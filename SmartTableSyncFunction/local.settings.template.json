@@ -1,0 +1,11 @@
+{
+  "_readme": "Copy this file to local.settings.json and fill in the values. local.settings.json is excluded from git.",
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+
+    "ParentDbConnectionString": "<parent-db-connection-string>",
+    "ChildDbConnectionString": "<child-db-connection-string>"
+  }
+}
