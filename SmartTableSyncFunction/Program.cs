@@ -6,6 +6,7 @@ using SmartTableSync.Introspection;
 using SmartTableSync.Logging;
 using SmartTableSync.Options;
 using SmartTableSync.Orchestration;
+using SmartTableSync.Planning;
 using SmartTableSync.State;
 using SmartTableSync.Syncers;
 
@@ -22,6 +23,7 @@ var host = new HostBuilder()
         services.AddSingleton<ISyncStateRepository, SyncStateRepository>();
         services.AddSingleton<IBatchLogger, BatchLogger>();
         services.AddSingleton<ISchemaReader, SchemaReader>();
+        services.AddSingleton<ISyncPlanHeuristic, SyncPlanHeuristic>();
 
         // Registered in execution order — orchestrator iterates in registration order.
         services.AddSingleton<ITableSyncer, ProductAttributeValueSyncer>();
