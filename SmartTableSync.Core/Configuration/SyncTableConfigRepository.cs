@@ -46,19 +46,19 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
             ON Target.[TableName] = Source.[TableName]
             WHEN MATCHED THEN
                 UPDATE SET
-                    [PrimaryKeyColumns]              = @PrimaryKeyColumns,
-                    [IdentityColumn]                 = @IdentityColumn,
-                    [MergeStrategy]                  = @MergeStrategy,
-                    [BatchSize]                       = @BatchSize,
-                    [BulkCopyTimeoutSeconds]          = @BulkCopyTimeoutSeconds,
-                    [RetryableSqlErrors]              = @RetryableSqlErrors,
-                    [TvpTypeName]                     = @TvpTypeName,
-                    [SchemaFingerprint]               = @SchemaFingerprint,
-                    [ConfiguredAtUtc]                 = @ConfiguredAtUtc,
-                    [MergeStrategyOverride]           = @MergeStrategyOverride,
-                    [BatchSizeOverride]               = @BatchSizeOverride,
-                    [BulkCopyTimeoutSecondsOverride]  = @BulkCopyTimeoutSecondsOverride,
-                    [RetryableSqlErrorsOverride]      = @RetryableSqlErrorsOverride
+                    [PrimaryKeyColumns] = @PrimaryKeyColumns,
+                    [IdentityColumn] = @IdentityColumn,
+                    [MergeStrategy] = @MergeStrategy,
+                    [BatchSize] = @BatchSize,
+                    [BulkCopyTimeoutSeconds] = @BulkCopyTimeoutSeconds,
+                    [RetryableSqlErrors] = @RetryableSqlErrors,
+                    [TvpTypeName] = @TvpTypeName,
+                    [SchemaFingerprint] = @SchemaFingerprint,
+                    [ConfiguredAtUtc] = @ConfiguredAtUtc,
+                    [MergeStrategyOverride] = @MergeStrategyOverride,
+                    [BatchSizeOverride] = @BatchSizeOverride,
+                    [BulkCopyTimeoutSecondsOverride] = @BulkCopyTimeoutSecondsOverride,
+                    [RetryableSqlErrorsOverride] = @RetryableSqlErrorsOverride
             WHEN NOT MATCHED THEN
                 INSERT (
                     [TableName], [PrimaryKeyColumns], [IdentityColumn], [MergeStrategy], [BatchSize],

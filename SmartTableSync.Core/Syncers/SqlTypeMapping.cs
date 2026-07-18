@@ -45,7 +45,7 @@ public static class SqlTypeMapping
     /// bytes; nvarchar/nchar store 2 bytes per character, so it must be halved to get the
     /// character-count SqlParameter expects (varchar/char/binary are already 1 byte/unit).
     /// -1 (MAX types) passes through unchanged.</summary>
-    public static int GetParameterSize(Introspection.ColumnProfile column)
+    public static int GetParameterSize(ColumnProfile column)
     {
         if (column.MaxLength == -1) return -1;
 

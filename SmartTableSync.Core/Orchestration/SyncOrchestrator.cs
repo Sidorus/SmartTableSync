@@ -5,22 +5,22 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     // Prevents concurrent invocations (e.g. manual trigger while timer run is in progress).
     // Timer triggers are already singleton by default via blob lease, but this guards
     // any manual/HTTP-triggered re-entry within the same app instance.
-    private static readonly SemaphoreSlim _runLock          = new(1, 1);
-    private static readonly TimeSpan      ReconcileInterval = TimeSpan.FromHours(1);
-    private static          DateTime      _lastReconcileUtc = DateTime.MinValue;
+    private static readonly SemaphoreSlim s_runLock = new(1, 1);
+    private static readonly TimeSpan s_reconcileInterval = TimeSpan.FromHours(1);
+    private static DateTime s_lastReconcileUtc = DateTime.MinValue;
 
     private readonly IEnumerable<ITableSyncer> _syncers;
-    private readonly IDbConnectionFactory      _connFactory;
-    private readonly ISyncStateRepository      _syncState;
-    private readonly ISyncMetricsReporter      _metrics;
+    private readonly IDbConnectionFactory _connFactory;
+    private readonly ISyncStateRepository _syncState;
+    private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
     public SyncOrchestrator(
         IEnumerable<ITableSyncer> syncers,
-        IDbConnectionFactory      connFactory,
-        ISyncStateRepository      syncState,
-        ISyncMetricsReporter      metrics,
-        IOptions<SyncSettings>    settings,
+        IDbConnectionFactory connFactory,
+        ISyncStateRepository syncState,
+        ISyncMetricsReporter metrics,
+        IOptions<SyncSettings> settings,
         ILogger<SyncOrchestrator> logger)
     {
         var configuredTables = settings.Value.Tables;
@@ -33,14 +33,14 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             : syncers.Where(s => configuredTables.Contains(s.TableName, StringComparer.OrdinalIgnoreCase));
 
         _connFactory = connFactory;
-        _syncState   = syncState;
-        _metrics     = metrics;
-        _logger      = logger;
+        _syncState = syncState;
+        _metrics = metrics;
+        _logger = logger;
     }
 
     public async Task RunAsync(CancellationToken ct = default)
     {
-        if (!await _runLock.WaitAsync(0))
+        if (!await s_runLock.WaitAsync(0))
         {
             _logger.LogWarning("SmartTableSync: previous run still in progress — skipping this invocation");
             return;
@@ -50,7 +50,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         {
             _logger.LogInformation("SmartTableSync run started at {Time}", DateTimeOffset.UtcNow);
 
-            var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= ReconcileInterval;
+            var shouldReconcile = DateTime.UtcNow - s_lastReconcileUtc >= s_reconcileInterval;
 
             foreach (var syncer in _syncers)
             {
@@ -59,13 +59,13 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             }
 
             if (shouldReconcile)
-                _lastReconcileUtc = DateTime.UtcNow;
+                s_lastReconcileUtc = DateTime.UtcNow;
 
             _logger.LogInformation("SmartTableSync run completed at {Time}", DateTimeOffset.UtcNow);
         }
         finally
         {
-            _runLock.Release();
+            s_runLock.Release();
         }
     }
 
@@ -79,7 +79,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             // after 30 min, so a long initial sync on the first table would leave
             // subsequent tables with a broken shared connection.
             await using var parent = _connFactory.CreateParentConnection();
-            await using var child  = _connFactory.CreateChildConnection();
+            await using var child = _connFactory.CreateChildConnection();
             await parent.OpenAsync(ct);
             await child.OpenAsync(ct);
 
@@ -88,8 +88,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             var syncStartedAt = await GetDbUtcNowAsync(parent, ct);
 
             var lastSync = await _syncState.GetLastSyncDateAsync(child, syncer.TableName, ct);
-            var result   = await syncer.SyncAsync(parent, child, lastSync, ct);
-            var deleted  = shouldReconcile
+            var result = await syncer.SyncAsync(parent, child, lastSync, ct);
+            var deleted = shouldReconcile
                 ? await syncer.ReconcileDeletesAsync(parent, child, lastSync, ct)
                 : 0;
 
