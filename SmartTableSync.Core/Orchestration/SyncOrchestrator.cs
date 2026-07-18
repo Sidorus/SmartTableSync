@@ -1,5 +1,3 @@
-using Microsoft.ApplicationInsights;
-
 namespace SmartTableSync.Orchestration;
 
 public sealed class SyncOrchestrator : ISyncOrchestrator
@@ -14,14 +12,14 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly IEnumerable<ITableSyncer> _syncers;
     private readonly IDbConnectionFactory      _connFactory;
     private readonly ISyncStateRepository      _syncState;
-    private readonly TelemetryClient           _telemetry;
+    private readonly ISyncMetricsReporter      _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
     public SyncOrchestrator(
         IEnumerable<ITableSyncer> syncers,
         IDbConnectionFactory      connFactory,
         ISyncStateRepository      syncState,
-        TelemetryClient           telemetry,
+        ISyncMetricsReporter      metrics,
         IOptions<SyncSettings>    settings,
         ILogger<SyncOrchestrator> logger)
     {
@@ -36,7 +34,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
         _connFactory = connFactory;
         _syncState   = syncState;
-        _telemetry   = telemetry;
+        _metrics     = metrics;
         _logger      = logger;
     }
 
@@ -111,21 +109,16 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 "{Table}: {Synced} synced, {Deleted} deleted, {Errors} errors, {Duration:s\\.f}s ({Mode})",
                 result.TableName, result.RowsSynced, deleted, result.RowsErrored, result.Duration, mode);
 
-            _telemetry.GetMetric("SmartTableSync.RowsSynced",          "TableName", "SyncMode")
-                      .TrackValue(result.RowsSynced,  result.TableName, mode);
-            _telemetry.GetMetric("SmartTableSync.RowsErrored",         "TableName", "SyncMode")
-                      .TrackValue(result.RowsErrored, result.TableName, mode);
-            _telemetry.GetMetric("SmartTableSync.SyncDurationSeconds", "TableName", "SyncMode")
-                      .TrackValue(result.Duration.TotalSeconds, result.TableName, mode);
+            _metrics.RowsSynced(result.TableName, mode, result.RowsSynced);
+            _metrics.RowsErrored(result.TableName, mode, result.RowsErrored);
+            _metrics.SyncDuration(result.TableName, mode, result.Duration);
 
             // Lag and deletes are only meaningful in incremental mode; during initial sync
             // lastSync is 2000-01-01, which would produce misleading metric values.
             if (!result.IsInitialSync)
             {
-                _telemetry.GetMetric("SmartTableSync.RowsDeleted",    "TableName")
-                          .TrackValue(deleted, result.TableName);
-                _telemetry.GetMetric("SmartTableSync.SyncLagMinutes", "TableName")
-                          .TrackValue((syncStartedAt - lastSync).TotalMinutes, result.TableName);
+                _metrics.RowsDeleted(result.TableName, deleted);
+                _metrics.SyncLag(result.TableName, syncStartedAt - lastSync);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
