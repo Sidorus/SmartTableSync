@@ -71,6 +71,15 @@ public sealed class SchemaReader : ISchemaReader
         return tables;
     }
 
+    public async Task<bool> TableExistsAsync(SqlConnection connection, string tableName, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(@TableName) IS NULL THEN 0 ELSE 1 END", connection)
+        { CommandTimeout = 30 };
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is int i && i == 1;
+    }
+
     private static async Task<IReadOnlyList<ColumnProfile>> GetColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {
         const string sql = """

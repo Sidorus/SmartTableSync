@@ -11,6 +11,7 @@ global using SmartTableSync.Introspection;
 global using SmartTableSync.Logging;
 global using SmartTableSync.Planning;
 global using SmartTableSync.Models;
+global using SmartTableSync.Scaffolding;
 global using SmartTableSync.Observability;
 global using SmartTableSync.Options;
 global using SmartTableSync.Orchestration;

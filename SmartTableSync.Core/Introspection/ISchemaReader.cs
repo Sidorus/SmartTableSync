@@ -19,4 +19,9 @@ public interface ISchemaReader
     /// so a "no" from this method isn't a full guarantee — treat it as an assisted first
     /// pass, not a complete answer.</summary>
     Task<IReadOnlyList<string>> FindDataSyncIncompatibleTablesAsync(SqlConnection parent, CancellationToken ct);
+
+    /// <summary>Cheap existence check via OBJECT_ID — used by the scaffold tool to decide
+    /// whether a CREATE TABLE script is needed for the child, without the "0 columns found"
+    /// exception GetFingerprintInputsAsync/ProfileTableAsync throw for a missing table.</summary>
+    Task<bool> TableExistsAsync(SqlConnection connection, string tableName, CancellationToken ct);
 }
