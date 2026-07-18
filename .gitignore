@@ -1,0 +1,20 @@
+# Azure Functions local settings — contains secrets, never commit
+local.settings.json
+
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+
+# Rider
+.idea/
+
+# Publish profiles and deployment artifacts — contain Azure resource names / subscription IDs
+**/Properties/
+
+# Markdown docs — keep only the public-facing README out of the ignore list
+*.md
+!README.md

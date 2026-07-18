@@ -1,0 +1,11 @@
+global using System.Data;
+global using System.Diagnostics;
+global using Microsoft.Data.SqlClient;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.Logging;
+global using SmartTableSync.Infrastructure;
+global using SmartTableSync.Logging;
+global using SmartTableSync.Models;
+global using SmartTableSync.Orchestration;
+global using SmartTableSync.State;
+global using SmartTableSync.Syncers;
