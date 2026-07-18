@@ -24,6 +24,7 @@ var host = new HostBuilder()
         services.AddSingleton<IBatchLogger, BatchLogger>();
         services.AddSingleton<ISchemaReader, SchemaReader>();
         services.AddSingleton<ISyncPlanHeuristic, SyncPlanHeuristic>();
+        services.AddSingleton<ITableSyncerFactory, TableSyncerFactory>();
 
         // Registered in execution order — orchestrator iterates in registration order.
         services.AddSingleton<ITableSyncer, ProductAttributeValueSyncer>();
