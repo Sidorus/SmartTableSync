@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SmartTableSync.Core/SmartTableSync.Core.csproj" />
+  <Project Path="SmartTableSync.Tests/SmartTableSync.Tests.csproj" />
+  <Project Path="SmartTableSyncFunction/SmartTableSyncFunction.csproj" />
+</Solution>
