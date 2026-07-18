@@ -34,6 +34,10 @@ The repo ships with three representative example tables, each demonstrating a di
 | `ProductCatalogItem` | Same — a wide table with an `nvarchar(max)` search-key column |
 | `DocumentAsset` | Rows can exceed the 24 MB batch limit (binary content columns) |
 
+## Project layout
+
+The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review — it never executes DDL itself.
+
 ## Getting started
 
 ```bash
@@ -42,3 +46,7 @@ dotnet build
 ```
 
 Deploy the SQL scripts under `sql/` to your target database in numbered order, configure `ParentDbConnectionString` / `ChildDbConnectionString`, and publish the Function.
+
+## Status
+
+`SmartTableSync.Core` is evolving from the hardcoded, three-table version above into a general-purpose, self-configuring engine — give it a table name, it introspects the schema, derives a sync plan, and generates reviewable SQL — intended to ship as a `SmartTableSync` NuGet package. That work is in progress and **not yet published**; the Function above is the current, working reference implementation.
