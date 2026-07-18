@@ -5,9 +5,9 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     // Prevents concurrent invocations (e.g. manual trigger while timer run is in progress).
     // Timer triggers are already singleton by default via blob lease, but this guards
     // any manual/HTTP-triggered re-entry within the same app instance.
-    private static readonly SemaphoreSlim s_runLock = new(1, 1);
-    private static readonly TimeSpan s_reconcileInterval = TimeSpan.FromHours(1);
-    private static DateTime s_lastReconcileUtc = DateTime.MinValue;
+    private static readonly SemaphoreSlim _runLock = new(1, 1);
+    private static readonly TimeSpan _reconcileInterval = TimeSpan.FromHours(1);
+    private static DateTime _lastReconcileUtc = DateTime.MinValue;
 
     private readonly IEnumerable<ITableSyncer> _syncers;
     private readonly IDbConnectionFactory _connFactory;
@@ -40,7 +40,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
     public async Task RunAsync(CancellationToken ct = default)
     {
-        if (!await s_runLock.WaitAsync(0))
+        if (!await _runLock.WaitAsync(0))
         {
             _logger.LogWarning("SmartTableSync: previous run still in progress — skipping this invocation");
             return;
@@ -50,7 +50,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         {
             _logger.LogInformation("SmartTableSync run started at {Time}", DateTimeOffset.UtcNow);
 
-            var shouldReconcile = DateTime.UtcNow - s_lastReconcileUtc >= s_reconcileInterval;
+            var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= _reconcileInterval;
 
             foreach (var syncer in _syncers)
             {
@@ -59,13 +59,13 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             }
 
             if (shouldReconcile)
-                s_lastReconcileUtc = DateTime.UtcNow;
+                _lastReconcileUtc = DateTime.UtcNow;
 
             _logger.LogInformation("SmartTableSync run completed at {Time}", DateTimeOffset.UtcNow);
         }
         finally
         {
-            s_runLock.Release();
+            _runLock.Release();
         }
     }
 
