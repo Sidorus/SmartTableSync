@@ -22,9 +22,18 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         IDbConnectionFactory      connFactory,
         ISyncStateRepository      syncState,
         TelemetryClient           telemetry,
+        IOptions<SyncSettings>    settings,
         ILogger<SyncOrchestrator> logger)
     {
-        _syncers     = syncers;
+        var configuredTables = settings.Value.Tables;
+
+        // Empty list means "not configured yet" — fall back to every registered syncer
+        // rather than silently syncing nothing, so this stays backward-compatible with
+        // deployments that haven't set SmartTableSync:TableList.
+        _syncers = configuredTables.Count == 0
+            ? syncers
+            : syncers.Where(s => configuredTables.Contains(s.TableName, StringComparer.OrdinalIgnoreCase));
+
         _connFactory = connFactory;
         _syncState   = syncState;
         _telemetry   = telemetry;

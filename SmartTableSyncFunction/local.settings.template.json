@@ -6,6 +6,8 @@
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
 
     "ParentDbConnectionString": "<parent-db-connection-string>",
-    "ChildDbConnectionString": "<child-db-connection-string>"
+    "ChildDbConnectionString": "<child-db-connection-string>",
+
+    "SmartTableSync:TableList": "ProductAttributeValue,ProductCatalogItem,DocumentAsset"
   }
 }

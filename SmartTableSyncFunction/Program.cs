@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SmartTableSync.Infrastructure;
 using SmartTableSync.Logging;
+using SmartTableSync.Options;
 using SmartTableSync.Orchestration;
 using SmartTableSync.State;
 using SmartTableSync.Syncers;
@@ -13,6 +14,8 @@ var host = new HostBuilder()
     {
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
+
+        services.AddSmartTableSyncSettings();
 
         services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
         services.AddSingleton<ISyncStateRepository, SyncStateRepository>();
