@@ -1,0 +1,22 @@
+namespace SmartTableSync.Introspection;
+
+public interface ISchemaReader
+{
+    /// <summary>Cheap, catalog-metadata-only profile: columns/types + primary key order +
+    /// identity column. Safe to run on every cold start to check for schema drift.</summary>
+    Task<TableProfile> GetFingerprintInputsAsync(SqlConnection parent, string tableName, CancellationToken ct);
+
+    /// <summary>Full profile — everything GetFingerprintInputsAsync returns, plus indexed
+    /// LOB-key detection, incoming-FK detection, and row count/size sampling. Only run
+    /// when (re)provisioning a table, not on every invocation.</summary>
+    Task<TableProfile> ProfileTableAsync(SqlConnection parent, string tableName, CancellationToken ct);
+
+    /// <summary>Stretch goal: scans every table in the parent database (not just the
+    /// configured ones) and returns the names of tables with an indexed nvarchar(max)/
+    /// varbinary(max) key column — the same catalog-only rule that excludes a table from
+    /// Azure SQL Data Sync. Catalog-metadata-only, no data scan, so safe to run broadly.
+    /// Does NOT check the oversized-row case (would require scanning every table's data),
+    /// so a "no" from this method isn't a full guarantee — treat it as an assisted first
+    /// pass, not a complete answer.</summary>
+    Task<IReadOnlyList<string>> FindDataSyncIncompatibleTablesAsync(SqlConnection parent, CancellationToken ct);
+}

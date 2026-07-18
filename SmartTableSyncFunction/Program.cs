@@ -2,6 +2,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SmartTableSync.Infrastructure;
+using SmartTableSync.Introspection;
 using SmartTableSync.Logging;
 using SmartTableSync.Options;
 using SmartTableSync.Orchestration;
@@ -20,6 +21,7 @@ var host = new HostBuilder()
         services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
         services.AddSingleton<ISyncStateRepository, SyncStateRepository>();
         services.AddSingleton<IBatchLogger, BatchLogger>();
+        services.AddSingleton<ISchemaReader, SchemaReader>();
 
         // Registered in execution order — orchestrator iterates in registration order.
         services.AddSingleton<ITableSyncer, ProductAttributeValueSyncer>();

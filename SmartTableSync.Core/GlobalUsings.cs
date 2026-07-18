@@ -6,6 +6,7 @@ global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Logging;
 global using Microsoft.Extensions.Options;
 global using SmartTableSync.Infrastructure;
+global using SmartTableSync.Introspection;
 global using SmartTableSync.Logging;
 global using SmartTableSync.Models;
 global using SmartTableSync.Options;
