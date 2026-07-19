@@ -10,8 +10,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private static DateTime _lastReconcileUtc = DateTime.MinValue;
 
     private readonly IReadOnlyList<string> _tableNames;
+    private readonly SyncMode _mode;
     private readonly ISyncTableProvisioner _provisioner;
     private readonly ITableSyncerFactory _syncerFactory;
+    private readonly IChildDdlProvisioner _childDdlProvisioner;
     private readonly IDbConnectionFactory _connFactory;
     private readonly ISyncStateRepository _syncState;
     private readonly ISyncMetricsReporter _metrics;
@@ -20,6 +22,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     public SyncOrchestrator(
         ISyncTableProvisioner provisioner,
         ITableSyncerFactory syncerFactory,
+        IChildDdlProvisioner childDdlProvisioner,
         IDbConnectionFactory connFactory,
         ISyncStateRepository syncState,
         ISyncMetricsReporter metrics,
@@ -34,8 +37,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             : throw new InvalidOperationException(
                 "SmartTableSync:TableList must list at least one table name.");
 
+        _mode = settings.Value.Mode;
         _provisioner = provisioner;
         _syncerFactory = syncerFactory;
+        _childDdlProvisioner = childDdlProvisioner;
         _connFactory = connFactory;
         _syncState = syncState;
         _metrics = metrics;
@@ -90,7 +95,15 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             // is what lets one generic ConfigurableTableSyncer replace a fixed set of
             // hand-written classes: the table's shape and plan are only known once these
             // connections are open.
-            var (profile, plan) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+            var (profile, plan, wasFreshlyProvisioned) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+
+            if (_mode == SyncMode.Auto && wasFreshlyProvisioned)
+            {
+                await using var childProvisioning = _connFactory.CreateChildProvisioningConnection();
+                await childProvisioning.OpenAsync(ct);
+                await _childDdlProvisioner.EnsureChildObjectsExistAsync(childProvisioning, profile, plan, ct);
+            }
+
             var syncer = _syncerFactory.Create(profile, plan);
 
             // Use the parent DB clock so LastSyncDate is comparable to column LastUpdate

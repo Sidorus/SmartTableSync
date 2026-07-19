@@ -10,6 +10,7 @@ using SmartTableSync.Observability;
 using SmartTableSync.Options;
 using SmartTableSync.Orchestration;
 using SmartTableSync.Planning;
+using SmartTableSync.Scaffolding;
 using SmartTableSync.State;
 using SmartTableSync.Syncers;
 
@@ -31,6 +32,8 @@ var host = new HostBuilder()
         services.AddSingleton<ITableSyncerFactory, TableSyncerFactory>();
         services.AddSingleton<ISyncTableConfigRepository, SyncTableConfigRepository>();
         services.AddSingleton<ISyncTableProvisioner, SyncTableProvisioner>();
+        services.AddSingleton<ISqlArtifactGenerator, SqlArtifactGenerator>();
+        services.AddSingleton<IChildDdlProvisioner, ChildDdlProvisioner>();
 
         services.AddSingleton<ISyncOrchestrator, SyncOrchestrator>();
     })

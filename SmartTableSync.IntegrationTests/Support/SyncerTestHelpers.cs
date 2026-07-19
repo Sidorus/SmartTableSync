@@ -30,7 +30,7 @@ public static class SyncerTestHelpers
             new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
             new NoOpSyncMetricsReporter(), NullLogger<SyncTableProvisioner>.Instance);
 
-        var (profile, plan) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+        var (profile, plan, _) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
         var factory = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance);
         return (factory.Create(profile, plan), plan);

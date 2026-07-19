@@ -8,6 +8,12 @@
     "ParentDbConnectionString": "<parent-db-connection-string>",
     "ChildDbConnectionString": "<child-db-connection-string>",
 
-    "SmartTableSync:TableList": "ProductAttributeValue,ProductCatalogItem,DocumentAsset"
+    "SmartTableSync:TableList": "ProductAttributeValue,ProductCatalogItem,DocumentAsset",
+
+    "SmartTableSync:Mode": "Manual",
+    "_SmartTableSync:Mode_readme": "Manual (default): scaffold the child DB by hand via SmartTableSync.Scaffold, then add tables to TableList once applied. Auto: the Function creates/updates child DDL itself on first sight of a table or parent schema drift - requires ChildProvisioningConnectionString below.",
+
+    "_ChildProvisioningConnectionString_readme": "Only required when SmartTableSync:Mode is Auto. Uses the smarttablesync-child-provisioning identity (see sql/07_permissions.sql) - the same one SmartTableSync.Scaffold already uses, never the runtime identity above.",
+    "ChildProvisioningConnectionString": "<child-db-provisioning-connection-string>"
   }
 }

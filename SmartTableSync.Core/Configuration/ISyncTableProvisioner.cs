@@ -9,5 +9,10 @@ namespace SmartTableSync.Configuration;
 /// redundant introspection call of their own.</summary>
 public interface ISyncTableProvisioner
 {
-    Task<(TableProfile Profile, SyncPlan Plan)> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct);
+    /// <summary>WasFreshlyProvisioned is true only on the new-table-or-schema-drift path
+    /// (false on the common fast path where an existing config's fingerprint still matches).
+    /// This is also the signal SyncOrchestrator uses to decide when to run Auto-mode child DDL
+    /// provisioning - it doesn't introduce a separate "have I done this before" tracking
+    /// mechanism, it reuses this one.</summary>
+    Task<(TableProfile Profile, SyncPlan Plan, bool WasFreshlyProvisioned)> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct);
 }

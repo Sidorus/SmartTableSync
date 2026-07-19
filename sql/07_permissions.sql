@@ -3,11 +3,11 @@
 -- always-on Function should never hold an identity capable of
 -- schema changes — only the manually-run scaffold tool needs that.
 --
--- | Identity              | Used by            | Runs               |
--- |------------------------|---------------------|--------------------|
--- | Child-provisioning     | Scaffold tool       | manual, on demand  |
--- | Parent-introspection   | Scaffold tool       | manual, on demand  |
--- | Runtime                | the Azure Function  | always-on          |
+-- | Identity              | Used by                              | Runs                          |
+-- |------------------------|----------------------------------------|---------------------------------|
+-- | Child-provisioning     | Scaffold tool; the Function (opt-in)  | manual, on demand; or on cold start/schema drift when SmartTableSync:Mode is Auto |
+-- | Parent-introspection   | Scaffold tool; the Function           | manual, on demand; or on cold start/schema drift |
+-- | Runtime                | the Azure Function                    | always-on                     |
 --
 -- Table names below (ProductAttributeValue, ProductCatalogItem,
 -- DocumentAsset) match this repo's example schema — substitute your
@@ -21,8 +21,14 @@
 
 -- ============================================================
 -- 1. Child-provisioning — run on the CHILD database.
--- Used only by SmartTableSync.Scaffold to create/alter tables, TVP
--- types, and stored procedures. Never used by the Function.
+-- Used by SmartTableSync.Scaffold to create/alter tables, TVP types,
+-- and stored procedures for a human to review and apply by hand
+-- (SmartTableSync:Mode = Manual, the default). Also used, opt-in, by
+-- the Function itself via ChildDdlProvisioner/ChildProvisioningConnectionString
+-- when SmartTableSync:Mode = Auto — and even then, only briefly, on
+-- the same infrequent occasions provisioning already re-runs (a new
+-- table, or parent schema drift), never on the routine sync path. The
+-- runtime identity below never gains these rights either way.
 -- ============================================================
 
 -- Option A — Azure AD / Managed Identity (recommended):

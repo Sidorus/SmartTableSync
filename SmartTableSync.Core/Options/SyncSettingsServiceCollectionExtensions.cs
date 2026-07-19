@@ -13,6 +13,12 @@ public static class SyncSettingsServiceCollectionExtensions
             {
                 var raw = configuration["SmartTableSync:TableList"] ?? string.Empty;
                 options.Tables = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                // Missing or unparseable -> Manual, today's only behavior - so existing
+                // deployments that predate this setting keep working unchanged.
+                options.Mode = Enum.TryParse<SyncMode>(configuration["SmartTableSync:Mode"], ignoreCase: true, out var mode)
+                    ? mode
+                    : SyncMode.Manual;
             });
 
         return services;
