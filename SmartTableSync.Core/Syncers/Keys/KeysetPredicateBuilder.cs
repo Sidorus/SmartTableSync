@@ -1,4 +1,4 @@
-namespace SmartTableSync.Syncers;
+namespace SmartTableSync.Syncers.Keys;
 
 /// <summary>
 /// Builds a keyset (seek) pagination predicate for any number of ordered primary key

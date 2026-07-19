@@ -1,5 +1,5 @@
 using System.Data;
-using SmartTableSync.Syncers;
+using SmartTableSync.Syncers.Keys;
 using Xunit;
 
 namespace SmartTableSync.Tests.Syncers;

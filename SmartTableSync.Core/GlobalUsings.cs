@@ -17,3 +17,8 @@ global using SmartTableSync.Options;
 global using SmartTableSync.Orchestration;
 global using SmartTableSync.State;
 global using SmartTableSync.Syncers;
+global using SmartTableSync.Syncers.Keys;
+global using SmartTableSync.Syncers.MergeStrategies;
+global using SmartTableSync.Syncers.Reconciliation;
+global using SmartTableSync.Syncers.Runners;
+global using SmartTableSync.Syncers.Sql;

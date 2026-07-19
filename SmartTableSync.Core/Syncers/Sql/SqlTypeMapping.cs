@@ -1,4 +1,4 @@
-namespace SmartTableSync.Syncers;
+namespace SmartTableSync.Syncers.Sql;
 
 /// <summary>Maps sys.types column type names (as read by SchemaReader) to SqlDbType and
 /// parses key-component strings back into the right CLR type. Pure, no I/O — this is what

@@ -1,4 +1,4 @@
-namespace SmartTableSync.Syncers;
+namespace SmartTableSync.Syncers.Keys;
 
 /// <summary>
 /// Generalizes DocumentAsset's hand-written "{DocumentId}|{Language}" resume-key format to
