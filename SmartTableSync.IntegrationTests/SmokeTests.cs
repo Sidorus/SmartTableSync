@@ -22,12 +22,9 @@ public class SmokeTests
     [Fact]
     public async Task SchemaReader_AgainstRealDatabase_ReportsAttributeTableCorrectly()
     {
-        var seedPath = Path.Combine(AppContext.BaseDirectory, "SeedData", "Attribute.json");
-        var rows = await SeedDataLoader.LoadAsync(seedPath);
-
         await using var connection = new SqlConnection(_fixture.ParentConnectionString);
         await connection.OpenAsync();
-        await SeedDataLoader.InsertRowsAsync(connection, "Attribute", rows, hasIdentityColumn: true);
+        await SeedDataLoader.EnsureSeededAsync(connection, "Attribute", "Attribute.json", hasIdentityColumn: true);
 
         var reader = new SchemaReader();
         var profile = await reader.GetFingerprintInputsAsync(connection, "Attribute", CancellationToken.None);
@@ -39,6 +36,6 @@ public class SmokeTests
 
         await using var countCommand = new SqlCommand("SELECT COUNT(*) FROM [dbo].[Attribute]", connection);
         var count = (int)(await countCommand.ExecuteScalarAsync())!;
-        Assert.Equal(rows.Count, count);
+        Assert.True(count >= 3);
     }
 }

@@ -15,7 +15,7 @@ namespace SmartTableSync.IntegrationTests.Fixtures;
 /// </summary>
 public sealed class MsSqlTestFixture : IAsyncLifetime
 {
-    private static readonly Regex GoSeparator = new(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static readonly Regex _goSeparator = new(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
     private readonly MsSqlContainer _container =
         new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04").Build();
@@ -76,7 +76,7 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
         {
             var script = await File.ReadAllTextAsync(path);
 
-            foreach (var batch in GoSeparator.Split(script))
+            foreach (var batch in _goSeparator.Split(script))
             {
                 var trimmed = batch.Trim();
                 if (trimmed.Length == 0) continue;

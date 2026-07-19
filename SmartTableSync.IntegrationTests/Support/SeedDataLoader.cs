@@ -28,6 +28,23 @@ public static class SeedDataLoader
         return rows;
     }
 
+    /// <summary>Seeds a table only if it's currently empty. Several test classes share the
+    /// same database via the collection fixture and some seed the same lookup table (e.g.
+    /// Attribute) - since xUnit doesn't guarantee which class runs first, whichever runs
+    /// first seeds the rows and the rest detect they're already there and skip.</summary>
+    public static async Task EnsureSeededAsync(
+        SqlConnection connection, string tableName, string jsonFileName,
+        bool hasIdentityColumn = false, CancellationToken ct = default)
+    {
+        await using var countCommand = new SqlCommand($"SELECT COUNT(*) FROM [dbo].[{tableName}]", connection);
+        var existing = (int)(await countCommand.ExecuteScalarAsync(ct))!;
+        if (existing > 0) return;
+
+        var seedPath = Path.Combine(AppContext.BaseDirectory, "SeedData", jsonFileName);
+        var rows = await LoadAsync(seedPath, ct);
+        await InsertRowsAsync(connection, tableName, rows, hasIdentityColumn, ct);
+    }
+
     /// <summary>Inserts every row into the given table via a parameterized INSERT built
     /// from each row's keys/values. Set hasIdentityColumn=true for tables where the seed
     /// data specifies an IDENTITY column's value explicitly (e.g. to keep FK references
@@ -50,10 +67,16 @@ public static class SeedDataLoader
             foreach (var row in rows)
             {
                 var columns = string.Join(", ", row.Keys.Select(c => $"[{c}]"));
-                var parameterNames = string.Join(", ", row.Keys.Select(c => $"@{c}"));
+
+                // Null values are emitted as the literal NULL rather than a parameter -
+                // AddWithValue can't infer a SqlDbType from DBNull.Value alone and defaults
+                // to NVarChar, which SQL Server then refuses to implicitly convert against a
+                // varbinary(max) target column (DocumentAsset's FileContent/PreviewImage/
+                // PdfRendition all hit this).
+                var valuePlaceholders = string.Join(", ", row.Select(kv => kv.Value is null ? "NULL" : $"@{kv.Key}"));
 
                 await using var command = new SqlCommand(
-                    $"INSERT INTO [dbo].[{tableName}] ({columns}) VALUES ({parameterNames})", connection);
+                    $"INSERT INTO [dbo].[{tableName}] ({columns}) VALUES ({valuePlaceholders})", connection);
 
                 // AddWithValue is normally avoided in this codebase (see CLAUDE.md) because
                 // implicit type inference can produce bad query plans on hot paths - but this
@@ -61,7 +84,8 @@ public static class SeedDataLoader
                 // from, and it only ever seeds a handful of static test rows once per run, so
                 // the tradeoff that convention exists to avoid doesn't apply here.
                 foreach (var (column, value) in row)
-                    command.Parameters.AddWithValue($"@{column}", value ?? DBNull.Value);
+                    if (value is not null)
+                        command.Parameters.AddWithValue($"@{column}", value);
 
                 await command.ExecuteNonQueryAsync(ct);
             }
