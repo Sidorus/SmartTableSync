@@ -1,0 +1,5 @@
+[
+  { "AttributeId": 1, "Name": "Color" },
+  { "AttributeId": 2, "Name": "Size" },
+  { "AttributeId": 3, "Name": "Material" }
+]

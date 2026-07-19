@@ -1,0 +1,5 @@
+[
+  { "AttributeValueId": 101, "AttributeId": 1, "Description": "Red", "LastUpdate": "2026-01-01T00:00:00", "ImageId": null, "SortOrder": 1, "ActiveToDate": null, "ActiveFromDate": null, "Slug": "red" },
+  { "AttributeValueId": 102, "AttributeId": 1, "Description": "Blue", "LastUpdate": "2026-01-01T00:00:00", "ImageId": null, "SortOrder": 2, "ActiveToDate": null, "ActiveFromDate": null, "Slug": "blue" },
+  { "AttributeValueId": 103, "AttributeId": 2, "Description": "Large", "LastUpdate": "2026-01-01T00:00:00", "ImageId": null, "SortOrder": 1, "ActiveToDate": null, "ActiveFromDate": null, "Slug": "large" }
+]
