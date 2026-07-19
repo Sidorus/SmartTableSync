@@ -1,41 +1,26 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using SmartTableSync.Configuration;
-using SmartTableSync.Functions.Observability;
-using SmartTableSync.Infrastructure;
-using SmartTableSync.Introspection;
-using SmartTableSync.Logging;
-using SmartTableSync.Observability;
-using SmartTableSync.Options;
-using SmartTableSync.Orchestration;
-using SmartTableSync.Planning;
-using SmartTableSync.Scaffolding;
-using SmartTableSync.State;
-using SmartTableSync.Syncers;
+using SmartTableSync.DependencyInjection;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices(services =>
     {
+        // Wires the Function's own logs/traces/requests into Application Insights — the
+        // Functions host's built-in diagnostics pipeline, unrelated to the sync engine's own
+        // metrics below.
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
 
-        services.AddSmartTableSyncSettings();
-
-        services.AddSingleton<ISyncMetricsReporter, AppInsightsMetricsReporter>();
-        services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
-        services.AddSingleton<ISyncStateRepository, SyncStateRepository>();
-        services.AddSingleton<IBatchLogger, BatchLogger>();
-        services.AddSingleton<ISchemaReader, SchemaReader>();
-        services.AddSingleton<ISyncPlanHeuristic, SyncPlanHeuristic>();
-        services.AddSingleton<ITableSyncerFactory, TableSyncerFactory>();
-        services.AddSingleton<ISyncTableConfigRepository, SyncTableConfigRepository>();
-        services.AddSingleton<ISyncTableProvisioner, SyncTableProvisioner>();
-        services.AddSingleton<ISqlArtifactGenerator, SqlArtifactGenerator>();
-        services.AddSingleton<IChildDdlProvisioner, ChildDdlProvisioner>();
-
-        services.AddSingleton<ISyncOrchestrator, SyncOrchestrator>();
+        // Registers the sync engine, including its default ISyncMetricsReporter
+        // (SmartTableSync.Observability.SyncMetricsReporter) — emits via
+        // System.Diagnostics.Metrics under the "SmartTableSync" meter name, so it's
+        // collectible by whatever OpenTelemetry exporter this host wants (Azure Monitor's
+        // OpenTelemetry distro, OTLP, Prometheus, ...), not tied to any one vendor. Wire up
+        // an exporter here if you want these metrics collected; add your own
+        // ISyncMetricsReporter registration after this call to replace them entirely.
+        services.AddSmartTableSync();
     })
     .Build();
 
