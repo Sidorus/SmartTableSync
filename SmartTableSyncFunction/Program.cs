@@ -32,11 +32,6 @@ var host = new HostBuilder()
         services.AddSingleton<ISyncTableConfigRepository, SyncTableConfigRepository>();
         services.AddSingleton<ISyncTableProvisioner, SyncTableProvisioner>();
 
-        // Registered in execution order — orchestrator iterates in registration order.
-        services.AddSingleton<ITableSyncer, ProductAttributeValueSyncer>();
-        services.AddSingleton<ITableSyncer, ProductCatalogItemSyncer>();
-        services.AddSingleton<ITableSyncer, DocumentAssetSyncer>();
-
         services.AddSingleton<ISyncOrchestrator, SyncOrchestrator>();
     })
     .Build();

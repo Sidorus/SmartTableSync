@@ -22,7 +22,7 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
         _logger = logger;
     }
 
-    public async Task<SyncPlan> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct)
+    public async Task<(TableProfile Profile, SyncPlan Plan)> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct)
     {
         var existing = await _configRepository.GetAsync(child, tableName, ct);
 
@@ -33,7 +33,7 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
         var currentFingerprint = SchemaFingerprint.Compute(cheapProfile);
 
         if (existing is not null && existing.SchemaFingerprint == currentFingerprint)
-            return existing.ToSyncPlan();
+            return (cheapProfile, existing.ToSyncPlan());
 
         if (existing is null)
             _logger.LogInformation("{Table}: not yet configured — introspecting and deriving a sync plan", tableName);
@@ -57,6 +57,6 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
         await _configRepository.UpsertAsync(child, config, ct);
         _metrics.TableProvisioned(tableName);
 
-        return config.ToSyncPlan();
+        return (fullProfile, config.ToSyncPlan());
     }
 }

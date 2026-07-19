@@ -9,29 +9,33 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private static readonly TimeSpan _reconcileInterval = TimeSpan.FromHours(1);
     private static DateTime _lastReconcileUtc = DateTime.MinValue;
 
-    private readonly IEnumerable<ITableSyncer> _syncers;
+    private readonly IReadOnlyList<string> _tableNames;
+    private readonly ISyncTableProvisioner _provisioner;
+    private readonly ITableSyncerFactory _syncerFactory;
     private readonly IDbConnectionFactory _connFactory;
     private readonly ISyncStateRepository _syncState;
     private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
     public SyncOrchestrator(
-        IEnumerable<ITableSyncer> syncers,
+        ISyncTableProvisioner provisioner,
+        ITableSyncerFactory syncerFactory,
         IDbConnectionFactory connFactory,
         ISyncStateRepository syncState,
         ISyncMetricsReporter metrics,
         IOptions<SyncSettings> settings,
         ILogger<SyncOrchestrator> logger)
     {
-        var configuredTables = settings.Value.Tables;
+        // Table names are now the only configuration surface for which tables get synced —
+        // there's no fixed set of hand-written syncers left to fall back to, so an empty list
+        // is a misconfiguration, not a valid "sync everything registered" default.
+        _tableNames = settings.Value.Tables.Count > 0
+            ? settings.Value.Tables
+            : throw new InvalidOperationException(
+                "SmartTableSync:TableList must list at least one table name.");
 
-        // Empty list means "not configured yet" — fall back to every registered syncer
-        // rather than silently syncing nothing, so this stays backward-compatible with
-        // deployments that haven't set SmartTableSync:TableList.
-        _syncers = configuredTables.Count == 0
-            ? syncers
-            : syncers.Where(s => configuredTables.Contains(s.TableName, StringComparer.OrdinalIgnoreCase));
-
+        _provisioner = provisioner;
+        _syncerFactory = syncerFactory;
         _connFactory = connFactory;
         _syncState = syncState;
         _metrics = metrics;
@@ -52,10 +56,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= _reconcileInterval;
 
-            foreach (var syncer in _syncers)
+            foreach (var tableName in _tableNames)
             {
                 ct.ThrowIfCancellationRequested();
-                await SyncTableAsync(syncer, shouldReconcile, ct);
+                await SyncTableAsync(tableName, shouldReconcile, ct);
             }
 
             if (shouldReconcile)
@@ -69,9 +73,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
     }
 
-    private async Task SyncTableAsync(
-        ITableSyncer syncer,
-        bool shouldReconcile, CancellationToken ct)
+    private async Task SyncTableAsync(string tableName, bool shouldReconcile, CancellationToken ct)
     {
         try
         {
@@ -82,6 +84,14 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             await using var child = _connFactory.CreateChildConnection();
             await parent.OpenAsync(ct);
             await child.OpenAsync(ct);
+
+            // Cheap on every run unless the parent schema actually changed - see
+            // SyncTableProvisioner. Building the syncer here (not at DI composition time)
+            // is what lets one generic ConfigurableTableSyncer replace a fixed set of
+            // hand-written classes: the table's shape and plan are only known once these
+            // connections are open.
+            var (profile, plan) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+            var syncer = _syncerFactory.Create(profile, plan);
 
             // Use the parent DB clock so LastSyncDate is comparable to column LastUpdate
             // values that SQL Server stamped — eliminates any app-server clock skew gap.
@@ -123,7 +133,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "{Table}: sync failed — will retry on next run", syncer.TableName);
+            _logger.LogError(ex, "{Table}: sync failed — will retry on next run", tableName);
         }
     }
 

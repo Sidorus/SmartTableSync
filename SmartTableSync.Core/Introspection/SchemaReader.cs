@@ -188,10 +188,10 @@ public sealed class SchemaReader : ISchemaReader
     {
         const string sql = """
             SELECT
-                SUM(ps.row_count) AS RowCount,
+                SUM(ps.row_count) AS [RowCount],
                 CASE WHEN SUM(ps.row_count) > 0
                      THEN CAST((SUM(ps.used_page_count) * 8192.0) / SUM(ps.row_count) AS BIGINT)
-                     ELSE 0 END AS AvgRowSizeBytes
+                     ELSE 0 END AS [AvgRowSizeBytes]
             FROM   sys.dm_db_partition_stats ps
             WHERE  ps.object_id = OBJECT_ID(@TableName)
               AND  ps.index_id IN (0, 1)

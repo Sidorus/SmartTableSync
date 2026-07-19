@@ -1,27 +1,31 @@
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.IntegrationTests.Support;
-using SmartTableSync.Logging;
+using SmartTableSync.Planning;
 using SmartTableSync.State;
-using SmartTableSync.Syncers;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Initial sync: the SqlBulkCopy path taken when a table's CustomSyncState still has its
-/// seeded InitialDate sentinel. Proves the bulk copy works and that SyncBatchLog gets a
-/// 'completed' row logged for it, against each of the three hand-written syncers.
+/// Initial sync via ConfigurableTableSyncer, built through the real production construction
+/// path (SchemaReader -> SyncTableProvisioner -> TableSyncerFactory) - the same construction
+/// SyncOrchestrator itself uses.
+///
+/// Uses its own dedicated container (IClassFixture, not the shared [Collection("SqlServer")])
+/// because initial sync reads/writes SyncBatchLog's resume cursor keyed only by
+/// (TableName, Phase) - this is the only place in the test suite that exercises the
+/// initial-sync path for these 3 real tables, so keeping it isolated means the seed data and
+/// row-count assertions can stay exact instead of needing the >= tolerance the shared-database
+/// tests elsewhere in this namespace require.
 /// </summary>
-[Collection("SqlServer")]
-public class InitialSyncTests
+public class InitialSyncTests : IClassFixture<MsSqlTestFixture>
 {
     private readonly MsSqlTestFixture _fixture;
 
     public InitialSyncTests(MsSqlTestFixture fixture) => _fixture = fixture;
 
     [Fact]
-    public async Task ProductAttributeValueSyncer_BulkCopiesSeededRowsAndLogsBatch()
+    public async Task ProductAttributeValueTable_BulkCopiesSeededRowsAndLogsBatch()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -38,25 +42,24 @@ public class InitialSyncTests
 
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "ProductAttributeValue", CancellationToken.None);
-        var syncer = new ProductAttributeValueSyncer(new BatchLogger(), NullLogger<ProductAttributeValueSyncer>.Instance);
+        var (syncer, plan) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "ProductAttributeValue");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 
-        // Assert - Parent is shared with other test classes in this collection, so RowsSynced
-        // can be more than rows.Count if another test already added rows there; check our
-        // specific seeded keys landed rather than asserting an exact total.
+        // Assert - has a real incoming FK (Attribute) -> heuristic must pick RowByRow, same
+        // as the hand-written engine's actual (hardcoded) choice for this table.
+        Assert.Equal(MergeStrategy.RowByRow, plan.MergeStrategy);
         Assert.True(result.IsInitialSync);
-        Assert.True(result.RowsSynced >= rows.Count);
+        Assert.Equal(rows.Count, result.RowsSynced);
         Assert.Equal(0, result.RowsErrored);
-        await using (var seededCountCmd = new SqlCommand(
-            "SELECT COUNT(*) FROM [dbo].[ProductAttributeValue] WHERE [AttributeValueId] IN (101, 102, 103)", child))
-            Assert.Equal(3, (int)(await seededCountCmd.ExecuteScalarAsync())!);
+        await using var countCmd = new SqlCommand("SELECT COUNT(*) FROM [dbo].[ProductAttributeValue]", child);
+        Assert.Equal(rows.Count, (int)(await countCmd.ExecuteScalarAsync())!);
         await SyncerTestHelpers.AssertBatchLogCompletedAsync(child, "ProductAttributeValue");
     }
 
     [Fact]
-    public async Task ProductCatalogItemSyncer_BulkCopiesSeededRowsAndLogsBatch()
+    public async Task ProductCatalogItemTable_BulkCopiesSeededRowsAndLogsBatch()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -70,25 +73,23 @@ public class InitialSyncTests
 
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "ProductCatalogItem", CancellationToken.None);
-        var syncer = new ProductCatalogItemSyncer(new BatchLogger(), NullLogger<ProductCatalogItemSyncer>.Instance);
+        var (syncer, plan) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "ProductCatalogItem");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 
-        // Assert - Parent is shared with other test classes in this collection, so RowsSynced
-        // can be more than rows.Count if another test already added rows there; check our
-        // specific seeded keys landed rather than asserting an exact total.
+        // Assert - no FK, small rows -> heuristic must pick Tvp, same as the hand-written engine
+        Assert.Equal(MergeStrategy.Tvp, plan.MergeStrategy);
         Assert.True(result.IsInitialSync);
-        Assert.True(result.RowsSynced >= rows.Count);
+        Assert.Equal(rows.Count, result.RowsSynced);
         Assert.Equal(0, result.RowsErrored);
-        await using (var seededCountCmd = new SqlCommand(
-            "SELECT COUNT(*) FROM [dbo].[ProductCatalogItem] WHERE [Sku] IN ('BOLT-M6', 'NUT-M6', 'WASHER-M6')", child))
-            Assert.Equal(3, (int)(await seededCountCmd.ExecuteScalarAsync())!);
+        await using var countCmd = new SqlCommand("SELECT COUNT(*) FROM [dbo].[ProductCatalogItem]", child);
+        Assert.Equal(rows.Count, (int)(await countCmd.ExecuteScalarAsync())!);
         await SyncerTestHelpers.AssertBatchLogCompletedAsync(child, "ProductCatalogItem");
     }
 
     [Fact]
-    public async Task DocumentAssetSyncer_BulkCopiesSeededRowsAndLogsBatch()
+    public async Task DocumentAssetTable_BulkCopiesSeededRowsAndLogsBatch()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -100,24 +101,29 @@ public class InitialSyncTests
             Path.Combine(AppContext.BaseDirectory, "SeedData", "DocumentAsset.json"));
         await SeedDataLoader.InsertRowsAsync(parent, "DocumentAsset", rows);
 
+        // The JSON seed rows all have NULL LOB columns - real introspection would correctly
+        // (if misleadingly, for this test) see no large rows and pick Tvp. Production's real
+        // DocumentAsset table has rows up to ~50 MB (and only a row-by-row SP deployed, no
+        // TVP type), so this test needs at least one genuinely large row for the heuristic to
+        // observe the same reality the hand-written engine was built around.
+        await SyncerTestHelpers.EnsureLargeDocumentAssetRowSeededAsync(parent);
+        var totalRowCount = rows.Count + 1;
+
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "DocumentAsset", CancellationToken.None);
-        var syncer = new DocumentAssetSyncer(new BatchLogger(), NullLogger<DocumentAssetSyncer>.Instance);
+        var (syncer, plan) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "DocumentAsset");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 
-        // Assert - Parent is shared with other test classes in this collection, so RowsSynced
-        // can be more than rows.Count if another test already added rows there; check our
-        // specific seeded keys landed rather than asserting an exact total.
+        // Assert - no FK, but large LOB rows -> heuristic must pick RowByRow, same as the
+        // hand-written engine
+        Assert.Equal(MergeStrategy.RowByRow, plan.MergeStrategy);
         Assert.True(result.IsInitialSync);
-        Assert.True(result.RowsSynced >= rows.Count);
+        Assert.Equal(totalRowCount, result.RowsSynced);
         Assert.Equal(0, result.RowsErrored);
-        await using (var seededCountCmd = new SqlCommand("""
-            SELECT COUNT(*) FROM [dbo].[DocumentAsset]
-            WHERE ([DocumentId] = 201 AND [LanguageCode] IN ('en', 'sv')) OR ([DocumentId] = 202 AND [LanguageCode] = 'en')
-            """, child))
-            Assert.Equal(3, (int)(await seededCountCmd.ExecuteScalarAsync())!);
+        await using var countCmd = new SqlCommand("SELECT COUNT(*) FROM [dbo].[DocumentAsset]", child);
+        Assert.Equal(totalRowCount, (int)(await countCmd.ExecuteScalarAsync())!);
         await SyncerTestHelpers.AssertBatchLogCompletedAsync(child, "DocumentAsset");
     }
 }

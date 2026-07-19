@@ -1,19 +1,15 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.IntegrationTests.Support;
-using SmartTableSync.Logging;
-using SmartTableSync.Syncers;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Incremental sync: a row already present in both Parent and Child (as if a prior sync ran)
-/// gets changed in Parent only, then re-synced via the real stored procedure MERGE - this is
-/// MERGE's UPDATE branch, the counterpart to IncrementalInsertTests' INSERT branch.
-///
-/// See IncrementalInsertTests' class doc comment for why RowsSynced is asserted as >= 1, not ==.
+/// Incremental sync via ConfigurableTableSyncer: a row already present in both Parent and
+/// Child gets changed in Parent only, then re-synced - MERGE's UPDATE branch, the counterpart
+/// to IncrementalInsertTests' INSERT branch. See that class's doc comment for why this shares
+/// the [Collection("SqlServer")] database safely and why RowsSynced is asserted as >= 1, not ==.
 /// </summary>
 [Collection("SqlServer")]
 public class IncrementalUpdateTests
@@ -23,7 +19,7 @@ public class IncrementalUpdateTests
     public IncrementalUpdateTests(MsSqlTestFixture fixture) => _fixture = fixture;
 
     [Fact]
-    public async Task ProductAttributeValueSyncer_UpdatesExistingRowViaRealStoredProcedure()
+    public async Task ProductAttributeValueTable_UpdatesExistingRowViaRealStoredProcedure()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -34,19 +30,19 @@ public class IncrementalUpdateTests
         await SeedDataLoader.EnsureSeededAsync(parent, "Attribute", "Attribute.json", hasIdentityColumn: true);
         await SeedDataLoader.EnsureSeededAsync(child, "Attribute", "Attribute.json", hasIdentityColumn: true);
 
-        const int attributeValueId = 501;
+        const int attributeValueId = 1101;
         var originalLastUpdate = DateTime.UtcNow.AddDays(-1);
-        await SyncerTestHelpers.InsertProductAttributeValueWithExplicitIdAsync(parent, attributeValueId, attributeId: 1, description: "Original", slug: "update-me", lastUpdate: originalLastUpdate);
-        await SyncerTestHelpers.InsertProductAttributeValueWithExplicitIdAsync(child, attributeValueId, attributeId: 1, description: "Original", slug: "update-me", lastUpdate: originalLastUpdate);
+        await SyncerTestHelpers.InsertProductAttributeValueWithExplicitIdAsync(parent, attributeValueId, attributeId: 1, description: "Original", slug: "cfg-update-me", lastUpdate: originalLastUpdate);
+        await SyncerTestHelpers.InsertProductAttributeValueWithExplicitIdAsync(child, attributeValueId, attributeId: 1, description: "Original", slug: "cfg-update-me", lastUpdate: originalLastUpdate);
 
-        var syncPoint = DateTime.UtcNow.AddHours(-9); // distinct hour from this table's incremental-insert test
+        var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateProductAttributeValueDescriptionAsync(parent, attributeValueId, newDescription: "Updated", lastUpdate: syncPoint.AddSeconds(5));
-        var syncer = new ProductAttributeValueSyncer(new BatchLogger(), NullLogger<ProductAttributeValueSyncer>.Instance);
+        var (syncer, _) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "ProductAttributeValue");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, syncPoint, CancellationToken.None);
 
-        // Assert
+        // Assert - no RowsErrored check, see IncrementalInsertTests' equivalent test
         Assert.False(result.IsInitialSync);
         Assert.True(result.RowsSynced >= 1);
         Assert.Equal("Updated", await SyncerTestHelpers.ReadScalarStringAsync(child,
@@ -55,7 +51,7 @@ public class IncrementalUpdateTests
     }
 
     [Fact]
-    public async Task ProductCatalogItemSyncer_UpdatesExistingRowViaRealStoredProcedure()
+    public async Task ProductCatalogItemTable_UpdatesExistingRowViaRealStoredProcedure()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -63,14 +59,14 @@ public class IncrementalUpdateTests
         await parent.OpenAsync();
         await child.OpenAsync();
 
-        const string sku = "UPDATE-ME-SKU";
+        const string sku = "CFG-UPDATE-ME-SKU";
         var originalLastUpdate = DateTime.UtcNow.AddDays(-1);
         await SyncerTestHelpers.InsertNewProductCatalogItemRowAsync(parent, sku, description: "Original Item", lastUpdate: originalLastUpdate);
         await SyncerTestHelpers.InsertNewProductCatalogItemRowAsync(child, sku, description: "Original Item", lastUpdate: originalLastUpdate);
 
-        var syncPoint = DateTime.UtcNow.AddHours(-9); // distinct hour from this table's other incremental tests
+        var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateProductCatalogItemDescriptionAsync(parent, sku, newDescription: "Updated Item", lastUpdate: syncPoint.AddSeconds(5));
-        var syncer = new ProductCatalogItemSyncer(new BatchLogger(), NullLogger<ProductCatalogItemSyncer>.Instance);
+        var (syncer, _) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "ProductCatalogItem");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, syncPoint, CancellationToken.None);
@@ -78,14 +74,14 @@ public class IncrementalUpdateTests
         // Assert
         Assert.False(result.IsInitialSync);
         Assert.True(result.RowsSynced >= 1);
-        Assert.Equal(0, result.RowsErrored); // ProductCatalogItem has no test that deliberately errors a row
+        Assert.Equal(0, result.RowsErrored);
         Assert.Equal("Updated Item", await SyncerTestHelpers.ReadScalarStringAsync(child,
             "SELECT [Description] FROM [dbo].[ProductCatalogItem] WHERE [Sku] = @Sku",
             ("@Sku", SqlDbType.NVarChar, sku, 50)));
     }
 
     [Fact]
-    public async Task DocumentAssetSyncer_UpdatesExistingRowViaRealStoredProcedure()
+    public async Task DocumentAssetTable_UpdatesExistingRowViaRealStoredProcedure()
     {
         // Arrange
         await using var parent = new SqlConnection(_fixture.ParentConnectionString);
@@ -93,15 +89,20 @@ public class IncrementalUpdateTests
         await parent.OpenAsync();
         await child.OpenAsync();
 
-        const int documentId = 401;
+        const int documentId = 1304;
         const string languageCode = "en";
         var originalLastUpdate = DateTime.UtcNow.AddDays(-1);
         await SyncerTestHelpers.InsertNewDocumentAssetRowAsync(parent, documentId, languageCode, title: "Original Title", lastUpdate: originalLastUpdate);
         await SyncerTestHelpers.InsertNewDocumentAssetRowAsync(child, documentId, languageCode, title: "Original Title", lastUpdate: originalLastUpdate);
 
-        var syncPoint = DateTime.UtcNow.AddHours(-9); // distinct hour from this table's other incremental tests
+        // Ensures DocumentAsset's persisted SyncPlan reflects a real large-row table (see
+        // InitialSyncTests' equivalent comment) regardless of which test in this shared
+        // collection is the first to provision it.
+        await SyncerTestHelpers.EnsureLargeDocumentAssetRowSeededAsync(parent);
+
+        var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateDocumentAssetTitleAsync(parent, documentId, languageCode, newTitle: "Updated Title", lastUpdate: syncPoint.AddSeconds(5));
-        var syncer = new DocumentAssetSyncer(new BatchLogger(), NullLogger<DocumentAssetSyncer>.Instance);
+        var (syncer, _) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "DocumentAsset");
 
         // Act
         var result = await syncer.SyncAsync(parent, child, syncPoint, CancellationToken.None);
@@ -109,7 +110,7 @@ public class IncrementalUpdateTests
         // Assert
         Assert.False(result.IsInitialSync);
         Assert.True(result.RowsSynced >= 1);
-        Assert.Equal(0, result.RowsErrored); // DocumentAsset has no test that deliberately errors a row
+        Assert.Equal(0, result.RowsErrored);
         Assert.Equal("Updated Title", await SyncerTestHelpers.ReadScalarStringAsync(child, """
             SELECT [Title] FROM [dbo].[DocumentAsset]
             WHERE [DocumentId] = @DocumentId AND [LanguageCode] = @LanguageCode

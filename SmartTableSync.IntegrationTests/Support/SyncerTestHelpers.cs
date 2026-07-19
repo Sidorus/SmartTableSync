@@ -1,6 +1,13 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging.Abstractions;
+using SmartTableSync.Configuration;
 using SmartTableSync.Infrastructure;
+using SmartTableSync.Introspection;
+using SmartTableSync.Logging;
+using SmartTableSync.Observability;
+using SmartTableSync.Planning;
+using SmartTableSync.Syncers;
 
 namespace SmartTableSync.IntegrationTests.Support;
 
@@ -11,6 +18,24 @@ namespace SmartTableSync.IntegrationTests.Support;
 /// </summary>
 public static class SyncerTestHelpers
 {
+    /// <summary>Builds a ConfigurableTableSyncer for the given table via the real production
+    /// construction path (SchemaReader -> SyncTableProvisioner -> TableSyncerFactory), so
+    /// tests exercise the exact same code SyncOrchestrator will use, not a shortcut. Returns
+    /// the derived SyncPlan alongside the syncer so tests can assert the chosen MergeStrategy
+    /// matches what the hand-written engine encoded per table.</summary>
+    public static async Task<(ITableSyncer Syncer, SyncPlan Plan)> BuildConfigurableSyncerAsync(
+        SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct = default)
+    {
+        var provisioner = new SyncTableProvisioner(
+            new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
+            new NoOpSyncMetricsReporter(), NullLogger<SyncTableProvisioner>.Instance);
+
+        var (profile, plan) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+
+        var factory = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance);
+        return (factory.Create(profile, plan), plan);
+    }
+
     public static async Task InsertNewProductAttributeValueRowAsync(
         SqlConnection parent, int attributeId, string slug, DateTime lastUpdate)
     {
@@ -72,6 +97,50 @@ public static class SyncerTestHelpers
         cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
         cmd.AddParam("@CreatedBy", SqlDbType.NVarChar, "tester", 50);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Same shape as InsertNewDocumentAssetRowAsync, but with a genuinely large
+    /// FileContent value. DocumentAsset's real rows can reach ~50 MB - SyncPlanHeuristic only
+    /// picks RowByRow for a FK-less table when it observes a row over LargeRowThresholdBytes
+    /// (1 MB), so a test relying on real introspection needs at least one row that's actually
+    /// large, not just NULL/small LOB columns like the standard JSON seed data.</summary>
+    public static async Task InsertLargeDocumentAssetRowAsync(
+        SqlConnection parent, int documentId, string languageCode, DateTime lastUpdate, int fileContentBytes = 2_000_000)
+    {
+        await using var cmd = new SqlCommand("""
+            INSERT INTO [dbo].[DocumentAsset]
+                ([DocumentId], [LanguageCode], [MediaLibraryId], [Title], [FileType], [MediaUrl],
+                 [IsPublished], [SortOrder], [FileContent], [LastUpdate], [CreatedBy])
+            VALUES (@DocumentId, @LanguageCode, @MediaLibraryId, @Title, @FileType, @MediaUrl,
+                    @IsPublished, @SortOrder, @FileContent, @LastUpdate, @CreatedBy)
+            """, parent);
+        cmd.AddParam("@DocumentId", SqlDbType.Int, documentId);
+        cmd.AddParam("@LanguageCode", SqlDbType.NVarChar, languageCode, 50);
+        cmd.AddParam("@MediaLibraryId", SqlDbType.Int, 3);
+        cmd.AddParam("@Title", SqlDbType.VarChar, "Large Attachment", 250);
+        cmd.AddParam("@FileType", SqlDbType.NVarChar, "pdf", 50);
+        cmd.AddParam("@MediaUrl", SqlDbType.NVarChar, $"https://example.test/docs/{documentId}-{languageCode}.pdf", 200);
+        cmd.AddParam("@IsPublished", SqlDbType.Bit, true);
+        cmd.AddParam("@SortOrder", SqlDbType.Int, 9);
+        cmd.AddParam("@FileContent", SqlDbType.VarBinary, new byte[fileContentBytes], -1);
+        cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
+        cmd.AddParam("@CreatedBy", SqlDbType.NVarChar, "tester", 50);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Idempotent version of InsertLargeDocumentAssetRowAsync (DocumentId 999,
+    /// LanguageCode "xx") - several test classes in the shared collection each independently
+    /// need DocumentAsset's introspected profile to include a large row before the first one
+    /// of them provisions it (SyncTableProvisioner persists the derived plan and every later
+    /// caller reuses it), and xUnit doesn't guarantee which one runs first.</summary>
+    public static async Task EnsureLargeDocumentAssetRowSeededAsync(SqlConnection parent)
+    {
+        await using var countCommand = new SqlCommand(
+            "SELECT COUNT(*) FROM [dbo].[DocumentAsset] WHERE [DocumentId] = 999 AND [LanguageCode] = 'xx'", parent);
+        var existing = (int)(await countCommand.ExecuteScalarAsync())!;
+        if (existing > 0) return;
+
+        await InsertLargeDocumentAssetRowAsync(parent, documentId: 999, languageCode: "xx", lastUpdate: DateTime.UtcNow);
     }
 
     public static async Task InsertProductAttributeValueWithExplicitIdAsync(
