@@ -9,7 +9,8 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
         const string sql = """
             SELECT [TableName], [PrimaryKeyColumns], [IdentityColumn], [MergeStrategy], [BatchSize],
                    [BulkCopyTimeoutSeconds], [RetryableSqlErrors], [TvpTypeName], [SchemaFingerprint], [ConfiguredAtUtc],
-                   [MergeStrategyOverride], [BatchSizeOverride], [BulkCopyTimeoutSecondsOverride], [RetryableSqlErrorsOverride]
+                   [MergeStrategyOverride], [BatchSizeOverride], [BulkCopyTimeoutSecondsOverride], [RetryableSqlErrorsOverride],
+                   [ChangeTrackingColumn], [IncrementalStrategy]
             FROM   [dbo].[SyncTableConfig]
             WHERE  [TableName] = @TableName
             """;
@@ -35,7 +36,9 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
             MergeStrategyOverride: reader.IsDBNull(10) ? null : Enum.Parse<MergeStrategy>(reader.GetString(10)),
             BatchSizeOverride: reader.IsDBNull(11) ? null : reader.GetInt32(11),
             BulkCopyTimeoutSecondsOverride: reader.IsDBNull(12) ? null : reader.GetInt32(12),
-            RetryableSqlErrorsOverride: reader.IsDBNull(13) ? null : SplitCsvInts(reader.GetString(13)));
+            RetryableSqlErrorsOverride: reader.IsDBNull(13) ? null : SplitCsvInts(reader.GetString(13)),
+            ChangeTrackingColumn: reader.IsDBNull(14) ? null : reader.GetString(14),
+            IncrementalStrategy: Enum.Parse<IncrementalStrategy>(reader.GetString(15)));
     }
 
     public async Task UpsertAsync(SqlConnection child, SyncTableConfig config, CancellationToken ct)
@@ -58,16 +61,20 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
                     [MergeStrategyOverride] = @MergeStrategyOverride,
                     [BatchSizeOverride] = @BatchSizeOverride,
                     [BulkCopyTimeoutSecondsOverride] = @BulkCopyTimeoutSecondsOverride,
-                    [RetryableSqlErrorsOverride] = @RetryableSqlErrorsOverride
+                    [RetryableSqlErrorsOverride] = @RetryableSqlErrorsOverride,
+                    [ChangeTrackingColumn] = @ChangeTrackingColumn,
+                    [IncrementalStrategy] = @IncrementalStrategy
             WHEN NOT MATCHED THEN
                 INSERT (
                     [TableName], [PrimaryKeyColumns], [IdentityColumn], [MergeStrategy], [BatchSize],
                     [BulkCopyTimeoutSeconds], [RetryableSqlErrors], [TvpTypeName], [SchemaFingerprint], [ConfiguredAtUtc],
-                    [MergeStrategyOverride], [BatchSizeOverride], [BulkCopyTimeoutSecondsOverride], [RetryableSqlErrorsOverride]
+                    [MergeStrategyOverride], [BatchSizeOverride], [BulkCopyTimeoutSecondsOverride], [RetryableSqlErrorsOverride],
+                    [ChangeTrackingColumn], [IncrementalStrategy]
                 ) VALUES (
                     @TableName, @PrimaryKeyColumns, @IdentityColumn, @MergeStrategy, @BatchSize,
                     @BulkCopyTimeoutSeconds, @RetryableSqlErrors, @TvpTypeName, @SchemaFingerprint, @ConfiguredAtUtc,
-                    @MergeStrategyOverride, @BatchSizeOverride, @BulkCopyTimeoutSecondsOverride, @RetryableSqlErrorsOverride
+                    @MergeStrategyOverride, @BatchSizeOverride, @BulkCopyTimeoutSecondsOverride, @RetryableSqlErrorsOverride,
+                    @ChangeTrackingColumn, @IncrementalStrategy
                 );
             """;
 
@@ -88,6 +95,8 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
         cmd.AddParam("@BulkCopyTimeoutSecondsOverride", SqlDbType.Int, config.BulkCopyTimeoutSecondsOverride);
         cmd.AddParam("@RetryableSqlErrorsOverride", SqlDbType.NVarChar,
             config.RetryableSqlErrorsOverride is null ? null : string.Join(",", config.RetryableSqlErrorsOverride), 200);
+        cmd.AddParam("@ChangeTrackingColumn", SqlDbType.NVarChar, config.ChangeTrackingColumn, 100);
+        cmd.AddParam("@IncrementalStrategy", SqlDbType.NVarChar, config.IncrementalStrategy.ToString(), 20);
 
         await cmd.ExecuteNonQueryAsync(ct);
     }

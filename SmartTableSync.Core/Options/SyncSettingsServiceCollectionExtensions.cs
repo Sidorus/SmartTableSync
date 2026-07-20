@@ -19,6 +19,14 @@ public static class SyncSettingsServiceCollectionExtensions
                 options.Mode = Enum.TryParse<SyncMode>(configuration["SmartTableSync:Mode"], ignoreCase: true, out var mode)
                     ? mode
                     : SyncMode.Manual;
+
+                options.ChangeTrackingColumns = configuration.GetSection("SmartTableSync:ChangeTrackingColumns")
+                    .GetChildren()
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+                    .ToDictionary(c => c.Key, c => c.Value!, StringComparer.OrdinalIgnoreCase);
+
+                var rawAllowFullRescanFor = configuration["SmartTableSync:AllowFullRescanFor"] ?? string.Empty;
+                options.AllowFullRescanFor = rawAllowFullRescanFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             });
 
         return services;

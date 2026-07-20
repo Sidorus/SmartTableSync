@@ -2,7 +2,11 @@ namespace SmartTableSync.Planning;
 
 public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
 {
-    public SyncPlan DerivePlan(TableProfile profile, PlanHeuristicOptions options)
+    public SyncPlan DerivePlan(
+        TableProfile profile,
+        PlanHeuristicOptions options,
+        string? changeTrackingColumn = null,
+        bool allowFullRescan = false)
     {
         // RowByRow when either an incoming FK could race against Data Sync's own delivery
         // of the referenced table (ProductAttributeValue's actual reason), or rows are large
@@ -46,6 +50,8 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             ? $"{profile.TableName}TableType"
             : null;
 
+        var incrementalStrategy = DeriveIncrementalStrategy(profile, options, changeTrackingColumn, allowFullRescan);
+
         return new SyncPlan(
             TableName: profile.TableName,
             MergeStrategy: mergeStrategy,
@@ -53,6 +59,27 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             BulkCopyOptions: bulkCopyOptions,
             BulkCopyTimeoutSeconds: bulkCopyTimeoutSeconds,
             RetryableSqlErrorNumbers: retryableSqlErrorNumbers,
-            TvpTypeName: tvpTypeName);
+            TvpTypeName: tvpTypeName,
+            ChangeTrackingColumn: changeTrackingColumn,
+            IncrementalStrategy: incrementalStrategy);
+    }
+
+    // No gate on the safe case (a usable column exists), explicit consent for the expensive
+    // case (a full re-scan every cycle) — same philosophy as Auto-mode DDL execution, here
+    // applied per-table instead of globally.
+    private static IncrementalStrategy DeriveIncrementalStrategy(
+        TableProfile profile, PlanHeuristicOptions options, string? changeTrackingColumn, bool allowFullRescan)
+    {
+        if (changeTrackingColumn is not null)
+            return IncrementalStrategy.Timestamp;
+
+        if (profile.RowCount <= options.FullRescanRowCountThreshold || allowFullRescan)
+            return IncrementalStrategy.FullRescan;
+
+        throw new InvalidOperationException(
+            $"{profile.TableName}: no usable change-tracking column and {profile.RowCount} rows exceeds the " +
+            $"FullRescan threshold ({options.FullRescanRowCountThreshold}) — set " +
+            $"SmartTableSync:ChangeTrackingColumns:{profile.TableName} to the correct column name, or add " +
+            $"'{profile.TableName}' to SmartTableSync:AllowFullRescanFor to accept a full re-scan every cycle.");
     }
 }

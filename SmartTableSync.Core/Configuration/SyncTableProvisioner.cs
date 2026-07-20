@@ -6,6 +6,7 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
     private readonly ISyncPlanHeuristic _heuristic;
     private readonly ISyncTableConfigRepository _configRepository;
     private readonly ISyncMetricsReporter _metrics;
+    private readonly IOptions<SyncSettings> _settings;
     private readonly ILogger<SyncTableProvisioner> _logger;
 
     public SyncTableProvisioner(
@@ -13,12 +14,14 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
         ISyncPlanHeuristic heuristic,
         ISyncTableConfigRepository configRepository,
         ISyncMetricsReporter metrics,
+        IOptions<SyncSettings> settings,
         ILogger<SyncTableProvisioner> logger)
     {
         _schemaReader = schemaReader;
         _heuristic = heuristic;
         _configRepository = configRepository;
         _metrics = metrics;
+        _settings = settings;
         _logger = logger;
     }
 
@@ -43,7 +46,15 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
                 tableName, existing.SchemaFingerprint, currentFingerprint);
 
         var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, ct);
-        var plan = _heuristic.DerivePlan(fullProfile, new PlanHeuristicOptions());
+
+        var configuredColumn = _settings.Value.ChangeTrackingColumns.TryGetValue(tableName, out var name)
+            ? name : "LastUpdate";
+        var columnExists = fullProfile.Columns.Any(c =>
+            string.Equals(c.Name, configuredColumn, StringComparison.OrdinalIgnoreCase));
+        var changeTrackingColumn = columnExists ? configuredColumn : null;
+        var allowFullRescan = _settings.Value.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);
+
+        var plan = _heuristic.DerivePlan(fullProfile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan);
 
         // Preserve any hand-set overrides across re-provisioning — they're reviewable data
         // an operator set deliberately, not something a fresh heuristic run should erase.

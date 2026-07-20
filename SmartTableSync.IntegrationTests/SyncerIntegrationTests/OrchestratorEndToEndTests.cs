@@ -63,7 +63,8 @@ public class OrchestratorEndToEndTests : IClassFixture<MsSqlTestFixture>
 
         var provisioner = new SyncTableProvisioner(
             new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
-            new NoOpSyncMetricsReporter(), NullLogger<SyncTableProvisioner>.Instance);
+            new NoOpSyncMetricsReporter(), Microsoft.Extensions.Options.Options.Create(new SyncSettings()),
+            NullLogger<SyncTableProvisioner>.Instance);
         var syncerFactory = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance);
 
         var childDdlProvisioner = new ChildDdlProvisioner(

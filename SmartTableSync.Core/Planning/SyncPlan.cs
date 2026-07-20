@@ -9,4 +9,6 @@ public sealed record SyncPlan(
     SqlBulkCopyOptions BulkCopyOptions,
     int BulkCopyTimeoutSeconds,
     IReadOnlyList<int> RetryableSqlErrorNumbers,
-    string? TvpTypeName);
+    string? TvpTypeName,
+    string? ChangeTrackingColumn = null,
+    IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp);

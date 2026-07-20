@@ -11,4 +11,5 @@ public sealed record PlanHeuristicOptions(
     int MaxBatchSize = 1000,
     int BaseTimeoutSeconds = 120,
     double SecondsPerMb = 3.6,
-    long LargeRowThresholdBytes = 1_000_000);
+    long LargeRowThresholdBytes = 1_000_000,
+    long FullRescanRowCountThreshold = 50_000);

@@ -56,7 +56,14 @@ foreach (var tableName in tableNames)
     Console.WriteLine($"=== {tableName} ===");
 
     var profile = await schemaReader.ProfileTableAsync(parent, tableName, CancellationToken.None);
-    var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions());
+
+    // Scaffold has no SyncSettings of its own (env-var-driven CLI, not a hosted app) - falls
+    // back to the same default column name SyncTableProvisioner uses when unconfigured, and
+    // never enforces the FullRescan row-count gate since this is a reporting/generation tool,
+    // not the runtime path that actually needs the safety valve.
+    var changeTrackingColumn = profile.Columns.Any(c => string.Equals(c.Name, "LastUpdate", StringComparison.OrdinalIgnoreCase))
+        ? "LastUpdate" : null;
+    var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan: true);
     var childExists = await schemaReader.TableExistsAsync(child, tableName, CancellationToken.None);
 
     Console.WriteLine($"  MergeStrategy={plan.MergeStrategy}, BatchSize={plan.BatchSize}, BulkCopyTimeoutSeconds={plan.BulkCopyTimeoutSeconds}");

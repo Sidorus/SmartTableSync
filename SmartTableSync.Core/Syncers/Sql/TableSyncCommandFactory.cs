@@ -49,7 +49,7 @@ public sealed class TableSyncCommandFactory
     {
         var cmd = new SqlCommand($"""
             SELECT * FROM [dbo].[{_profile.TableName}]
-            WHERE  [LastUpdate] >= DATEADD(minute, -1, @LastSync)
+            WHERE  [{_plan.ChangeTrackingColumn}] >= DATEADD(minute, -1, @LastSync)
             """, parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
 
         cmd.Parameters.Add("@LastSync", SqlDbType.DateTime).Value = lastSync;

@@ -5,5 +5,13 @@ namespace SmartTableSync.Planning;
 /// derived from data rather than hand-declared per table.</summary>
 public interface ISyncPlanHeuristic
 {
-    SyncPlan DerivePlan(TableProfile profile, PlanHeuristicOptions options);
+    /// <summary>changeTrackingColumn/allowFullRescan are already-resolved inputs (config
+    /// lookup + column-existence check happens in SyncTableProvisioner) — this stays a pure
+    /// function with no config/I/O of its own. changeTrackingColumn null means the configured
+    /// (or default "LastUpdate") column doesn't exist on this table.</summary>
+    SyncPlan DerivePlan(
+        TableProfile profile,
+        PlanHeuristicOptions options,
+        string? changeTrackingColumn = null,
+        bool allowFullRescan = false);
 }

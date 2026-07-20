@@ -6,6 +6,7 @@ using SmartTableSync.Infrastructure;
 using SmartTableSync.Introspection;
 using SmartTableSync.Logging;
 using SmartTableSync.Observability;
+using SmartTableSync.Options;
 using SmartTableSync.Planning;
 using SmartTableSync.Syncers;
 
@@ -22,13 +23,16 @@ public static class SyncerTestHelpers
     /// construction path (SchemaReader -> SyncTableProvisioner -> TableSyncerFactory), so
     /// tests exercise the exact same code SyncOrchestrator will use, not a shortcut. Returns
     /// the derived SyncPlan alongside the syncer so tests can assert the chosen MergeStrategy
-    /// matches what the hand-written engine encoded per table.</summary>
+    /// matches what the hand-written engine encoded per table. settings defaults to plain
+    /// SyncSettings (no ChangeTrackingColumns/AllowFullRescanFor entries) — every table not
+    /// listed resolves to the default "LastUpdate" column, today's behavior.</summary>
     public static async Task<(ITableSyncer Syncer, SyncPlan Plan)> BuildConfigurableSyncerAsync(
-        SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct = default)
+        SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct = default, SyncSettings? settings = null)
     {
         var provisioner = new SyncTableProvisioner(
             new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
-            new NoOpSyncMetricsReporter(), NullLogger<SyncTableProvisioner>.Instance);
+            new NoOpSyncMetricsReporter(), Microsoft.Extensions.Options.Options.Create(settings ?? new SyncSettings()),
+            NullLogger<SyncTableProvisioner>.Instance);
 
         var (profile, plan, _) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
@@ -222,6 +226,49 @@ public static class SyncerTestHelpers
         cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
         cmd.AddParam("@DocumentId", SqlDbType.Int, documentId);
         cmd.AddParam("@LanguageCode", SqlDbType.NVarChar, languageCode, 50);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task InsertIncrementalStrategyFullRescanRowAsync(SqlConnection connection, int id, string value)
+    {
+        await using var cmd = new SqlCommand(
+            "INSERT INTO [dbo].[IncrementalStrategyFullRescanTestTable] ([Id], [Value]) VALUES (@Id, @Value)", connection);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task UpdateIncrementalStrategyFullRescanValueAsync(SqlConnection connection, int id, string newValue)
+    {
+        await using var cmd = new SqlCommand(
+            "UPDATE [dbo].[IncrementalStrategyFullRescanTestTable] SET [Value] = @Value WHERE [Id] = @Id", connection);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, newValue, 200);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task InsertIncrementalStrategyConfiguredColumnRowAsync(
+        SqlConnection connection, int id, string value, DateTime modifiedAt)
+    {
+        await using var cmd = new SqlCommand("""
+            INSERT INTO [dbo].[IncrementalStrategyConfiguredColumnTestTable] ([Id], [Value], [ModifiedAt]) VALUES (@Id, @Value, @ModifiedAt)
+            """, connection);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+        cmd.AddParam("@ModifiedAt", SqlDbType.DateTime, modifiedAt);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task UpdateIncrementalStrategyConfiguredColumnValueAsync(
+        SqlConnection connection, int id, string newValue, DateTime modifiedAt)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE [dbo].[IncrementalStrategyConfiguredColumnTestTable]
+            SET [Value] = @Value, [ModifiedAt] = @ModifiedAt WHERE [Id] = @Id
+            """, connection);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, newValue, 200);
+        cmd.AddParam("@ModifiedAt", SqlDbType.DateTime, modifiedAt);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
         await cmd.ExecuteNonQueryAsync();
     }
 

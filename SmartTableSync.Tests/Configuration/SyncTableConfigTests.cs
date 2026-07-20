@@ -97,4 +97,29 @@ public class SyncTableConfigTests
         Assert.Equal(originalPlan.BulkCopyTimeoutSeconds, roundTripped.BulkCopyTimeoutSeconds);
         Assert.Equal(originalPlan.TvpTypeName, roundTripped.TvpTypeName);
     }
+
+    [Fact]
+    public void FromPlan_ThenToSyncPlan_RoundTripsChangeTrackingColumnAndIncrementalStrategy()
+    {
+        var profile = new SmartTableSync.Introspection.TableProfile(
+            TableName: "TestTable",
+            Columns: [],
+            PrimaryKeyColumns: ["Id"],
+            IdentityColumn: null,
+            IndexedLobColumns: [],
+            HasIncomingForeignKeys: false,
+            RowCount: 0,
+            AvgRowSizeBytes: 0,
+            MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+        var originalPlan = new SyncPlan(
+            "TestTable", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "TestTableTableType",
+            ChangeTrackingColumn: null, IncrementalStrategy: IncrementalStrategy.FullRescan);
+
+        var config = SyncTableConfig.FromPlan(profile, originalPlan, "fingerprint1", DateTime.UtcNow);
+        var roundTripped = config.ToSyncPlan();
+
+        Assert.Null(roundTripped.ChangeTrackingColumn);
+        Assert.Equal(IncrementalStrategy.FullRescan, roundTripped.IncrementalStrategy);
+    }
 }

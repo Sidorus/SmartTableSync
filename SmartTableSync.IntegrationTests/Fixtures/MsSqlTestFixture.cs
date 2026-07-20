@@ -40,7 +40,11 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
         ChildConnectionString = new SqlConnectionStringBuilder(baseConnectionString) { InitialCatalog = "ChildTestDb" }.ConnectionString;
 
         var schemaDir = Path.Combine(AppContext.BaseDirectory, "Schema");
-        var tableScripts = new[] { "Attribute.sql", "ProductAttributeValue.sql", "ProductCatalogItem.sql", "DocumentAsset.sql" };
+        var tableScripts = new[]
+        {
+            "Attribute.sql", "ProductAttributeValue.sql", "ProductCatalogItem.sql", "DocumentAsset.sql",
+            "IncrementalStrategyFullRescanTestTable.sql", "IncrementalStrategyConfiguredColumnTestTable.sql",
+        };
 
         await RunScriptsAsync(ParentConnectionString, tableScripts.Select(f => Path.Combine(schemaDir, f)));
 

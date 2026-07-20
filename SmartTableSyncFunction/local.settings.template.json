@@ -14,6 +14,11 @@
     "_SmartTableSync:Mode_readme": "Manual (default): scaffold the child DB by hand via SmartTableSync.Scaffold, then add tables to TableList once applied. Auto: the Function creates/updates child DDL itself on first sight of a table or parent schema drift - requires ChildProvisioningConnectionString below.",
 
     "_ChildProvisioningConnectionString_readme": "Only required when SmartTableSync:Mode is Auto. Uses the smarttablesync-child-provisioning identity (see sql/07_permissions.sql) - the same one SmartTableSync.Scaffold already uses, never the runtime identity above.",
-    "ChildProvisioningConnectionString": "<child-db-provisioning-connection-string>"
+    "ChildProvisioningConnectionString": "<child-db-provisioning-connection-string>",
+
+    "_SmartTableSync:ChangeTrackingColumns_readme": "Per-table override of the incremental change-tracking column name. A table not listed here defaults to 'LastUpdate'. Example: \"SmartTableSync:ChangeTrackingColumns:SomeOtherTable\": \"ModifiedAt\".",
+
+    "_SmartTableSync:AllowFullRescanFor_readme": "Comma-separated table names explicitly allowed to fall back to a full-table re-scan every incremental cycle when their change-tracking column doesn't exist, even above PlanHeuristicOptions.FullRescanRowCountThreshold (50,000 rows by default). Small tables below that threshold fall back automatically without needing to be listed here.",
+    "SmartTableSync:AllowFullRescanFor": ""
   }
 }

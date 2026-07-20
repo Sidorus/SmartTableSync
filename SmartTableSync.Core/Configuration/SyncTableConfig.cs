@@ -17,11 +17,15 @@ public sealed record SyncTableConfig(
     MergeStrategy? MergeStrategyOverride,
     int? BatchSizeOverride,
     int? BulkCopyTimeoutSecondsOverride,
-    IReadOnlyList<int>? RetryableSqlErrorsOverride)
+    IReadOnlyList<int>? RetryableSqlErrorsOverride,
+    string? ChangeTrackingColumn = null,
+    IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp)
 {
     /// <summary>Maps to a SyncPlan, applying any non-null override over the corresponding
     /// heuristically-derived value. BulkCopyOptions isn't stored separately — it's fully
-    /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.</summary>
+    /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.
+    /// ChangeTrackingColumn/IncrementalStrategy have no override — the one configuration
+    /// surface for them is SyncSettings (app config), resolved once at provisioning time.</summary>
     public SyncPlan ToSyncPlan() => new(
         TableName: TableName,
         MergeStrategy: MergeStrategyOverride ?? MergeStrategy,
@@ -29,7 +33,9 @@ public sealed record SyncTableConfig(
         BulkCopyOptions: IdentityColumn is not null ? SqlBulkCopyOptions.KeepIdentity : SqlBulkCopyOptions.Default,
         BulkCopyTimeoutSeconds: BulkCopyTimeoutSecondsOverride ?? BulkCopyTimeoutSeconds,
         RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
-        TvpTypeName: TvpTypeName);
+        TvpTypeName: TvpTypeName,
+        ChangeTrackingColumn: ChangeTrackingColumn,
+        IncrementalStrategy: IncrementalStrategy);
 
     public static SyncTableConfig FromPlan(
         TableProfile profile,
@@ -53,5 +59,7 @@ public sealed record SyncTableConfig(
         MergeStrategyOverride: mergeStrategyOverride,
         BatchSizeOverride: batchSizeOverride,
         BulkCopyTimeoutSecondsOverride: bulkCopyTimeoutSecondsOverride,
-        RetryableSqlErrorsOverride: retryableSqlErrorsOverride);
+        RetryableSqlErrorsOverride: retryableSqlErrorsOverride,
+        ChangeTrackingColumn: plan.ChangeTrackingColumn,
+        IncrementalStrategy: plan.IncrementalStrategy);
 }

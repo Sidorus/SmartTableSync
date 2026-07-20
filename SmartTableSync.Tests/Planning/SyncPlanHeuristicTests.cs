@@ -15,6 +15,7 @@ public class SyncPlanHeuristicTests
         string? identityColumn = null,
         bool hasIncomingForeignKeys = false,
         long avgRowSizeBytes = 500,
+        long rowCount = 1000,
         IReadOnlyDictionary<string, long>? maxLobColumnSizeBytes = null) =>
         new(
             TableName: tableName,
@@ -23,7 +24,7 @@ public class SyncPlanHeuristicTests
             IdentityColumn: identityColumn,
             IndexedLobColumns: [],
             HasIncomingForeignKeys: hasIncomingForeignKeys,
-            RowCount: 1000,
+            RowCount: rowCount,
             AvgRowSizeBytes: avgRowSizeBytes,
             MaxLobColumnSizeBytes: maxLobColumnSizeBytes ?? new Dictionary<string, long>());
 
@@ -132,5 +133,46 @@ public class SyncPlanHeuristicTests
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
         Assert.True(plan.BatchSize >= DefaultOptions.MinBatchSize);
+    }
+
+    [Fact]
+    public void DerivePlan_WithChangeTrackingColumn_ChoosesTimestampStrategy()
+    {
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate");
+
+        Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
+        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_NoChangeTrackingColumnAndSmallTable_FallsBackToFullRescan()
+    {
+        var profile = CreateProfile(rowCount: 1_000);
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null);
+
+        Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
+        Assert.Null(plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_NoChangeTrackingColumnAndLargeTableWithoutAllowFullRescan_Throws()
+    {
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
+
+        Assert.Throws<InvalidOperationException>(
+            () => _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false));
+    }
+
+    [Fact]
+    public void DerivePlan_NoChangeTrackingColumnAndLargeTableWithAllowFullRescan_ChoosesFullRescan()
+    {
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: true);
+
+        Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
     }
 }

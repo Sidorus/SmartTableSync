@@ -44,6 +44,11 @@ BEGIN
         [BulkCopyTimeoutSecondsOverride] INT           NULL,
         [RetryableSqlErrorsOverride]     NVARCHAR(200) NULL,
 
+        -- Resolved once from SmartTableSync:ChangeTrackingColumns app config at provisioning
+        -- time (no override column — SyncSettings is the one configuration surface for this).
+        [ChangeTrackingColumn]           NVARCHAR(100) NULL,
+        [IncrementalStrategy]            NVARCHAR(20)  NOT NULL DEFAULT 'Timestamp',  -- 'Timestamp' | 'FullRescan'
+
         CONSTRAINT [PK_SyncTableConfig] PRIMARY KEY ([TableName])
     );
 
@@ -51,4 +56,17 @@ BEGIN
 END
 ELSE
     PRINT 'dbo.SyncTableConfig already exists';
+GO
+
+-- Migration for a database that already has dbo.SyncTableConfig from before
+-- ChangeTrackingColumn/IncrementalStrategy existed — the CREATE TABLE guard above only
+-- helps a fresh deployment.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SyncTableConfig') AND name = 'ChangeTrackingColumn')
+BEGIN
+    ALTER TABLE [dbo].[SyncTableConfig] ADD
+        [ChangeTrackingColumn] NVARCHAR(100) NULL,
+        [IncrementalStrategy]  NVARCHAR(20)  NOT NULL DEFAULT 'Timestamp';
+
+    PRINT 'Added ChangeTrackingColumn/IncrementalStrategy to dbo.SyncTableConfig';
+END
 GO

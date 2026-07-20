@@ -22,7 +22,7 @@ public sealed class TableSyncerFactory : ITableSyncerFactory
         var syncRunners = new Dictionary<SyncPhase, Lazy<ISyncRunner>>
         {
             [SyncPhase.Initial] = new(() => new InitialSyncRunner(profile, plan, commandFactory, mergeStrategy, _batchLogger, logger)),
-            [SyncPhase.Incremental] = new(() => new IncrementalSyncRunner(commandFactory, mergeStrategy)),
+            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, logger)),
         };
 
         var deleteReconciler = new DeleteReconciler(profile, commandFactory, logger);

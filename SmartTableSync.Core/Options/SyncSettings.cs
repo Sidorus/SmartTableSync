@@ -13,6 +13,19 @@ public sealed class SyncSettings
     /// executes it against the child database the first time a table is seen or its parent
     /// schema drifts, via the separate, opt-in ChildProvisioningConnectionString.</summary>
     public SyncMode Mode { get; set; } = SyncMode.Manual;
+
+    /// <summary>Per-table override of the incremental change-tracking column name, keyed by
+    /// table name. A table not listed here defaults to "LastUpdate" — today's hardcoded
+    /// behavior, reproduced automatically with zero config needed.</summary>
+    public IReadOnlyDictionary<string, string> ChangeTrackingColumns { get; set; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Tables explicitly allowed to fall back to a full-table re-scan every
+    /// incremental cycle when their change-tracking column doesn't exist, even if the table
+    /// is larger than PlanHeuristicOptions.FullRescanRowCountThreshold. Without this,
+    /// provisioning a large table with no usable column throws instead of silently
+    /// re-scanning it every cycle.</summary>
+    public IReadOnlyList<string> AllowFullRescanFor { get; set; } = [];
 }
 
 public enum SyncMode

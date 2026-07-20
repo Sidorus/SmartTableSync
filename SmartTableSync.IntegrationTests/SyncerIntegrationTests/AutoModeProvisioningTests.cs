@@ -6,6 +6,7 @@ using SmartTableSync.IntegrationTests.Support;
 using SmartTableSync.Introspection;
 using SmartTableSync.Logging;
 using SmartTableSync.Observability;
+using SmartTableSync.Options;
 using SmartTableSync.Planning;
 using SmartTableSync.Scaffolding;
 using SmartTableSync.State;
@@ -136,7 +137,8 @@ public class AutoModeProvisioningTests : IClassFixture<MsSqlTestFixture>
 
     private static SyncTableProvisioner BuildProvisioner() => new(
         new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
-        new NoOpSyncMetricsReporter(), NullLogger<SyncTableProvisioner>.Instance);
+        new NoOpSyncMetricsReporter(), Microsoft.Extensions.Options.Options.Create(new SyncSettings()),
+        NullLogger<SyncTableProvisioner>.Instance);
 
     private static ChildDdlProvisioner BuildChildDdlProvisioner() => new(
         new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance);
