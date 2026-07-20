@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using SmartTableSync.Scaffolding;
 using Testcontainers.MsSql;
 
 namespace SmartTableSync.IntegrationTests.Fixtures;
@@ -50,14 +51,17 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
 
         var childScripts = tableScripts.Concat(
         [
-            "01_child_db_setup.sql",
             "05_udt_types.sql",
             "02_sp_sync_product_attribute_value.sql",
             "03_sp_sync_product_catalog_item.sql",
             "04_sp_sync_document_asset.sql",
-            "06_sync_table_config.sql",
         ]).Select(f => Path.Combine(schemaDir, f));
 
+        // CustomSyncState/SyncBatchLog/SyncTableConfig are no longer static files - Scaffold's
+        // --infrastructure output and Auto mode's IChildDdlProvisioner.EnsureInfrastructureExistsAsync
+        // both come from this same generator, so exercising it here proves that generated
+        // content is what test setup actually relies on, not a hand-copied file that could drift.
+        await RunGeneratedScriptAsync(ChildConnectionString, new SqlArtifactGenerator().GenerateInfrastructureScript());
         await RunScriptsAsync(ChildConnectionString, childScripts);
 
         Configuration = new ConfigurationBuilder()
@@ -77,23 +81,31 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
         await connection.OpenAsync();
 
         foreach (var path in scriptPaths)
+            await ExecuteBatchesAsync(connection, await File.ReadAllTextAsync(path), Path.GetFileName(path));
+    }
+
+    private static async Task RunGeneratedScriptAsync(string connectionString, string script)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        await ExecuteBatchesAsync(connection, script, "SqlArtifactGenerator.GenerateInfrastructureScript()");
+    }
+
+    private static async Task ExecuteBatchesAsync(SqlConnection connection, string script, string scriptLabel)
+    {
+        foreach (var batch in _goSeparator.Split(script))
         {
-            var script = await File.ReadAllTextAsync(path);
+            var trimmed = batch.Trim();
+            if (trimmed.Length == 0) continue;
 
-            foreach (var batch in _goSeparator.Split(script))
+            await using var command = new SqlCommand(trimmed, connection) { CommandTimeout = 120 };
+            try
             {
-                var trimmed = batch.Trim();
-                if (trimmed.Length == 0) continue;
-
-                await using var command = new SqlCommand(trimmed, connection) { CommandTimeout = 120 };
-                try
-                {
-                    await command.ExecuteNonQueryAsync();
-                }
-                catch (SqlException ex)
-                {
-                    throw new InvalidOperationException($"Schema script '{Path.GetFileName(path)}' failed: {ex.Message}", ex);
-                }
+                await command.ExecuteNonQueryAsync();
+            }
+            catch (SqlException ex)
+            {
+                throw new InvalidOperationException($"Schema script '{scriptLabel}' failed: {ex.Message}", ex);
             }
         }
     }

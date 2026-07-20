@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.Introspection;
 using SmartTableSync.Models;
+using SmartTableSync.State;
 
 namespace SmartTableSync.IntegrationTests;
 
@@ -63,25 +64,34 @@ public class ChildSchemaTests
     }
 
     [Fact]
-    public async Task ChildDatabase_CustomSyncStateIsSeededForManagedTables()
+    public async Task ChildDatabase_CustomSyncStateStartsEmpty_NoTableNamesHardcoded()
     {
-        // Arrange
+        // GenerateInfrastructureScript() is table-agnostic - it can't know a consumer's table
+        // names ahead of time, so CustomSyncState is intentionally seeded with zero rows.
+        // SyncStateRepository.GetLastSyncDateAsync already defaults any table with no row to
+        // SyncConstants.InitialDate, so explicit per-table seeding was never actually required
+        // (the earlier hand-authored script's seed INSERTs for the 3 example tables were
+        // convenience, not a functional dependency).
         await using var child = new SqlConnection(_fixture.ChildConnectionString);
         await child.OpenAsync();
-        await using var cmd = new SqlCommand(
-            "SELECT [TableName], [LastSyncDate] FROM [dbo].[CustomSyncState] ORDER BY [TableName]", child);
+        await using var cmd = new SqlCommand("SELECT COUNT(*) FROM [dbo].[CustomSyncState]", child);
 
-        // Act
-        await using var dbReader = await cmd.ExecuteReaderAsync();
-        var rows = new List<(string TableName, DateTime LastSyncDate)>();
-        while (await dbReader.ReadAsync())
-            rows.Add((dbReader.GetString(0), dbReader.GetDateTime(1)));
+        Assert.Equal(0, (int)(await cmd.ExecuteScalarAsync())!);
+    }
 
-        // Assert
-        Assert.Equal(
-            ["DocumentAsset", "ProductAttributeValue", "ProductCatalogItem"],
-            rows.Select(r => r.TableName));
-        Assert.All(rows, r => Assert.Equal(SyncConstants.InitialDate, r.LastSyncDate));
+    [Theory]
+    [InlineData("ProductAttributeValue")]
+    [InlineData("ProductCatalogItem")]
+    [InlineData("DocumentAsset")]
+    public async Task GetLastSyncDateAsync_NoRowYet_DefaultsToInitialDate(string tableName)
+    {
+        await using var child = new SqlConnection(_fixture.ChildConnectionString);
+        await child.OpenAsync();
+        var stateRepository = new SyncStateRepository();
+
+        var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, tableName, CancellationToken.None);
+
+        Assert.Equal(SyncConstants.InitialDate, lastSyncDate);
     }
 
     [Fact]

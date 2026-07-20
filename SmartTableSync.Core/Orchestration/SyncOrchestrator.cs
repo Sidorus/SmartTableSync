@@ -59,6 +59,13 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         {
             _logger.LogInformation("SmartTableSync run started at {Time}", DateTimeOffset.UtcNow);
 
+            if (_mode == SyncMode.Auto)
+            {
+                await using var childProvisioning = _connFactory.CreateChildProvisioningConnection();
+                await childProvisioning.OpenAsync(ct);
+                await _childDdlProvisioner.EnsureInfrastructureExistsAsync(childProvisioning, ct);
+            }
+
             var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= _reconcileInterval;
 
             foreach (var tableName in _tableNames)

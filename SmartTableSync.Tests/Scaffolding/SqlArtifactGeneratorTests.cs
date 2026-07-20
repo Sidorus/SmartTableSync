@@ -181,4 +181,49 @@ public class SqlArtifactGeneratorTests
 
         Assert.Contains("@FileContent [varbinary](max)", script);
     }
+
+    // --- GenerateInfrastructureScript: table-agnostic, no TableProfile involved ---
+
+    [Fact]
+    public void GenerateInfrastructureScript_CreatesAllThreeTrackingTables()
+    {
+        var script = _generator.GenerateInfrastructureScript();
+
+        Assert.Contains("CREATE TABLE [dbo].[CustomSyncState]", script);
+        Assert.Contains("CREATE TABLE [dbo].[SyncBatchLog]", script);
+        Assert.Contains("CREATE TABLE [dbo].[SyncTableConfig]", script);
+    }
+
+    [Fact]
+    public void GenerateInfrastructureScript_DoesNotHardcodeAnyTableName()
+    {
+        // The earlier hand-authored script seeded CustomSyncState with rows for this repo's
+        // 3 example tables - a real consumer's tables aren't ProductAttributeValue/
+        // ProductCatalogItem/DocumentAsset, so this generator must never bake those in.
+        var script = _generator.GenerateInfrastructureScript();
+
+        Assert.DoesNotContain("ProductAttributeValue", script);
+        Assert.DoesNotContain("ProductCatalogItem", script);
+        Assert.DoesNotContain("DocumentAsset", script);
+    }
+
+    [Fact]
+    public void GenerateInfrastructureScript_SyncTableConfig_IncludesChangeTrackingColumns()
+    {
+        var script = _generator.GenerateInfrastructureScript();
+
+        Assert.Contains("[ChangeTrackingColumn]", script);
+        Assert.Contains("[IncrementalStrategy]", script);
+    }
+
+    [Fact]
+    public void GenerateInfrastructureScript_EveryCreateTableIsGuardedByIfNotExists()
+    {
+        var script = _generator.GenerateInfrastructureScript();
+
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CustomSyncState'", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'SyncBatchLog'", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'SyncTableConfig'", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SyncTableConfig') AND name = 'ChangeTrackingColumn'", script);
+    }
 }

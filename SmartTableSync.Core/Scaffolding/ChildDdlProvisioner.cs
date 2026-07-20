@@ -32,4 +32,9 @@ public sealed class ChildDdlProvisioner : IChildDdlProvisioner
 
         _logger.LogInformation("{Table}: child DDL objects verified/created", profile.TableName);
     }
+
+    public async Task EnsureInfrastructureExistsAsync(SqlConnection childProvisioning, CancellationToken ct)
+    {
+        await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateInfrastructureScript(), ct);
+    }
 }

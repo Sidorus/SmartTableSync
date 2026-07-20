@@ -11,4 +11,10 @@ public interface IChildDdlProvisioner
 {
     Task EnsureChildObjectsExistAsync(
         SqlConnection childProvisioning, TableProfile profile, SyncPlan plan, CancellationToken ct);
+
+    /// <summary>Ensures the table-agnostic tracking infrastructure (CustomSyncState,
+    /// SyncBatchLog, SyncTableConfig) exists — called once per run in Auto mode, before any
+    /// business table is touched. Idempotent and cheap (IF NOT EXISTS-guarded), same as
+    /// EnsureChildObjectsExistAsync's own per-table guards.</summary>
+    Task EnsureInfrastructureExistsAsync(SqlConnection childProvisioning, CancellationToken ct);
 }

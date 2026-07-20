@@ -15,20 +15,34 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 
         Usage:
           dotnet run -- <TableName> [<TableName> ...] [--output <dir>]
+          dotnet run -- --infrastructure [--output <dir>]
 
-        Environment variables required:
+        Environment variables required (per-table generation only — --infrastructure needs none):
           ParentIntrospectionConnectionString   (read-only: VIEW DEFINITION + SELECT on parent)
           ChildProvisioningConnectionString      (used only to check whether the child table
                                                    already exists — never executes DDL)
 
-        Output defaults to sql/generated/ (relative to the current directory) and never
-        overwrites the hand-authored sql/01-06 scripts.
+        --infrastructure writes the table-agnostic tracking schema every managed table
+        depends on (CustomSyncState, SyncBatchLog, SyncTableConfig) to one reviewable file.
+        Apply it once, before syncing any table for the first time.
+
+        Output defaults to sql/generated/ (relative to the current directory).
         """);
     return 0;
 }
 
 var outputIndex = Array.IndexOf(args, "--output");
 var outputDir = outputIndex >= 0 && outputIndex + 1 < args.Length ? args[outputIndex + 1] : "sql/generated";
+
+if (args.Contains("--infrastructure"))
+{
+    Directory.CreateDirectory(outputDir);
+    var infrastructurePath = Path.Combine(outputDir, "00_infrastructure.sql");
+    await File.WriteAllTextAsync(infrastructurePath, new SqlArtifactGenerator().GenerateInfrastructureScript());
+    Console.WriteLine($"wrote {infrastructurePath}");
+    return 0;
+}
+
 var tableNames = args.Where((a, i) => a != "--output" && (outputIndex < 0 || i != outputIndex + 1)).ToList();
 
 var parentConnString = Environment.GetEnvironmentVariable("ParentIntrospectionConnectionString");
