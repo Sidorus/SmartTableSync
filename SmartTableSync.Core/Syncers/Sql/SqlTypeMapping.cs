@@ -18,7 +18,12 @@ public static class SqlTypeMapping
         "char" => SqlDbType.Char,
         "datetime" => SqlDbType.DateTime,
         "datetime2" => SqlDbType.DateTime2,
+        "smalldatetime" => SqlDbType.SmallDateTime,
+        "datetimeoffset" => SqlDbType.DateTimeOffset,
+        "time" => SqlDbType.Time,
         "date" => SqlDbType.Date,
+        "text" => SqlDbType.Text,
+        "ntext" => SqlDbType.NText,
         "bit" => SqlDbType.Bit,
         "real" => SqlDbType.Real,
         "float" => SqlDbType.Float,
@@ -68,7 +73,9 @@ public static class SqlTypeMapping
         "tinyint" => byte.Parse(value),
         "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext" => value,
         "uniqueidentifier" => Guid.Parse(value),
-        "datetime" or "datetime2" or "date" => DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
+        "datetime" or "datetime2" or "smalldatetime" or "date" => DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
+        "datetimeoffset" => DateTimeOffset.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
+        "time" => TimeSpan.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
         _ => throw new NotSupportedException($"Unsupported key column type for keyset pagination: {sqlTypeName}"),
     };
 }
