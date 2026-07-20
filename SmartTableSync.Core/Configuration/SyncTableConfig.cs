@@ -62,4 +62,16 @@ public sealed record SyncTableConfig(
         RetryableSqlErrorsOverride: retryableSqlErrorsOverride,
         ChangeTrackingColumn: plan.ChangeTrackingColumn,
         IncrementalStrategy: plan.IncrementalStrategy);
+
+    /// <summary>An operator overriding MergeStrategy to RowByRow for FK-timing reasons expects
+    /// the matching [547] retry behavior the heuristic itself would have applied for the same
+    /// reason (SyncPlanHeuristic.DerivePlan couples them: RowByRow-because-of-FK always implies
+    /// [547]) — without this, overriding just the strategy silently drops FK-retry handling
+    /// unless the operator also knows to set RetryableSqlErrorsOverride separately. Pure, so
+    /// it's unit-testable without the live SqlConnection EnsureProvisionedAsync needs.</summary>
+    public static IReadOnlyList<int>? ResolveRetryableSqlErrorsOverride(
+        MergeStrategy? mergeStrategyOverride, IReadOnlyList<int>? existingRetryableSqlErrorsOverride, bool hasIncomingForeignKeys) =>
+        mergeStrategyOverride == MergeStrategy.RowByRow && existingRetryableSqlErrorsOverride is null && hasIncomingForeignKeys
+            ? [547]
+            : existingRetryableSqlErrorsOverride;
 }

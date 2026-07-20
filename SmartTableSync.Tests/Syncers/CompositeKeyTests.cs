@@ -1,5 +1,7 @@
 using System.Data;
+using System.Globalization;
 using SmartTableSync.Syncers.Keys;
+using SmartTableSync.Syncers.Sql;
 using Xunit;
 
 namespace SmartTableSync.Tests.Syncers;
@@ -58,5 +60,32 @@ public class CompositeKeyTests
     public void Parse_WrongComponentCount_ThrowsFormatException()
     {
         Assert.Throws<FormatException>(() => CompositeKey.Parse("206", ["DocumentId", "LanguageCode"]));
+    }
+
+    [Fact]
+    public void Extract_DateTimeColumn_RoundTripsViaParseKeyComponentRegardlessOfCurrentCulture()
+    {
+        // Regression test for the confirmed bug: Extract used to call row[c]!.ToString() with
+        // no culture specified (CurrentCulture), while SqlTypeMapping.ParseKeyComponent always
+        // parses with InvariantCulture - on a host whose culture isn't invariant/en-US-
+        // compatible, a DateTime-typed key could format one way and fail to parse (or parse
+        // to the wrong value) the other way. de-DE formats dates day-first, distinct from
+        // invariant's month-first "MM/dd/yyyy" default ToString() would otherwise have used.
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+        try
+        {
+            var value = new DateTime(2026, 3, 5, 14, 30, 0);
+            var row = CreateRow(("ModifiedAt", value));
+
+            var extracted = CompositeKey.Extract(row, ["ModifiedAt"]);
+            var parsed = SqlTypeMapping.ParseKeyComponent(extracted, "datetime2");
+
+            Assert.Equal(value, parsed);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 }

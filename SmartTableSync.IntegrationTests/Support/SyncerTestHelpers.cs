@@ -229,6 +229,27 @@ public static class SyncerTestHelpers
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public static async Task InsertIdentityTvpTestTableRowWithExplicitIdAsync(
+        SqlConnection connection, int id, string value, DateTime lastUpdate)
+    {
+        await using (var identityOn = new SqlCommand("SET IDENTITY_INSERT [dbo].[IdentityTvpTestTable] ON", connection))
+            await identityOn.ExecuteNonQueryAsync();
+
+        await using (var cmd = new SqlCommand("""
+            INSERT INTO [dbo].[IdentityTvpTestTable] ([Id], [Value], [LastUpdate])
+            VALUES (@Id, @Value, @LastUpdate)
+            """, connection))
+        {
+            cmd.AddParam("@Id", SqlDbType.Int, id);
+            cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+            cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using var identityOff = new SqlCommand("SET IDENTITY_INSERT [dbo].[IdentityTvpTestTable] OFF", connection);
+        await identityOff.ExecuteNonQueryAsync();
+    }
+
     public static async Task InsertIncrementalStrategyFullRescanRowAsync(SqlConnection connection, int id, string value)
     {
         await using var cmd = new SqlCommand(

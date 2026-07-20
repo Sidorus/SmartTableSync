@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>SmartTableSync</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>A self-configuring sync engine for SQL tables Azure SQL Data Sync can't handle — nvarchar(max)/varbinary(max) indexed keys, rows over Data Sync's 24 MB batch limit. Give it a table name; it introspects the schema, derives a sync plan, and generates reviewable SQL.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

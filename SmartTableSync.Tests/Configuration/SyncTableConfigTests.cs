@@ -122,4 +122,59 @@ public class SyncTableConfigTests
         Assert.Null(roundTripped.ChangeTrackingColumn);
         Assert.Equal(IncrementalStrategy.FullRescan, roundTripped.IncrementalStrategy);
     }
+
+    // --- ResolveRetryableSqlErrorsOverride: item 8b, the MergeStrategyOverride/retry
+    // consistency fix. Pure, so testable directly without SyncTableProvisioner's live
+    // SqlConnection dependency. ---
+
+    [Fact]
+    public void ResolveRetryableSqlErrorsOverride_RowByRowOverrideWithForeignKeysAndNoExistingOverride_Derives547()
+    {
+        var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+
+        Assert.Equal([547], result);
+    }
+
+    [Fact]
+    public void ResolveRetryableSqlErrorsOverride_RowByRowOverrideWithoutForeignKeys_LeavesNullAlone()
+    {
+        // No FK, so there's genuinely nothing to retry around - correctly stays null/empty,
+        // same as the heuristic's own "no FK timing race, purely row-size-driven RowByRow"
+        // case (DocumentAsset's actual shape).
+        var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: false);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveRetryableSqlErrorsOverride_TvpOverride_NeverDerivesRetryOverride()
+    {
+        var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            mergeStrategyOverride: MergeStrategy.Tvp, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveRetryableSqlErrorsOverride_NoMergeStrategyOverrideAtAll_LeavesExistingAlone()
+    {
+        var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            mergeStrategyOverride: null, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveRetryableSqlErrorsOverride_ExistingOverrideAlreadySet_NeverOverwritesOperatorChoice()
+    {
+        // An operator who deliberately set a different retry list (or explicitly opted out
+        // with an empty list) has that choice preserved - auto-derivation only fills a gap,
+        // it never clobbers an existing, deliberately-set override.
+        var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: [2601], hasIncomingForeignKeys: true);
+
+        Assert.Equal([2601], result);
+    }
 }

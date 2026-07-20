@@ -36,7 +36,7 @@ The repo ships with three representative example tables, each demonstrating a di
 
 ## Project layout
 
-The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review — it never executes DDL itself.
+The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI (also installable as a `dotnet tool`, `smarttablesync-scaffold`) that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review, or writes the shared tracking-infrastructure schema via `--infrastructure` — it never executes DDL itself.
 
 ## Getting started
 
@@ -45,8 +45,13 @@ cd SmartTableSyncFunction
 dotnet build
 ```
 
-Deploy the SQL scripts under `sql/` to your target database in numbered order, configure `ParentDbConnectionString` / `ChildDbConnectionString`, and publish the Function.
+The engine needs three tracking tables (`CustomSyncState`, `SyncBatchLog`, `SyncTableConfig`) on the child database before syncing any table — these are generated, not static files:
+
+- **Auto mode** (`SmartTableSync:Mode = Auto`): the Function creates them itself, automatically, on every run. Nothing to deploy by hand.
+- **Manual mode** (default): run `dotnet tool run smarttablesync-scaffold -- --infrastructure` once and apply the generated `00_infrastructure.sql` yourself.
+
+For this repo's own three example tables, also deploy `sql/02-05_*.sql` in numbered order (their stored procedures/UDT — hand-authored reference scripts for the worked example, not something the engine generates for you). Configure `ParentDbConnectionString` / `ChildDbConnectionString`, and publish the Function.
 
 ## Status
 
-`SmartTableSync.Core` is evolving from the hardcoded, three-table version above into a general-purpose, self-configuring engine — give it a table name, it introspects the schema, derives a sync plan, and generates reviewable SQL — intended to ship as a `SmartTableSync` NuGet package. That work is in progress and **not yet published**; the Function above is the current, working reference implementation.
+`SmartTableSync.Core` has evolved from the hardcoded, three-table version above into a general-purpose, self-configuring engine — give it a table name, it introspects the schema, derives a sync plan, and generates reviewable SQL (or applies it directly in Auto mode). Landed so far: the config-driven engine itself, Auto/Manual DDL provisioning, a configurable per-table change-tracking column (with a safe full-rescan fallback for tables that have none), full `SqlTypeMapping` type coverage, script-independent infrastructure DDL, a `dotnet tool`-packaged Scaffold CLI, and the three `/code-review` findings from the last audit pass. Verified against a real, disposable SQL Server (Testcontainers) — not yet against real Azure SQL Database, Managed Identity, or a deployed Function App. Still **not published** to NuGet/GitHub; the Function above is the current, working reference implementation.

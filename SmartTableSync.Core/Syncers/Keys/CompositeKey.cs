@@ -13,9 +13,17 @@ public static class CompositeKey
 {
     private const char Delimiter = '|';
 
-    /// <summary>Builds the resume-cursor string for a row, e.g. "206|en" for a 2-column key.</summary>
+    /// <summary>Builds the resume-cursor string for a row, e.g. "206|en" for a 2-column key.
+    /// Formats with InvariantCulture explicitly — SqlTypeMapping.ParseKeyComponent parses
+    /// with InvariantCulture, and a bare ToString() defaults to CurrentCulture, which can
+    /// mismatch (and fail to round-trip) for DateTime/DateTimeOffset/decimal-typed keys on a
+    /// host whose culture isn't invariant/en-US-compatible.</summary>
     public static string Extract(DataRow row, IReadOnlyList<string> primaryKeyColumns) =>
-        string.Join(Delimiter, primaryKeyColumns.Select(c => row[c]!.ToString()));
+        string.Join(Delimiter, primaryKeyColumns.Select(c => row[c] switch
+        {
+            IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            var v => v!.ToString(),
+        }));
 
     /// <summary>Splits a non-null resume-cursor string back into its per-column string
     /// components, in the same order as primaryKeyColumns.</summary>

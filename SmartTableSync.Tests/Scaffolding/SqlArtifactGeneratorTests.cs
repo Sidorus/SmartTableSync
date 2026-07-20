@@ -135,6 +135,50 @@ public class SqlArtifactGeneratorTests
         Assert.DoesNotContain("IDENTITY_INSERT", script);
     }
 
+    // --- Identity + Tvp shape: no incoming FKs, small rows -> Tvp, but with an identity PK
+    // (a real, reachable heuristic outcome none of the 3 example tables happen to hit) ---
+
+    private static TableProfile IdentityTvpProfile() => new(
+        TableName: "LookupCode",
+        Columns:
+        [
+            new ColumnProfile("LookupCodeId", "int", 4, false),
+            new ColumnProfile("Description", "nvarchar", 400, true),
+        ],
+        PrimaryKeyColumns: ["LookupCodeId"],
+        IdentityColumn: "LookupCodeId",
+        IndexedLobColumns: [],
+        HasIncomingForeignKeys: false,
+        RowCount: 100,
+        AvgRowSizeBytes: 500,
+        MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+    private static SyncPlan IdentityTvpPlan() => new(
+        "LookupCode", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.KeepIdentity, 120, [], "LookupCodeTableType");
+
+    [Fact]
+    public void GenerateMergeProcedureScript_TvpWithIdentity_WrapsInIdentityInsert()
+    {
+        // Regression test for the confirmed bug: GenerateRowByRowMergeProcedure already
+        // wrapped identity-column inserts in SET IDENTITY_INSERT ON/OFF, but
+        // GenerateTvpMergeProcedure had no such wrapping at all - any table with both an
+        // identity column and the Tvp merge strategy failed every incremental sync with
+        // SQL error 544 (explicit identity value with IDENTITY_INSERT OFF).
+        var script = _generator.GenerateMergeProcedureScript(IdentityTvpProfile(), IdentityTvpPlan());
+
+        Assert.Contains("SET IDENTITY_INSERT [dbo].[LookupCode] ON;", script);
+        Assert.Contains("SET IDENTITY_INSERT [dbo].[LookupCode] OFF;", script);
+        Assert.Contains("CREATE OR ALTER PROCEDURE [dbo].[sp_SyncLookupCodeBatch]", script);
+        Assert.Contains("@Rows [dbo].[LookupCodeTableType] READONLY", script);
+
+        // IDENTITY_INSERT must wrap the MERGE, not just decorate the procedure body randomly.
+        var identityOnIndex = script.IndexOf("SET IDENTITY_INSERT [dbo].[LookupCode] ON;", StringComparison.Ordinal);
+        var mergeIndex = script.IndexOf("MERGE [dbo].[LookupCode]", StringComparison.Ordinal);
+        var identityOffIndex = script.IndexOf("SET IDENTITY_INSERT [dbo].[LookupCode] OFF;", StringComparison.Ordinal);
+        Assert.True(identityOnIndex < mergeIndex);
+        Assert.True(mergeIndex < identityOffIndex);
+    }
+
     // --- DocumentAsset shape: composite PK, RowByRow, no identity ---
 
     private static TableProfile DocumentAssetProfile() => new(

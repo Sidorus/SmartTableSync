@@ -56,6 +56,9 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
 
         var plan = _heuristic.DerivePlan(fullProfile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan);
 
+        var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
+            existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.HasIncomingForeignKeys);
+
         // Preserve any hand-set overrides across re-provisioning — they're reviewable data
         // an operator set deliberately, not something a fresh heuristic run should erase.
         var config = SyncTableConfig.FromPlan(
@@ -63,7 +66,7 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
             mergeStrategyOverride: existing?.MergeStrategyOverride,
             batchSizeOverride: existing?.BatchSizeOverride,
             bulkCopyTimeoutSecondsOverride: existing?.BulkCopyTimeoutSecondsOverride,
-            retryableSqlErrorsOverride: existing?.RetryableSqlErrorsOverride);
+            retryableSqlErrorsOverride: retryableSqlErrorsOverride);
 
         await _configRepository.UpsertAsync(child, config, ct);
         _metrics.TableProvisioned(tableName);

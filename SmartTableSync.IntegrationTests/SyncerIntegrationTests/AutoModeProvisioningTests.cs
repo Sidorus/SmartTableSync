@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Configuration;
@@ -133,6 +134,53 @@ public class AutoModeProvisioningTests : IClassFixture<MsSqlTestFixture>
         Assert.Equal(0, result.RowsErrored);
         await using var countCmd = new SqlCommand("SELECT COUNT(*) FROM [dbo].[ProductAttributeValue]", child);
         Assert.Equal(rows.Count, (int)(await countCmd.ExecuteScalarAsync())!);
+    }
+
+    [Fact]
+    public async Task IdentityTvpTestTable_AutoCreatesTvpTypeAndProcedure_IncrementalSyncInsertsIdentityRowSuccessfully()
+    {
+        // Item 8a regression test: identity PK + no incoming FKs + small rows resolves to
+        // Tvp (a real, reachable heuristic outcome none of the 3 example tables happen to
+        // hit), and the generated TVP MERGE procedure must wrap identity-column inserts in
+        // SET IDENTITY_INSERT ON/OFF - without that fix, this fails with SQL error 544 the
+        // moment the incremental MERGE's INSERT branch fires for a row carrying an explicit
+        // identity value.
+        await using var parent = new SqlConnection(_fixture.ParentConnectionString);
+        await using var child = new SqlConnection(_fixture.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+
+        var provisioner = BuildProvisioner();
+        var (profile, plan, wasFreshlyProvisioned) =
+            await provisioner.EnsureProvisionedAsync(parent, child, "IdentityTvpTestTable", CancellationToken.None);
+
+        Assert.True(wasFreshlyProvisioned);
+        Assert.Equal(MergeStrategy.Tvp, plan.MergeStrategy);
+
+        var childDdlProvisioner = BuildChildDdlProvisioner();
+        await childDdlProvisioner.EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
+
+        Assert.True(await TypeExistsAsync(child, "IdentityTvpTestTableTableType"));
+        Assert.True(await ProcedureExistsAsync(child, "sp_SyncIdentityTvpTestTableBatch"));
+
+        // Child starts empty; a non-initial lastSyncDate forces the incremental (Tvp MERGE)
+        // path rather than the bulk-copy initial path, so this row's explicit identity value
+        // actually goes through the generated stored procedure's INSERT branch.
+        const int explicitId = 500;
+        await SyncerTestHelpers.InsertIdentityTvpTestTableRowWithExplicitIdAsync(
+            parent, explicitId, "Original", DateTime.UtcNow.AddSeconds(-30));
+
+        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncPoint = DateTime.UtcNow.AddMinutes(-5);
+
+        var result = await syncer.SyncAsync(parent, child, syncPoint, CancellationToken.None);
+
+        Assert.False(result.IsInitialSync);
+        Assert.Equal(1, result.RowsSynced);
+        Assert.Equal(0, result.RowsErrored);
+        Assert.Equal("Original", await SyncerTestHelpers.ReadScalarStringAsync(child,
+            "SELECT [Value] FROM [dbo].[IdentityTvpTestTable] WHERE [Id] = @Id",
+            ("@Id", SqlDbType.Int, explicitId, 0)));
     }
 
     private static SyncTableProvisioner BuildProvisioner() => new(
