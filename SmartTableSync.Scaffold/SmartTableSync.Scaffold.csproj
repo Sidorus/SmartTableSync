@@ -20,4 +20,13 @@
     <ProjectReference Include="..\SmartTableSync.Core\SmartTableSync.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Concrete implementations (Core only references the *.Abstractions packages) — needed
+         to build a real IConfiguration from environment variables so Scaffold can bind the
+         same SyncSettings (ChangeTrackingColumns/AllowFullRescanFor/IncrementalStrategyOverrides)
+         the runtime does, via SyncSettingsServiceCollectionExtensions.Bind. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+  </ItemGroup>
+
 </Project>

@@ -2,12 +2,15 @@ namespace SmartTableSync.Orchestration;
 
 public sealed class SyncOrchestrator : ISyncOrchestrator
 {
-    // Prevents concurrent invocations (e.g. manual trigger while timer run is in progress).
-    // Timer triggers are already singleton by default via blob lease, but this guards
-    // any manual/HTTP-triggered re-entry within the same app instance.
-    private static readonly SemaphoreSlim _runLock = new(1, 1);
     private static readonly TimeSpan _reconcileInterval = TimeSpan.FromHours(1);
-    private static DateTime _lastReconcileUtc = DateTime.MinValue;
+
+    // Instance fields, not static — SyncOrchestrator is already registered as a DI singleton
+    // (one instance per host), so static state here was redundant and actively harmful: two
+    // orchestrator instances in the same process (e.g. two test fixtures, or a future
+    // multi-tenant/multi-child-database scenario) would otherwise share one lock/timestamp
+    // and collide, exactly as happened once during this project's own test development.
+    private readonly SemaphoreSlim _runLock = new(1, 1);
+    private DateTime _lastReconcileUtc = DateTime.MinValue;
 
     private readonly IReadOnlyList<string> _tableNames;
     private readonly SyncMode _mode;

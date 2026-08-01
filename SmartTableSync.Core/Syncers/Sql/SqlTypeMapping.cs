@@ -46,6 +46,13 @@ public static class SqlTypeMapping
     public static bool IsStringType(string sqlTypeName) =>
         sqlTypeName.ToLowerInvariant() is "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext";
 
+    /// <summary>The types TableSyncCommandFactory.BuildIncrementalCommand's
+    /// "WHERE [Col] &gt;= DATEADD(minute, -1, @LastSync)" comparison actually works against
+    /// (@LastSync is bound as SqlDbType.DateTime). Excludes datetimeoffset/time, which don't
+    /// compare correctly against a plain DateTime parameter the same way.</summary>
+    public static bool IsDateTimeFamily(string sqlTypeName) =>
+        sqlTypeName.ToLowerInvariant() is "datetime" or "datetime2" or "smalldatetime" or "date";
+
     /// <summary>SqlParameter.Size for a column, or 0 (no explicit size) for fixed-size
     /// types where AddParam's size argument isn't meaningful. sys.columns.max_length is in
     /// bytes; nvarchar/nchar store 2 bytes per character, so it must be halved to get the

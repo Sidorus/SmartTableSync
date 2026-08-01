@@ -10,6 +10,11 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 
     public TvpBatchMergeStrategy(TableProfile profile, SyncPlan plan)
     {
+        if (string.IsNullOrEmpty(plan.TvpTypeName))
+            throw new InvalidOperationException(
+                $"{profile.TableName}: TvpBatchMergeStrategy requires a non-null TvpTypeName — a plan with " +
+                $"MergeStrategy.Tvp and no TvpTypeName should never reach here (see SyncTableConfig.ToSyncPlan).");
+
         _profile = profile;
         _plan = plan;
     }

@@ -47,11 +47,7 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
 
         var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, ct);
 
-        var configuredColumn = _settings.Value.ChangeTrackingColumns.TryGetValue(tableName, out var name)
-            ? name : "LastUpdate";
-        var columnExists = fullProfile.Columns.Any(c =>
-            string.Equals(c.Name, configuredColumn, StringComparison.OrdinalIgnoreCase));
-        var changeTrackingColumn = columnExists ? configuredColumn : null;
+        var changeTrackingColumn = ChangeTrackingColumnResolver.Resolve(fullProfile, _settings.Value.ChangeTrackingColumns);
         var allowFullRescan = _settings.Value.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);
         var strategyOverride = _settings.Value.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;

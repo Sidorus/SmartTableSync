@@ -44,6 +44,25 @@ public class SqlTypeMappingTests
         Assert.Equal(expected, SqlTypeMapping.IsStringType(sqlTypeName));
     }
 
+    [Theory]
+    [InlineData("datetime", true)]
+    [InlineData("datetime2", true)]
+    [InlineData("smalldatetime", true)]
+    [InlineData("date", true)]
+    [InlineData("DateTime", true)]
+    [InlineData("datetimeoffset", false)]
+    [InlineData("time", false)]
+    [InlineData("int", false)]
+    [InlineData("nvarchar", false)]
+    [InlineData("timestamp", false)]
+    public void IsDateTimeFamily_ClassifiesCorrectly(string sqlTypeName, bool expected)
+    {
+        // Deliberately excludes datetimeoffset/time - BuildIncrementalCommand's
+        // "WHERE [Col] >= DATEADD(minute,-1,@LastSync)" binds @LastSync as SqlDbType.DateTime,
+        // which doesn't compare correctly against those types.
+        Assert.Equal(expected, SqlTypeMapping.IsDateTimeFamily(sqlTypeName));
+    }
+
     [Fact]
     public void ToSqlDbType_TextAndNText_NoLongerThrowsDespiteBeingClassifiedAsStringTypes()
     {

@@ -312,6 +312,32 @@ public static class SyncerTestHelpers
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public static async Task InsertIncrementalStrategyOverrideTimestampRowAsync(
+        SqlConnection connection, int id, string value, DateTime lastUpdate)
+    {
+        await using var cmd = new SqlCommand("""
+            INSERT INTO [dbo].[IncrementalStrategyOverrideTimestampTestTable] ([Id], [Value], [LastUpdate])
+            VALUES (@Id, @Value, @LastUpdate)
+            """, connection);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+        cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task UpdateIncrementalStrategyOverrideTimestampValueAsync(
+        SqlConnection connection, int id, string newValue, DateTime lastUpdate)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE [dbo].[IncrementalStrategyOverrideTimestampTestTable]
+            SET [Value] = @Value, [LastUpdate] = @LastUpdate WHERE [Id] = @Id
+            """, connection);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, newValue, 200);
+        cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public static async Task<string> ReadScalarStringAsync(
         SqlConnection connection, string sql, params (string Name, SqlDbType Type, object Value, int Size)[] parameters)
     {

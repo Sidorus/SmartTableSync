@@ -25,17 +25,35 @@ public sealed record SyncTableConfig(
     /// heuristically-derived value. BulkCopyOptions isn't stored separately — it's fully
     /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.
     /// ChangeTrackingColumn/IncrementalStrategy have no override — the one configuration
-    /// surface for them is SyncSettings (app config), resolved once at provisioning time.</summary>
-    public SyncPlan ToSyncPlan() => new(
-        TableName: TableName,
-        MergeStrategy: MergeStrategyOverride ?? MergeStrategy,
-        BatchSize: BatchSizeOverride ?? BatchSize,
-        BulkCopyOptions: IdentityColumn is not null ? SqlBulkCopyOptions.KeepIdentity : SqlBulkCopyOptions.Default,
-        BulkCopyTimeoutSeconds: BulkCopyTimeoutSecondsOverride ?? BulkCopyTimeoutSeconds,
-        RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
-        TvpTypeName: TvpTypeName,
-        ChangeTrackingColumn: ChangeTrackingColumn,
-        IncrementalStrategy: IncrementalStrategy);
+    /// surface for them is SyncSettings (app config), resolved once at provisioning time.
+    ///
+    /// TvpTypeName must be derived from the RESOLVED merge strategy, not passed through
+    /// unconditionally — the stored TvpTypeName is only ever non-null when the heuristic
+    /// itself picked Tvp (SyncPlanHeuristic.DerivePlan). Hand-setting MergeStrategyOverride to
+    /// Tvp on a table the heuristic picked RowByRow for (or drift flipping the heuristic's own
+    /// choice while a stale override survives) would otherwise persist a null TvpTypeName
+    /// forever — TvpBatchMergeStrategy then targets a TVP type named "dbo." (SqlException,
+    /// every batch), and in Auto mode ChildDdlProvisioner auto-executes an invalid
+    /// "CREATE TYPE [dbo].[] AS TABLE (...)". Falling back to the same naming convention
+    /// SyncPlanHeuristic uses ("{TableName}TableType") makes the override self-healing instead.</summary>
+    public SyncPlan ToSyncPlan()
+    {
+        var resolvedMergeStrategy = MergeStrategyOverride ?? MergeStrategy;
+        var resolvedTvpTypeName = resolvedMergeStrategy == MergeStrategy.Tvp
+            ? TvpTypeName ?? $"{TableName}TableType"
+            : null;
+
+        return new SyncPlan(
+            TableName: TableName,
+            MergeStrategy: resolvedMergeStrategy,
+            BatchSize: BatchSizeOverride ?? BatchSize,
+            BulkCopyOptions: IdentityColumn is not null ? SqlBulkCopyOptions.KeepIdentity : SqlBulkCopyOptions.Default,
+            BulkCopyTimeoutSeconds: BulkCopyTimeoutSecondsOverride ?? BulkCopyTimeoutSeconds,
+            RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
+            TvpTypeName: resolvedTvpTypeName,
+            ChangeTrackingColumn: ChangeTrackingColumn,
+            IncrementalStrategy: IncrementalStrategy);
+    }
 
     public static SyncTableConfig FromPlan(
         TableProfile profile,

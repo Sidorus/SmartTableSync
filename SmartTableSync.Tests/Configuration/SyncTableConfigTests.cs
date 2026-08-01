@@ -74,6 +74,50 @@ public class SyncTableConfigTests
     }
 
     [Fact]
+    public void ToSyncPlan_MergeStrategyOverrideTvp_WithNullStoredTvpTypeName_DerivesConventionalTypeName()
+    {
+        // Reproduces the confirmed bug: a table the heuristic picked RowByRow for (so
+        // TvpTypeName was persisted null) with a hand-set MergeStrategyOverride=Tvp used to
+        // leave TvpTypeName null forever - TvpBatchMergeStrategy would target a TVP type
+        // literally named "dbo." (SqlException every batch), and Auto mode would auto-execute
+        // an invalid "CREATE TYPE [dbo].[] AS TABLE (...)" via ChildDdlProvisioner.
+        var config = new SyncTableConfig(
+            TableName: "TestTable",
+            PrimaryKeyColumns: ["Id"],
+            IdentityColumn: null,
+            MergeStrategy: MergeStrategy.RowByRow,
+            BatchSize: 500,
+            BulkCopyTimeoutSeconds: 60,
+            RetryableSqlErrorNumbers: [547],
+            TvpTypeName: null,
+            SchemaFingerprint: "abc123",
+            ConfiguredAtUtc: DateTime.UtcNow,
+            MergeStrategyOverride: MergeStrategy.Tvp,
+            BatchSizeOverride: null,
+            BulkCopyTimeoutSecondsOverride: null,
+            RetryableSqlErrorsOverride: null);
+
+        var plan = config.ToSyncPlan();
+
+        Assert.Equal(MergeStrategy.Tvp, plan.MergeStrategy);
+        Assert.Equal("TestTableTableType", plan.TvpTypeName);
+    }
+
+    [Fact]
+    public void ToSyncPlan_MergeStrategyOverrideRowByRow_ClearsStoredTvpTypeNameFromPlan()
+    {
+        // The inverse case: a table the heuristic picked Tvp for (stored TvpTypeName is
+        // non-null) with an override flipping it to RowByRow. The resolved plan must not
+        // carry the now-irrelevant TVP type name forward.
+        var config = CreateConfig(mergeStrategyOverride: MergeStrategy.RowByRow);
+
+        var plan = config.ToSyncPlan();
+
+        Assert.Equal(MergeStrategy.RowByRow, plan.MergeStrategy);
+        Assert.Null(plan.TvpTypeName);
+    }
+
+    [Fact]
     public void FromPlan_ThenToSyncPlan_RoundTripsWithoutOverrides()
     {
         var profile = new SmartTableSync.Introspection.TableProfile(
