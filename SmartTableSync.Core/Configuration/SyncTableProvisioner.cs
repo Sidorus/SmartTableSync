@@ -53,8 +53,11 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
             string.Equals(c.Name, configuredColumn, StringComparison.OrdinalIgnoreCase));
         var changeTrackingColumn = columnExists ? configuredColumn : null;
         var allowFullRescan = _settings.Value.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);
+        var strategyOverride = _settings.Value.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
+            ? overriddenStrategy : (IncrementalStrategy?)null;
 
-        var plan = _heuristic.DerivePlan(fullProfile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan);
+        var plan = _heuristic.DerivePlan(
+            fullProfile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride);
 
         var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
             existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.HasIncomingForeignKeys);

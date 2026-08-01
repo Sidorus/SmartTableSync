@@ -24,6 +24,7 @@ public static class SqlTypeMapping
         "date" => SqlDbType.Date,
         "text" => SqlDbType.Text,
         "ntext" => SqlDbType.NText,
+        "timestamp" or "rowversion" => SqlDbType.Timestamp,
         "bit" => SqlDbType.Bit,
         "real" => SqlDbType.Real,
         "float" => SqlDbType.Float,

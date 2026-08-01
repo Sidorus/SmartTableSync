@@ -71,7 +71,7 @@ public class AutoModeProvisioningTests : IClassFixture<MsSqlTestFixture>
 
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "ProductCatalogItem", CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 
@@ -124,7 +124,7 @@ public class AutoModeProvisioningTests : IClassFixture<MsSqlTestFixture>
 
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "ProductAttributeValue", CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 
@@ -170,7 +170,7 @@ public class AutoModeProvisioningTests : IClassFixture<MsSqlTestFixture>
         await SyncerTestHelpers.InsertIdentityTvpTestTableRowWithExplicitIdAsync(
             parent, explicitId, "Original", DateTime.UtcNow.AddSeconds(-30));
 
-        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
         var syncPoint = DateTime.UtcNow.AddMinutes(-5);
 
         var result = await syncer.SyncAsync(parent, child, syncPoint, CancellationToken.None);

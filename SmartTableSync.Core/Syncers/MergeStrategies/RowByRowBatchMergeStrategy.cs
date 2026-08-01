@@ -60,6 +60,11 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 
         foreach (var col in _profile.Columns)
         {
+            // The generated procedure has no parameter for this column — SQL Server rejects
+            // any explicit value written into a rowversion column, so it's never part of the
+            // parameter list on either side (see SqlArtifactGenerator.InsertableColumns).
+            if (col.Name == _profile.RowVersionColumn) continue;
+
             var size = SqlTypeMapping.GetParameterSize(col);
             sp.AddParam($"@{col.Name}", SqlTypeMapping.ToSqlDbType(col.SqlTypeName), row[col.Name], size);
         }

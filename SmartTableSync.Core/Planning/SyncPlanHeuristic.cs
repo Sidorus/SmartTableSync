@@ -6,7 +6,9 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         TableProfile profile,
         PlanHeuristicOptions options,
         string? changeTrackingColumn = null,
-        bool allowFullRescan = false)
+        bool allowFullRescan = false,
+        string? rowVersionColumn = null,
+        IncrementalStrategy? strategyOverride = null)
     {
         // RowByRow when either an incoming FK could race against Data Sync's own delivery
         // of the referenced table (ProductAttributeValue's actual reason), or rows are large
@@ -50,7 +52,19 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             ? $"{profile.TableName}TableType"
             : null;
 
-        var incrementalStrategy = DeriveIncrementalStrategy(profile, options, changeTrackingColumn, allowFullRescan);
+        var incrementalStrategy = DeriveIncrementalStrategy(profile, options, changeTrackingColumn, allowFullRescan, rowVersionColumn, strategyOverride);
+
+        // Must follow the RESOLVED strategy, not raw "rowVersionColumn ?? changeTrackingColumn"
+        // priority — otherwise a strategyOverride forcing Timestamp while a rowversion column
+        // also exists would leave ChangeTrackingColumn pointing at the rowversion column, and
+        // TableSyncCommandFactory.BuildIncrementalCommand would query the wrong (and wrong-
+        // typed) column entirely.
+        var resolvedChangeTrackingColumn = incrementalStrategy switch
+        {
+            IncrementalStrategy.RowVersion => rowVersionColumn,
+            IncrementalStrategy.Timestamp => changeTrackingColumn,
+            _ => null,
+        };
 
         return new SyncPlan(
             TableName: profile.TableName,
@@ -60,16 +74,26 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             BulkCopyTimeoutSeconds: bulkCopyTimeoutSeconds,
             RetryableSqlErrorNumbers: retryableSqlErrorNumbers,
             TvpTypeName: tvpTypeName,
-            ChangeTrackingColumn: changeTrackingColumn,
+            ChangeTrackingColumn: resolvedChangeTrackingColumn,
             IncrementalStrategy: incrementalStrategy);
     }
 
     // No gate on the safe case (a usable column exists), explicit consent for the expensive
     // case (a full re-scan every cycle) — same philosophy as Auto-mode DDL execution, here
-    // applied per-table instead of globally.
+    // applied per-table instead of globally. rowVersionColumn is checked first — a detected
+    // rowversion column is a fact, not a guess, so it wins over a configured/default datetime
+    // column whenever both are present. strategyOverride, when set, wins over everything
+    // below it, but is still validated against what's actually available on the table.
     private static IncrementalStrategy DeriveIncrementalStrategy(
-        TableProfile profile, PlanHeuristicOptions options, string? changeTrackingColumn, bool allowFullRescan)
+        TableProfile profile, PlanHeuristicOptions options, string? changeTrackingColumn, bool allowFullRescan,
+        string? rowVersionColumn, IncrementalStrategy? strategyOverride)
     {
+        if (strategyOverride is not null)
+            return ValidateOverride(strategyOverride.Value, profile, changeTrackingColumn, rowVersionColumn);
+
+        if (rowVersionColumn is not null)
+            return IncrementalStrategy.RowVersion;
+
         if (changeTrackingColumn is not null)
             return IncrementalStrategy.Timestamp;
 
@@ -81,5 +105,24 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             $"FullRescan threshold ({options.FullRescanRowCountThreshold}) — set " +
             $"SmartTableSync:ChangeTrackingColumns:{profile.TableName} to the correct column name, or add " +
             $"'{profile.TableName}' to SmartTableSync:AllowFullRescanFor to accept a full re-scan every cycle.");
+    }
+
+    // An override forcing a strategy the table can't actually support (e.g. RowVersion with
+    // no rowversion column) fails loudly at provisioning time instead of silently falling
+    // through to a runner that has nothing to query.
+    private static IncrementalStrategy ValidateOverride(
+        IncrementalStrategy strategyOverride, TableProfile profile, string? changeTrackingColumn, string? rowVersionColumn)
+    {
+        if (strategyOverride == IncrementalStrategy.RowVersion && rowVersionColumn is null)
+            throw new InvalidOperationException(
+                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces RowVersion, but this " +
+                $"table has no rowversion/timestamp-typed column.");
+
+        if (strategyOverride == IncrementalStrategy.Timestamp && changeTrackingColumn is null)
+            throw new InvalidOperationException(
+                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces Timestamp, but the " +
+                $"configured (or default \"LastUpdate\") change-tracking column doesn't exist on this table.");
+
+        return strategyOverride;
     }
 }

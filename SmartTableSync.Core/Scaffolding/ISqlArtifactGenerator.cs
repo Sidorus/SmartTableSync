@@ -19,4 +19,14 @@ public interface ISqlArtifactGenerator
     /// IChildDdlProvisioner nor Manual mode's Scaffold CLI create these as a side effect of
     /// provisioning a business table — this is the one place that does.</summary>
     string GenerateInfrastructureScript();
+
+    /// <summary>Generates the one-time DDL an operator applies BY HAND against the PARENT
+    /// database to opt a table into the RowVersion incremental strategy: an ALTER TABLE
+    /// adding the rowversion column (skipped if profile.RowVersionColumn already shows one),
+    /// plus the nonclustered index it needs to avoid a full scan every incremental cycle.
+    /// Never executed by any SmartTableSync tooling in either Manual or Auto mode — the
+    /// parent database is the customer's own live application database, and neither mode has
+    /// (or should have) DDL access to it. Purely generated text for review, same trust model
+    /// as sql/07_permissions.sql.</summary>
+    string GenerateRowVersionSetupScript(TableProfile profile, string columnName = "RowVer");
 }

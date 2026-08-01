@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SmartTableSync.Options;
+using SmartTableSync.Planning;
 using Xunit;
 
 namespace SmartTableSync.Tests.Options;
@@ -69,5 +70,49 @@ public class SyncSettingsServiceCollectionExtensionsTests
         var settings = Bind([]);
 
         Assert.Empty(settings.AllowFullRescanFor);
+    }
+
+    [Fact]
+    public void IncrementalStrategyOverrides_BindsDictionarySection()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:IncrementalStrategyOverrides:SomeTable"] = "Timestamp",
+            ["SmartTableSync:IncrementalStrategyOverrides:AnotherTable"] = "FullRescan",
+        });
+
+        Assert.Equal(IncrementalStrategy.Timestamp, settings.IncrementalStrategyOverrides["SomeTable"]);
+        Assert.Equal(IncrementalStrategy.FullRescan, settings.IncrementalStrategyOverrides["AnotherTable"]);
+    }
+
+    [Fact]
+    public void IncrementalStrategyOverrides_IsCaseInsensitiveForBothKeyAndValue()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:IncrementalStrategyOverrides:SomeTable"] = "rowversion",
+        });
+
+        Assert.True(settings.IncrementalStrategyOverrides.TryGetValue("sometable", out var strategy));
+        Assert.Equal(IncrementalStrategy.RowVersion, strategy);
+    }
+
+    [Fact]
+    public void IncrementalStrategyOverrides_UnparseableValue_IsDropped()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:IncrementalStrategyOverrides:SomeTable"] = "NotARealStrategy",
+        });
+
+        Assert.Empty(settings.IncrementalStrategyOverrides);
+    }
+
+    [Fact]
+    public void IncrementalStrategyOverrides_Missing_IsEmpty()
+    {
+        var settings = Bind([]);
+
+        Assert.Empty(settings.IncrementalStrategyOverrides);
     }
 }

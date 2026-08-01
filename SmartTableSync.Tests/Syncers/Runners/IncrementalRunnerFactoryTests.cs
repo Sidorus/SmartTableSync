@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Introspection;
 using SmartTableSync.Planning;
+using SmartTableSync.State;
 using SmartTableSync.Syncers.MergeStrategies;
 using SmartTableSync.Syncers.Runners;
 using SmartTableSync.Syncers.Sql;
@@ -37,12 +38,14 @@ public class IncrementalRunnerFactoryTests
     private static IBatchMergeStrategy MergeStrategyFor(SyncPlan plan) =>
         BatchMergeStrategyFactory.Create(Profile, plan, NullLogger.Instance);
 
+    private static readonly ISyncStateRepository SyncState = new SyncStateRepository();
+
     [Fact]
     public void Create_TimestampStrategy_ReturnsIncrementalSyncRunner()
     {
         var plan = CreatePlan(IncrementalStrategy.Timestamp);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
 
         Assert.IsType<IncrementalSyncRunner>(runner);
     }
@@ -52,8 +55,18 @@ public class IncrementalRunnerFactoryTests
     {
         var plan = CreatePlan(IncrementalStrategy.FullRescan);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
 
         Assert.IsType<FullRescanSyncRunner>(runner);
+    }
+
+    [Fact]
+    public void Create_RowVersionStrategy_ReturnsRowVersionSyncRunner()
+    {
+        var plan = CreatePlan(IncrementalStrategy.RowVersion);
+
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+
+        Assert.IsType<RowVersionSyncRunner>(runner);
     }
 }

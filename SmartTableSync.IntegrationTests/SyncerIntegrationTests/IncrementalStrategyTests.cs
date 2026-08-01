@@ -11,6 +11,7 @@ using SmartTableSync.Observability;
 using SmartTableSync.Options;
 using SmartTableSync.Planning;
 using SmartTableSync.Scaffolding;
+using SmartTableSync.State;
 using SmartTableSync.Syncers;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
@@ -75,7 +76,7 @@ public class IncrementalStrategyTests
         Assert.Equal("ModifiedAt", plan.ChangeTrackingColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateIncrementalStrategyConfiguredColumnValueAsync(parent, rowId, "Updated", syncPoint.AddSeconds(5));
@@ -111,7 +112,7 @@ public class IncrementalStrategyTests
         Assert.Null(plan.ChangeTrackingColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
 
         // A row that exists only in Parent (never synced) and an update to an existing row -
         // neither has any change-tracking column to be detected by, so only a full re-scan

@@ -26,10 +26,27 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
         sp.Parameters.Add(new SqlParameter("@Rows", SqlDbType.Structured)
         {
             TypeName = $"dbo.{_plan.TvpTypeName}",
-            Value = batch
+            Value = TvpShapedRows(batch)
         });
 
         await sp.ExecuteNonQueryAsync(ct);
         return (batch.Rows.Count, 0, false);
+    }
+
+    // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a real
+    // table column does - the TVP type (SqlArtifactGenerator.GenerateTvpUdtScript) excludes
+    // the table's rowversion column entirely, so the DataTable passed as @Rows must match
+    // that shape. Projects rather than mutates batch — callers (e.g. InitialSyncRunner's
+    // PK-violation fallback) still read the original DataTable afterward.
+    private DataTable TvpShapedRows(DataTable batch)
+    {
+        if (_profile.RowVersionColumn is null) return batch;
+
+        var columnNames = batch.Columns.Cast<DataColumn>()
+            .Where(c => c.ColumnName != _profile.RowVersionColumn)
+            .Select(c => c.ColumnName)
+            .ToArray();
+
+        return batch.DefaultView.ToTable(distinct: false, columnNames);
     }
 }

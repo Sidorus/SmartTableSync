@@ -175,4 +175,98 @@ public class SyncPlanHeuristicTests
 
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
     }
+
+    [Fact]
+    public void DerivePlan_WithRowVersionColumn_ChoosesRowVersionStrategy()
+    {
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
+        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_RowVersionColumnTakesPriorityOverChangeTrackingColumn()
+    {
+        // Detecting a rowversion-typed column is a fact, not a guess - it wins even when a
+        // configured/default datetime column also exists on the same table.
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
+        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_RowVersionColumnTakesPriorityOverFullRescanForLargeTables()
+    {
+        // Even a large table with no configured datetime column and no AllowFullRescanFor
+        // opt-in should resolve RowVersion (not throw) once a rowversion column is detected.
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false, rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideTimestamp_WinsOverDetectedRowVersionColumn()
+    {
+        // The whole reason this override exists: an operator wants Timestamp even though a
+        // rowversion column - which would otherwise always win - is also present.
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer",
+            strategyOverride: IncrementalStrategy.Timestamp);
+
+        Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
+        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideFullRescan_WinsOverDetectedRowVersionColumn()
+    {
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(
+            profile, DefaultOptions, rowVersionColumn: "RowVer", strategyOverride: IncrementalStrategy.FullRescan);
+
+        Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideRowVersion_WithNoRowVersionColumn_Throws()
+    {
+        var profile = CreateProfile();
+
+        Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: null,
+            strategyOverride: IncrementalStrategy.RowVersion));
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideTimestamp_WithNoChangeTrackingColumn_Throws()
+    {
+        var profile = CreateProfile();
+
+        Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: null, rowVersionColumn: null,
+            strategyOverride: IncrementalStrategy.Timestamp));
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideFullRescan_NeedsNoColumnAtAll()
+    {
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: null, rowVersionColumn: null,
+            strategyOverride: IncrementalStrategy.FullRescan);
+
+        Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
+    }
 }

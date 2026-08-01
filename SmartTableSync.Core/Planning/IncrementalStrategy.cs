@@ -13,4 +13,11 @@ public enum IncrementalStrategy
     /// PlanHeuristicOptions.FullRescanRowCountThreshold, or when explicitly allowed via
     /// SyncSettings.AllowFullRescanFor.</summary>
     FullRescan,
+
+    /// <summary>Windowed query against a rowversion/timestamp column, engine-maintained on
+    /// every INSERT/UPDATE with no trigger or app-code discipline required — strictly more
+    /// reliable than a datetime column, so detected and preferred over one whenever present.
+    /// Position tracking (CustomSyncState.IncrementalPosition) is owned entirely by
+    /// RowVersionSyncRunner, separate from LastSyncDate.</summary>
+    RowVersion,
 }

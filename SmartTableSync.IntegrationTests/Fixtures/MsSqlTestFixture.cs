@@ -45,7 +45,7 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
         {
             "Attribute.sql", "ProductAttributeValue.sql", "ProductCatalogItem.sql", "DocumentAsset.sql",
             "IncrementalStrategyFullRescanTestTable.sql", "IncrementalStrategyConfiguredColumnTestTable.sql",
-            "IdentityTvpTestTable.sql",
+            "IdentityTvpTestTable.sql", "RowVersionTestTable.sql",
         };
 
         await RunScriptsAsync(ParentConnectionString, tableScripts.Select(f => Path.Combine(schemaDir, f)));

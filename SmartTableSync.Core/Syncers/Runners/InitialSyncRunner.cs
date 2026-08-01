@@ -73,7 +73,7 @@ public sealed class InitialSyncRunner : ISyncRunner
             bool batchOk = false;
             try
             {
-                await BulkCopyWriter.WriteAsync(batch, child, tableName, _plan.BulkCopyOptions, _plan.BulkCopyTimeoutSeconds, ct);
+                await BulkCopyWriter.WriteAsync(batch, child, tableName, _plan.BulkCopyOptions, _plan.BulkCopyTimeoutSeconds, _profile.RowVersionColumn, ct);
                 await _batchLogger.LogBatchCompleteAsync(child, logId, rowsRead, 0, currentKey, CancellationToken.None);
                 thisRunSynced += rowsRead;
                 resumeKey = currentKey;

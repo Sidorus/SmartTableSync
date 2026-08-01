@@ -135,6 +135,129 @@ public class SqlArtifactGeneratorTests
         Assert.DoesNotContain("IDENTITY_INSERT", script);
     }
 
+    // --- Rowversion shape: Tvp, with a rowversion/timestamp column — SQL Server rejects any
+    // explicit value written into a rowversion column, so it must be excluded from generated
+    // INSERT/UPDATE column lists regardless of merge strategy. ---
+
+    private static TableProfile RowVersionTvpProfile() => new(
+        TableName: "PricePoint",
+        Columns:
+        [
+            new ColumnProfile("PricePointId", "int", 4, false),
+            new ColumnProfile("Amount", "decimal", 9, false),
+            new ColumnProfile("RowVer", "timestamp", 8, false),
+        ],
+        PrimaryKeyColumns: ["PricePointId"],
+        IdentityColumn: null,
+        IndexedLobColumns: [],
+        HasIncomingForeignKeys: false,
+        RowCount: 100,
+        AvgRowSizeBytes: 200,
+        MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+    private static SyncPlan RowVersionTvpPlan() => new(
+        "PricePoint", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "PricePointTableType",
+        ChangeTrackingColumn: "RowVer", IncrementalStrategy: IncrementalStrategy.RowVersion);
+
+    [Fact]
+    public void GenerateTvpUdtScript_WithRowVersionColumn_ExcludesItFromTvpType()
+    {
+        // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a
+        // real table column does - confirmed against a real database (SQL error 200: "data
+        // for table-valued parameter doesn't conform to the table type") before this fix.
+        var script = _generator.GenerateTvpUdtScript(RowVersionTvpProfile(), "PricePointTableType");
+
+        Assert.DoesNotContain("RowVer", script);
+        Assert.Contains("PricePointId", script);
+        Assert.Contains("Amount", script);
+    }
+
+    [Fact]
+    public void GenerateMergeProcedureScript_TvpWithRowVersionColumn_ExcludesItFromInsertAndUpdate()
+    {
+        var script = _generator.GenerateMergeProcedureScript(RowVersionTvpProfile(), RowVersionTvpPlan());
+
+        var updateSetIndex = script.IndexOf("UPDATE SET", StringComparison.Ordinal);
+        var insertIndex = script.IndexOf("INSERT (", StringComparison.Ordinal);
+        var updateSetBlock = script[updateSetIndex..insertIndex];
+        var insertBlock = script[insertIndex..];
+
+        Assert.DoesNotContain("[RowVer]", updateSetBlock);
+        Assert.DoesNotContain("[RowVer]", insertBlock);
+        // Everything else still makes it in.
+        Assert.Contains("[Amount] = Source.[Amount]", updateSetBlock);
+        Assert.Contains("[PricePointId]", insertBlock);
+    }
+
+    [Fact]
+    public void GenerateMergeProcedureScript_RowByRowWithRowVersionColumn_ExcludesItFromParametersInsertAndUpdate()
+    {
+        var plan = RowVersionTvpPlan() with { MergeStrategy = MergeStrategy.RowByRow, TvpTypeName = null };
+        var script = _generator.GenerateMergeProcedureScript(RowVersionTvpProfile(), plan);
+
+        Assert.DoesNotContain("@RowVer", script);
+        Assert.DoesNotContain("[RowVer]", script);
+        Assert.Contains("@Amount", script);
+    }
+
+    // --- GenerateRowVersionSetupScript: parent-side, hand-applied-only DDL ---
+
+    private static TableProfile NoRowVersionProfile() => new(
+        TableName: "OrderStatus",
+        Columns:
+        [
+            new ColumnProfile("OrderStatusId", "int", 4, false),
+            new ColumnProfile("Name", "nvarchar", 200, false),
+        ],
+        PrimaryKeyColumns: ["OrderStatusId"],
+        IdentityColumn: "OrderStatusId",
+        IndexedLobColumns: [],
+        HasIncomingForeignKeys: false,
+        RowCount: 100,
+        AvgRowSizeBytes: 100,
+        MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+    [Fact]
+    public void GenerateRowVersionSetupScript_NoExistingRowVersionColumn_IncludesAlterTableAndIndex()
+    {
+        var script = _generator.GenerateRowVersionSetupScript(NoRowVersionProfile());
+
+        Assert.Contains("ALTER TABLE [dbo].[OrderStatus] ADD [RowVer] ROWVERSION NOT NULL;", script);
+        Assert.Contains("CREATE NONCLUSTERED INDEX [IX_OrderStatus_RowVer] ON [dbo].[OrderStatus] ([RowVer]);", script);
+    }
+
+    [Fact]
+    public void GenerateRowVersionSetupScript_CustomColumnName_UsesItThroughout()
+    {
+        var script = _generator.GenerateRowVersionSetupScript(NoRowVersionProfile(), columnName: "Version");
+
+        Assert.Contains("ADD [Version] ROWVERSION NOT NULL;", script);
+        Assert.Contains("CREATE NONCLUSTERED INDEX [IX_OrderStatus_Version] ON [dbo].[OrderStatus] ([Version]);", script);
+        Assert.DoesNotContain("[RowVer]", script);
+    }
+
+    [Fact]
+    public void GenerateRowVersionSetupScript_AlreadyHasRowVersionColumn_SkipsAlterTableButStillIndexes()
+    {
+        // RowVersionTvpProfile already has a "RowVer" timestamp column - the ALTER TABLE
+        // would fail outright if generated (SQL Server rejects two rowversion columns per
+        // table), so it must be skipped, with only the index generated against that column.
+        var script = _generator.GenerateRowVersionSetupScript(RowVersionTvpProfile());
+
+        Assert.DoesNotContain("ALTER TABLE", script);
+        Assert.Contains("already has a rowversion column ('RowVer')", script);
+        Assert.Contains("CREATE NONCLUSTERED INDEX [IX_PricePoint_RowVer] ON [dbo].[PricePoint] ([RowVer]);", script);
+    }
+
+    [Fact]
+    public void GenerateRowVersionSetupScript_EveryStatementIsGuardedByIfNotExists()
+    {
+        var script = _generator.GenerateRowVersionSetupScript(NoRowVersionProfile());
+
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderStatus') AND name = 'RowVer')", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.OrderStatus') AND name = 'IX_OrderStatus_RowVer')", script);
+    }
+
     // --- Identity + Tvp shape: no incoming FKs, small rows -> Tvp, but with an identity PK
     // (a real, reachable heuristic outcome none of the 3 example tables happen to hit) ---
 

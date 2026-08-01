@@ -56,6 +56,28 @@ public sealed class TableSyncCommandFactory
         return cmd;
     }
 
+    /// <summary>Rowversion strategy's incremental query — an exact cutoff, unlike
+    /// BuildIncrementalCommand's 1-minute datetime overlap, since rowversion values are
+    /// unambiguous and monotonically increasing. RowVersionSyncRunner is responsible for
+    /// capturing lastRowVersion correctly (MIN_ACTIVE_ROWVERSION(), never @@DBTS).
+    ///
+    /// Deliberately &gt;= (inclusive), not &gt; : MIN_ACTIVE_ROWVERSION() returns the value the
+    /// *next* write will receive when nothing is currently in flight, so the very first write
+    /// committed after a position was captured can land on exactly that value — a strict
+    /// &gt; would silently skip it. Never re-matches a row from the previous cycle either: that
+    /// row's version was already committed (thus strictly less than) the position captured
+    /// before that cycle's read, by the same reasoning.</summary>
+    public SqlCommand BuildRowVersionIncrementalCommand(SqlConnection parent, byte[] lastRowVersion)
+    {
+        var cmd = new SqlCommand($"""
+            SELECT * FROM [dbo].[{_profile.TableName}]
+            WHERE  [{_plan.ChangeTrackingColumn}] >= @LastRowVersion
+            """, parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
+
+        cmd.Parameters.Add("@LastRowVersion", SqlDbType.Timestamp).Value = lastRowVersion;
+        return cmd;
+    }
+
     public SqlCommand BuildParentKeyCommand(SqlConnection parent) =>
         new($"SELECT {BuildKeySelectExpression()} FROM [dbo].[{_profile.TableName}]", parent)
         { CommandTimeout = _plan.BulkCopyTimeoutSeconds };

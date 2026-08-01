@@ -19,6 +19,8 @@ public class SqlTypeMappingTests
     [InlineData("time", System.Data.SqlDbType.Time)]
     [InlineData("text", System.Data.SqlDbType.Text)]
     [InlineData("ntext", System.Data.SqlDbType.NText)]
+    [InlineData("timestamp", System.Data.SqlDbType.Timestamp)]
+    [InlineData("rowversion", System.Data.SqlDbType.Timestamp)]
     public void ToSqlDbType_MapsKnownTypes(string sqlTypeName, System.Data.SqlDbType expected)
     {
         Assert.Equal(expected, SqlTypeMapping.ToSqlDbType(sqlTypeName));

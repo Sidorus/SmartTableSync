@@ -8,6 +8,7 @@ using SmartTableSync.Logging;
 using SmartTableSync.Observability;
 using SmartTableSync.Options;
 using SmartTableSync.Planning;
+using SmartTableSync.State;
 using SmartTableSync.Syncers;
 
 namespace SmartTableSync.IntegrationTests.Support;
@@ -36,7 +37,7 @@ public static class SyncerTestHelpers
 
         var (profile, plan, _) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
-        var factory = new TableSyncerFactory(new BatchLogger(), NullLoggerFactory.Instance);
+        var factory = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance);
         return (factory.Create(profile, plan), plan);
     }
 
@@ -226,6 +227,24 @@ public static class SyncerTestHelpers
         cmd.AddParam("@LastUpdate", SqlDbType.DateTime, lastUpdate);
         cmd.AddParam("@DocumentId", SqlDbType.Int, documentId);
         cmd.AddParam("@LanguageCode", SqlDbType.NVarChar, languageCode, 50);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task InsertRowVersionTestTableRowAsync(SqlConnection connection, int id, string value)
+    {
+        await using var cmd = new SqlCommand(
+            "INSERT INTO [dbo].[RowVersionTestTable] ([Id], [Value]) VALUES (@Id, @Value)", connection);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task UpdateRowVersionTestTableValueAsync(SqlConnection connection, int id, string newValue)
+    {
+        await using var cmd = new SqlCommand(
+            "UPDATE [dbo].[RowVersionTestTable] SET [Value] = @Value WHERE [Id] = @Id", connection);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, newValue, 200);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
         await cmd.ExecuteNonQueryAsync();
     }
 

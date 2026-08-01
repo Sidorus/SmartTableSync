@@ -5,11 +5,13 @@ namespace SmartTableSync.Syncers.Runners;
 public static class IncrementalRunnerFactory
 {
     public static ISyncRunner Create(
-        TableProfile profile, SyncPlan plan, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy, ILogger logger) =>
+        TableProfile profile, SyncPlan plan, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy,
+        ISyncStateRepository syncState, ILogger logger) =>
         plan.IncrementalStrategy switch
         {
             IncrementalStrategy.Timestamp => new IncrementalSyncRunner(commandFactory, mergeStrategy),
             IncrementalStrategy.FullRescan => new FullRescanSyncRunner(profile, plan, commandFactory, mergeStrategy, logger),
+            IncrementalStrategy.RowVersion => new RowVersionSyncRunner(profile, commandFactory, mergeStrategy, syncState, logger),
             _ => throw new NotSupportedException($"Unhandled incremental strategy: {plan.IncrementalStrategy}"),
         };
 }

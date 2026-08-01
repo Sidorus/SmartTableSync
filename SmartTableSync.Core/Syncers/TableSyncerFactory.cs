@@ -3,11 +3,13 @@ namespace SmartTableSync.Syncers;
 public sealed class TableSyncerFactory : ITableSyncerFactory
 {
     private readonly IBatchLogger _batchLogger;
+    private readonly ISyncStateRepository _syncState;
     private readonly ILoggerFactory _loggerFactory;
 
-    public TableSyncerFactory(IBatchLogger batchLogger, ILoggerFactory loggerFactory)
+    public TableSyncerFactory(IBatchLogger batchLogger, ISyncStateRepository syncState, ILoggerFactory loggerFactory)
     {
         _batchLogger = batchLogger;
+        _syncState = syncState;
         _loggerFactory = loggerFactory;
     }
 
@@ -22,7 +24,7 @@ public sealed class TableSyncerFactory : ITableSyncerFactory
         var syncRunners = new Dictionary<SyncPhase, Lazy<ISyncRunner>>
         {
             [SyncPhase.Initial] = new(() => new InitialSyncRunner(profile, plan, commandFactory, mergeStrategy, _batchLogger, logger)),
-            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, logger)),
+            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, _syncState, logger)),
         };
 
         var deleteReconciler = new DeleteReconciler(profile, commandFactory, logger);

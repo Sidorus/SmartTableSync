@@ -26,6 +26,15 @@ public sealed class SyncSettings
     /// provisioning a large table with no usable column throws instead of silently
     /// re-scanning it every cycle.</summary>
     public IReadOnlyList<string> AllowFullRescanFor { get; set; } = [];
+
+    /// <summary>Per-table override of the auto-derived IncrementalStrategy, keyed by table
+    /// name. Without this, a detected rowversion column always wins over a configured/default
+    /// datetime column — a correct default (the engine guarantees it's current), but one an
+    /// operator has no way to override otherwise. SyncPlanHeuristic still validates the
+    /// override is actually satisfiable (e.g. forcing RowVersion without a rowversion column
+    /// throws) rather than silently accepting an impossible choice.</summary>
+    public IReadOnlyDictionary<string, IncrementalStrategy> IncrementalStrategyOverrides { get; set; } =
+        new Dictionary<string, IncrementalStrategy>(StringComparer.OrdinalIgnoreCase);
 }
 
 public enum SyncMode

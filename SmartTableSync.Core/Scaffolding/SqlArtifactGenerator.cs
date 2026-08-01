@@ -30,7 +30,11 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 
     public string GenerateTvpUdtScript(TableProfile profile, string typeName)
     {
-        var columnLines = profile.Columns.Select(c =>
+        // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a
+        // real table column does, so it's excluded here too, not just from the MERGE's own
+        // INSERT/UPDATE lists — TvpBatchMergeStrategy projects the DataTable it passes as
+        // @Rows to match this same shape.
+        var columnLines = InsertableColumns(profile).Select(c =>
             $"        [{c.Name}]{new string(' ', Math.Max(1, 24 - c.Name.Length))}{FormatSqlType(c)} {(c.IsNullable ? "NULL" : "NOT NULL")}");
         var columnsBlock = string.Join(",\n", columnLines);
 
@@ -64,11 +68,12 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 
     private static string GenerateTvpMergeProcedure(TableProfile profile, SyncPlan plan)
     {
+        var insertableColumns = InsertableColumns(profile);
         var pkJoin = string.Join(" AND ", profile.PrimaryKeyColumns.Select(c => $"Target.[{c}] = Source.[{c}]"));
-        var updateColumns = profile.Columns.Where(c => !profile.PrimaryKeyColumns.Contains(c.Name)).ToList();
+        var updateColumns = insertableColumns.Where(c => !profile.PrimaryKeyColumns.Contains(c.Name)).ToList();
         var updateSet = string.Join(",\n", updateColumns.Select(c => $"            [{c.Name}] = Source.[{c.Name}]"));
-        var insertColumns = string.Join(", ", profile.Columns.Select(c => $"[{c.Name}]"));
-        var insertValues = string.Join(", ", profile.Columns.Select(c => $"Source.[{c.Name}]"));
+        var insertColumns = string.Join(", ", insertableColumns.Select(c => $"[{c.Name}]"));
+        var insertValues = string.Join(", ", insertableColumns.Select(c => $"Source.[{c.Name}]"));
 
         var hasIdentity = profile.IdentityColumn is not null;
         var identityOn = hasIdentity ? $"\n    SET IDENTITY_INSERT [dbo].[{profile.TableName}] ON;\n" : "";
@@ -105,13 +110,14 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 
     private static string GenerateRowByRowMergeProcedure(TableProfile profile, SyncPlan plan)
     {
-        var parameters = string.Join(",\n", profile.Columns.Select(c => $"    @{c.Name} {FormatSqlType(c)}"));
-        var sourceSelect = string.Join(", ", profile.Columns.Select(c => $"@{c.Name} AS [{c.Name}]"));
+        var insertableColumns = InsertableColumns(profile);
+        var parameters = string.Join(",\n", insertableColumns.Select(c => $"    @{c.Name} {FormatSqlType(c)}"));
+        var sourceSelect = string.Join(", ", insertableColumns.Select(c => $"@{c.Name} AS [{c.Name}]"));
         var pkJoin = string.Join(" AND ", profile.PrimaryKeyColumns.Select(c => $"Target.[{c}] = Source.[{c}]"));
-        var updateColumns = profile.Columns.Where(c => !profile.PrimaryKeyColumns.Contains(c.Name)).ToList();
+        var updateColumns = insertableColumns.Where(c => !profile.PrimaryKeyColumns.Contains(c.Name)).ToList();
         var updateSet = string.Join(",\n", updateColumns.Select(c => $"            [{c.Name}] = Source.[{c.Name}]"));
-        var insertColumns = string.Join(", ", profile.Columns.Select(c => $"[{c.Name}]"));
-        var insertValues = string.Join(", ", profile.Columns.Select(c => $"Source.[{c.Name}]"));
+        var insertColumns = string.Join(", ", insertableColumns.Select(c => $"[{c.Name}]"));
+        var insertValues = string.Join(", ", insertableColumns.Select(c => $"Source.[{c.Name}]"));
 
         var hasIdentity = profile.IdentityColumn is not null;
         var identityOn = hasIdentity ? $"\n    SET IDENTITY_INSERT [dbo].[{profile.TableName}] ON;\n" : "";
@@ -160,11 +166,15 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
         -- problem: SyncStateRepository.GetLastSyncDateAsync defaults to
         -- SyncConstants.InitialDate ("initial full sync not yet done") when a table has
         -- no row yet, so this schema is intentionally seeded with zero rows.
+        -- IncrementalPosition is a generic, opaque position string owned entirely by
+        -- whichever ISyncRunner needs one that isn't a DateTime (e.g. RowVersionSyncRunner's
+        -- hex-encoded rowversion) - unrelated to and never overwritten by LastSyncDate.
         IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'CustomSyncState' AND schema_id = SCHEMA_ID('dbo'))
         BEGIN
             CREATE TABLE [dbo].[CustomSyncState] (
-                [TableName]    NVARCHAR(100) NOT NULL,
-                [LastSyncDate] DATETIME      NOT NULL,
+                [TableName]           NVARCHAR(100) NOT NULL,
+                [LastSyncDate]        DATETIME      NOT NULL,
+                [IncrementalPosition] NVARCHAR(50)  NULL,
                 CONSTRAINT [PK_CustomSyncState] PRIMARY KEY ([TableName])
             );
 
@@ -172,6 +182,16 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
         END
         ELSE
             PRINT 'dbo.CustomSyncState already exists';
+        GO
+
+        -- Migration for a database whose CustomSyncState predates IncrementalPosition —
+        -- safe to run every time, idempotent by construction.
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CustomSyncState') AND name = 'IncrementalPosition')
+        BEGIN
+            ALTER TABLE [dbo].[CustomSyncState] ADD [IncrementalPosition] NVARCHAR(50) NULL;
+
+            PRINT 'Added IncrementalPosition to dbo.CustomSyncState';
+        END
         GO
 
         -- SyncBatchLog — tracks initial full-sync progress per batch, so a crash or
@@ -246,6 +266,63 @@ public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
         GO
 
         """;
+
+    public string GenerateRowVersionSetupScript(TableProfile profile, string columnName = "RowVer")
+    {
+        var existingColumn = profile.RowVersionColumn;
+        var col = existingColumn ?? columnName;
+        var indexName = $"IX_{profile.TableName}_{col}";
+
+        var alterBlock = existingColumn is not null
+            ? $"-- dbo.{profile.TableName} already has a rowversion column ('{existingColumn}') — nothing to add.\n"
+            : $"""
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.{profile.TableName}') AND name = '{col}')
+                BEGIN
+                    ALTER TABLE [dbo].[{profile.TableName}] ADD [{col}] ROWVERSION NOT NULL;
+
+                    PRINT 'Added {col} to dbo.{profile.TableName}';
+                END
+                ELSE
+                    PRINT 'dbo.{profile.TableName} already has a {col} column';
+                GO
+
+                """;
+
+        return $"""
+            -- ============================================================
+            -- Generated by SmartTableSync.Scaffold — review before applying.
+            -- Apply this MANUALLY against the PARENT database to opt
+            -- dbo.{profile.TableName} into SmartTableSync's RowVersion incremental
+            -- strategy. SmartTableSync never has DDL access to the parent database,
+            -- in either Manual or Auto mode — see sql/07_permissions.sql.
+            -- ============================================================
+
+            SET ANSI_NULLS ON;
+            SET QUOTED_IDENTIFIER ON;
+            GO
+
+            {alterBlock}-- Required — without it, the incremental query is a full table scan
+            -- every cycle, defeating the point of using rowversion at all.
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.{profile.TableName}') AND name = '{indexName}')
+            BEGIN
+                CREATE NONCLUSTERED INDEX [{indexName}] ON [dbo].[{profile.TableName}] ([{col}]);
+
+                PRINT 'Created {indexName}';
+            END
+            ELSE
+                PRINT '{indexName} already exists';
+            GO
+
+            """;
+    }
+
+    /// <summary>Every column except the table's rowversion/timestamp column, if it has one —
+    /// SQL Server rejects any explicit value written into a rowversion column via INSERT or
+    /// UPDATE, so it must never appear in a generated MERGE's column/parameter lists. The
+    /// primary key columns ARE included here (only excluded from updateSet separately, same
+    /// as before) — this only strips the one column that can never be written at all.</summary>
+    private static IReadOnlyList<ColumnProfile> InsertableColumns(TableProfile profile) =>
+        profile.Columns.Where(c => c.Name != profile.RowVersionColumn).ToList();
 
     private static string FormatColumnDefinition(ColumnProfile col, bool isIdentity)
     {

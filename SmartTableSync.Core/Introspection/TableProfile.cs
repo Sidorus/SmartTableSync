@@ -27,4 +27,14 @@ public sealed record TableProfile(
     /// hides the rare oversized-row case (e.g. a handful of ~50 MB rows among many
     /// small ones).</summary>
     public long MaxLobRowSizeBytes => MaxLobColumnSizeBytes.Count == 0 ? 0 : MaxLobColumnSizeBytes.Values.Max();
+
+    /// <summary>The table's rowversion/timestamp column, if it has one. SQL Server allows at
+    /// most one per table and always reports its sys.types name as "timestamp" (rowversion is
+    /// just a Transact-SQL keyword synonym, not a distinct catalog type) — detecting it is a
+    /// fact, not a guess, since the type itself proves the engine maintains it on every write.
+    /// Single source of truth for: preferring the RowVersion incremental strategy over a
+    /// datetime match, and excluding this column from generated INSERT/UPDATE/bulk-copy column
+    /// lists, since SQL Server rejects any explicit value written into a rowversion column.</summary>
+    public string? RowVersionColumn => Columns.FirstOrDefault(c =>
+        string.Equals(c.SqlTypeName, "timestamp", StringComparison.OrdinalIgnoreCase))?.Name;
 }
