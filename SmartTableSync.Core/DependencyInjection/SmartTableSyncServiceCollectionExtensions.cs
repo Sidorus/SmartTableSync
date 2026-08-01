@@ -1,15 +1,4 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using SmartTableSync.Configuration;
-using SmartTableSync.Infrastructure;
-using SmartTableSync.Introspection;
-using SmartTableSync.Logging;
-using SmartTableSync.Observability;
-using SmartTableSync.Options;
-using SmartTableSync.Orchestration;
-using SmartTableSync.Planning;
-using SmartTableSync.Scaffolding;
-using SmartTableSync.State;
-using SmartTableSync.Syncers;
 
 namespace SmartTableSync.DependencyInjection;
 

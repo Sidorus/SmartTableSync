@@ -19,7 +19,7 @@ public sealed class DbConnectionFactory : IDbConnectionFactory
     }
 
     public SqlConnection CreateParentConnection() => new(_parentConnStr);
-    public SqlConnection CreateChildConnection()  => new(_childConnStr);
+    public SqlConnection CreateChildConnection() => new(_childConnStr);
 
     public SqlConnection CreateChildProvisioningConnection() => new(
         _childProvisioningConnStr

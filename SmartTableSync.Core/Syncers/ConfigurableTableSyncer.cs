@@ -34,12 +34,12 @@ public sealed class ConfigurableTableSyncer : ITableSyncer
     public async Task<SyncResult> SyncAsync(
         SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default)
     {
-        var sw = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         var isInitial = SyncConstants.IsInitial(lastSyncDate);
         var runner = GetSyncRunner(isInitial);
         var (synced, errored, hasRetryable) = await runner.RunAsync(parent, child, lastSyncDate, ct);
 
-        return new SyncResult(TableName, synced, errored, hasRetryable, isInitial, sw.Elapsed);
+        return new SyncResult(TableName, synced, errored, hasRetryable, isInitial, stopwatch.Elapsed);
     }
 
     public Task<int> ReconcileDeletesAsync(

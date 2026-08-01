@@ -85,12 +85,30 @@ if (args.Contains("--rowversion-setup"))
     await using var rowVersionParent = new SqlConnection(rowVersionParentConnString);
     await rowVersionParent.OpenAsync();
 
+    var failedRowVersionTables = new List<string>();
+
     foreach (var tableName in rowVersionTableNames)
     {
-        var profile = await rowVersionSchemaReader.ProfileTableAsync(rowVersionParent, tableName, CancellationToken.None);
-        var path = Path.Combine(outputDir, $"{tableName}_RowVersionSetup.sql");
-        await File.WriteAllTextAsync(path, rowVersionGenerator.GenerateRowVersionSetupScript(profile, columnName));
-        Console.WriteLine($"wrote {path} — apply manually against the PARENT database");
+        try
+        {
+            var profile = await rowVersionSchemaReader.ProfileTableAsync(rowVersionParent, tableName, CancellationToken.None);
+            var path = Path.Combine(outputDir, $"{tableName}_RowVersionSetup.sql");
+            await File.WriteAllTextAsync(path, rowVersionGenerator.GenerateRowVersionSetupScript(profile, columnName));
+            Console.WriteLine($"wrote {path} — apply manually against the PARENT database");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Same aggregate-and-continue behavior as the main per-table loop below — one bad
+            // table (e.g. a typo'd name that fails introspection) shouldn't abort the rest.
+            Console.Error.WriteLine($"{tableName}: FAILED: {ex.Message}");
+            failedRowVersionTables.Add(tableName);
+        }
+    }
+
+    if (failedRowVersionTables.Count > 0)
+    {
+        Console.Error.WriteLine($"{failedRowVersionTables.Count} table(s) failed: {string.Join(", ", failedRowVersionTables)} — fix and re-run.");
+        return 1;
     }
 
     return 0;

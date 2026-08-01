@@ -89,7 +89,7 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         string? rowVersionColumn, IncrementalStrategy? strategyOverride)
     {
         if (strategyOverride is not null)
-            return ValidateOverride(strategyOverride.Value, profile, changeTrackingColumn, rowVersionColumn);
+            return ValidateOverride(profile, changeTrackingColumn, rowVersionColumn, strategyOverride.Value);
 
         if (rowVersionColumn is not null)
             return IncrementalStrategy.RowVersion;
@@ -111,7 +111,7 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
     // no rowversion column) fails loudly at provisioning time instead of silently falling
     // through to a runner that has nothing to query.
     private static IncrementalStrategy ValidateOverride(
-        IncrementalStrategy strategyOverride, TableProfile profile, string? changeTrackingColumn, string? rowVersionColumn)
+        TableProfile profile, string? changeTrackingColumn, string? rowVersionColumn, IncrementalStrategy strategyOverride)
     {
         if (strategyOverride == IncrementalStrategy.RowVersion && rowVersionColumn is null)
             throw new InvalidOperationException(

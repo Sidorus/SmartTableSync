@@ -26,7 +26,7 @@ public sealed class SyncStateRepository : ISyncStateRepository
                 INSERT ([TableName], [LastSyncDate]) VALUES (@T, @D);
             """, conn);
         cmd.Parameters.Add("@T", SqlDbType.NVarChar, 100).Value = tableName;
-        cmd.Parameters.Add("@D", SqlDbType.DateTime).Value      = syncDate;
+        cmd.Parameters.Add("@D", SqlDbType.DateTime).Value = syncDate;
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

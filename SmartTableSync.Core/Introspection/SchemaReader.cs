@@ -77,7 +77,7 @@ public sealed class SchemaReader : ISchemaReader
         { CommandTimeout = 30 };
         cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
         var result = await cmd.ExecuteScalarAsync(ct);
-        return result is int i && i == 1;
+        return result is int intResult && intResult == 1;
     }
 
     private static async Task<IReadOnlyList<ColumnProfile>> GetColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
@@ -181,7 +181,7 @@ public sealed class SchemaReader : ISchemaReader
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
         cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
         var result = await cmd.ExecuteScalarAsync(ct);
-        return result is bool b && b;
+        return result is bool boolResult && boolResult;
     }
 
     private static async Task<(long RowCount, long AvgRowSizeBytes)> GetRowCountAndAvgSizeAsync(SqlConnection parent, string tableName, CancellationToken ct)

@@ -7,7 +7,7 @@ public static class DataTableLoader
 {
     public static async Task<DataTable> LoadAsync(SqlDataReader reader, CancellationToken ct)
     {
-        var dt = new DataTable();
+        var dataTable = new DataTable();
         bool first = true;
 
         while (await reader.ReadAsync(ct))
@@ -15,16 +15,16 @@ public static class DataTableLoader
             if (first)
             {
                 for (int i = 0; i < reader.FieldCount; i++)
-                    dt.Columns.Add(reader.GetName(i), reader.GetFieldType(i));
+                    dataTable.Columns.Add(reader.GetName(i), reader.GetFieldType(i));
                 first = false;
             }
 
-            var row = dt.NewRow();
+            var row = dataTable.NewRow();
             for (int i = 0; i < reader.FieldCount; i++)
                 row[i] = reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i);
-            dt.Rows.Add(row);
+            dataTable.Rows.Add(row);
         }
 
-        return dt;
+        return dataTable;
     }
 }

@@ -50,9 +50,9 @@ public sealed class BatchLogger : IBatchLogger
             VALUES (@T, 'initial', @Batch, @Key, GETUTCDATE(), 'started');
             SELECT SCOPE_IDENTITY();
             """, conn);
-        cmd.Parameters.Add("@T",     SqlDbType.NVarChar, 100).Value = tableName;
-        cmd.Parameters.Add("@Batch", SqlDbType.Int).Value           = batchNumber;
-        cmd.Parameters.Add("@Key",   SqlDbType.NVarChar, 400).Value = (object?)startKey ?? DBNull.Value;
+        cmd.Parameters.Add("@T", SqlDbType.NVarChar, 100).Value = tableName;
+        cmd.Parameters.Add("@Batch", SqlDbType.Int).Value = batchNumber;
+        cmd.Parameters.Add("@Key", SqlDbType.NVarChar, 400).Value = (object?)startKey ?? DBNull.Value;
         return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
     }
 
@@ -68,10 +68,10 @@ public sealed class BatchLogger : IBatchLogger
                    [Status]       = 'completed'
             WHERE  [LogId] = @Id
             """, conn);
-        cmd.Parameters.Add("@Id",      SqlDbType.Int).Value           = logId;
-        cmd.Parameters.Add("@Synced",  SqlDbType.Int).Value           = synced;
-        cmd.Parameters.Add("@Errored", SqlDbType.Int).Value           = errored;
-        cmd.Parameters.Add("@Key",     SqlDbType.NVarChar, 400).Value = lastKey;
+        cmd.Parameters.Add("@Id", SqlDbType.Int).Value = logId;
+        cmd.Parameters.Add("@Synced", SqlDbType.Int).Value = synced;
+        cmd.Parameters.Add("@Errored", SqlDbType.Int).Value = errored;
+        cmd.Parameters.Add("@Key", SqlDbType.NVarChar, 400).Value = lastKey;
         await cmd.ExecuteNonQueryAsync(ct);
     }
 }

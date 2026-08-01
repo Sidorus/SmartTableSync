@@ -8,15 +8,15 @@ public static class SqlCommandExtensions
     /// </summary>
     public static void AddParam(
         this SqlCommand cmd,
-        string          name,
-        SqlDbType       type,
-        object?         value,
-        int             size = 0)
+        string name,
+        SqlDbType type,
+        object? value,
+        int size = 0)
     {
-        var p = size != 0
+        var parameter = size != 0
             ? cmd.Parameters.Add(name, type, size)
             : cmd.Parameters.Add(name, type);
 
-        p.Value = value is null or DBNull ? DBNull.Value : value;
+        parameter.Value = value is null or DBNull ? DBNull.Value : value;
     }
 }

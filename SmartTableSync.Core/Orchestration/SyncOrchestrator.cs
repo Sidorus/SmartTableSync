@@ -10,7 +10,6 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     // multi-tenant/multi-child-database scenario) would otherwise share one lock/timestamp
     // and collide, exactly as happened once during this project's own test development.
     private readonly SemaphoreSlim _runLock = new(1, 1);
-    private DateTime _lastReconcileUtc = DateTime.MinValue;
 
     private readonly IReadOnlyList<string> _tableNames;
     private readonly SyncMode _mode;
@@ -21,6 +20,9 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly ISyncStateRepository _syncState;
     private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
+
+    // Also instance, not static — see rationale above _runLock.
+    private DateTime _lastReconcileUtc = DateTime.MinValue;
 
     public SyncOrchestrator(
         ISyncTableProvisioner provisioner,
@@ -70,14 +72,19 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             }
 
             var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= _reconcileInterval;
+            var allTablesSucceeded = true;
 
             foreach (var tableName in _tableNames)
             {
                 ct.ThrowIfCancellationRequested();
-                await SyncTableAsync(tableName, shouldReconcile, ct);
+                var succeeded = await SyncTableAsync(tableName, shouldReconcile, ct);
+                allTablesSucceeded &= succeeded;
             }
 
-            if (shouldReconcile)
+            // Only advance if every table's pass (sync + reconcile) actually succeeded this
+            // cycle — otherwise a table whose reconcile threw would silently wait a full extra
+            // hour before its next reconcile attempt, even though nothing was actually resolved.
+            if (shouldReconcile && allTablesSucceeded)
                 _lastReconcileUtc = DateTime.UtcNow;
 
             _logger.LogInformation("SmartTableSync run completed at {Time}", DateTimeOffset.UtcNow);
@@ -88,7 +95,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
     }
 
-    private async Task SyncTableAsync(string tableName, bool shouldReconcile, CancellationToken ct)
+    private async Task<bool> SyncTableAsync(string tableName, bool shouldReconcile, CancellationToken ct)
     {
         try
         {
@@ -153,10 +160,13 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 _metrics.RowsDeleted(result.TableName, deleted);
                 _metrics.SyncLag(result.TableName, syncStartedAt - lastSync);
             }
+
+            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "{Table}: sync failed — will retry on next run", tableName);
+            return false;
         }
     }
 

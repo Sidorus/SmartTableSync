@@ -7,7 +7,7 @@ public interface ITableSyncer
     Task<SyncResult> SyncAsync(
         SqlConnection parent,
         SqlConnection child,
-        DateTime      lastSyncDate,
+        DateTime lastSyncDate,
         CancellationToken ct = default);
 
     /// <summary>
@@ -17,6 +17,6 @@ public interface ITableSyncer
     Task<int> ReconcileDeletesAsync(
         SqlConnection parent,
         SqlConnection child,
-        DateTime      lastSyncDate,
+        DateTime lastSyncDate,
         CancellationToken ct = default);
 }

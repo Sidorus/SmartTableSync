@@ -9,14 +9,17 @@ namespace SmartTableSync.Infrastructure;
 /// file for a human to apply by hand.</summary>
 public static class SqlScriptExecutor
 {
-    private static readonly Regex GoSeparator = new(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static readonly Regex _goSeparator = new(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
     public static async Task ExecuteAsync(SqlConnection connection, string script, CancellationToken ct, int commandTimeout = 60)
     {
-        foreach (var batch in GoSeparator.Split(script))
+        foreach (var batch in _goSeparator.Split(script))
         {
             var trimmed = batch.Trim();
-            if (trimmed.Length == 0) continue;
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
 
             await using var command = new SqlCommand(trimmed, connection) { CommandTimeout = commandTimeout };
             await command.ExecuteNonQueryAsync(ct);

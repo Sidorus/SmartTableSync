@@ -4,8 +4,9 @@ namespace SmartTableSync.Syncers.Runners;
 /// Strategy for running one sync pass over a table. ConfigurableTableSyncer depends on this
 /// interface alone — it doesn't know "initial" and "incremental" exist as separate concepts,
 /// let alone how many implementations there are or how one gets picked over another.
-/// PhaseSyncRunner is the one class that knows both concrete strategies exist and selects
-/// between them by lastSyncDate.
+/// TableSyncerFactory and ConfigurableTableSyncer.GetSyncRunner together are the ones that
+/// know both concrete strategies exist: TableSyncerFactory builds them, and
+/// ConfigurableTableSyncer.GetSyncRunner selects between them by lastSyncDate.
 /// </summary>
 public interface ISyncRunner
 {
