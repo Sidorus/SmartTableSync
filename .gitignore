@@ -15,6 +15,7 @@ obj/
 # Publish profiles and deployment artifacts — contain Azure resource names / subscription IDs
 **/Properties/
 
-# Markdown docs — keep only the public-facing README out of the ignore list
+# Markdown docs — keep only the public-facing README and the ADRs out of the ignore list
 *.md
 !README.md
+!docs/adr/*.md

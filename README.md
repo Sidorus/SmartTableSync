@@ -38,6 +38,14 @@ The repo ships with three representative example tables, each demonstrating a di
 
 The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI (also installable as a `dotnet tool`, `smarttablesync-scaffold`) that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review, or writes the shared tracking-infrastructure schema via `--infrastructure` — it never executes DDL itself.
 
+## Architecture decisions
+
+Significant design decisions — what was chosen, what was rejected, and why — are recorded as
+[Architecture Decision Records](docs/adr/README.md) in `docs/adr/`. Start there for the
+reasoning behind the engine's shape (custom build vs. Data Factory/replication/migration
+tooling, the merge-strategy and incremental-strategy selection rules, the least-privilege
+identity model) rather than reverse-engineering it from the code.
+
 ## Getting started
 
 ```bash
