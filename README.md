@@ -13,6 +13,15 @@ Data Sync works well for most tables, but it has two hard limits:
 
 Any table that hits either limit simply can't be included in Data Sync's sync group. Real-world schemas frequently have a handful of tables like this — a search-key column that's `nvarchar(max)`, or a document/media table with large binary content. SmartTableSync exists to synchronize exactly those exception tables, using a custom transport layer and stored-procedure-based `MERGE` instead of Data Sync's built-in replication.
 
+```mermaid
+flowchart LR
+    Parent[("Parent<br/>Azure SQL Database")]
+    Child[("Child<br/>Azure SQL Database")]
+
+    Parent -- "Azure SQL Data Sync<br/>(everything else, scheduled)" --> Child
+    Parent -- "SmartTableSync<br/>(exception tables, 5-min timer)" --> Child
+```
+
 ## What it does
 
 A timer-triggered Azure Function that:
@@ -34,11 +43,38 @@ The repo ships with three representative example tables, each demonstrating a di
 | `ProductCatalogItem` | Same — a wide table with an `nvarchar(max)` search-key column |
 | `DocumentAsset` | Rows can exceed the 24 MB batch limit (binary content columns) |
 
-## Project layout
+## Architecture
+
+What happens every 5-minute cycle, per table:
+
+```mermaid
+flowchart TD
+    Timer["Timer trigger (5 min)"] --> SR["SchemaReader<br/>introspects parent schema"]
+    SR --> FP{"Schema fingerprint<br/>changed, or new table?"}
+    FP -- No --> Plan["Load persisted SyncPlan<br/>(SyncTableConfig)"]
+    FP -- Yes --> Heuristic["SyncPlanHeuristic<br/>derives merge + incremental strategy"]
+    Heuristic --> Persist["SyncTableProvisioner<br/>persists plan + fingerprint"]
+    Persist --> Plan
+
+    Plan --> Phase{"Ever synced<br/>before?"}
+    Phase -- No --> Initial["InitialSyncRunner<br/>keyset-paginated SqlBulkCopy"]
+    Phase -- Yes --> Incremental["Incremental runner<br/>Timestamp / RowVersion / FullRescan"]
+
+    Initial --> Merge["MERGE via TVP or row-by-row"]
+    Incremental --> Merge
+    Merge --> ChildDB[("Child DB")]
+
+    Plan --> Reconcile["DeleteReconciler<br/>(hourly)"]
+    Reconcile --> ChildDB
+
+    Merge --> Metrics["Application Insights<br/>rows synced/errored, duration, lag"]
+```
+
+### Project layout
 
 The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI (also installable as a `dotnet tool`, `smarttablesync-scaffold`) that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review, or writes the shared tracking-infrastructure schema via `--infrastructure` — it never executes DDL itself.
 
-## Architecture decisions
+### Architecture decisions
 
 Significant design decisions — what was chosen, what was rejected, and why — are recorded as
 [Architecture Decision Records](docs/adr/README.md) in `docs/adr/`. Start there for the
