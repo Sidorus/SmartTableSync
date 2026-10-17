@@ -98,6 +98,17 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void IncrementalStrategyOverrides_BindsSqlChangeTracking()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:IncrementalStrategyOverrides:SomeTable"] = "SqlChangeTracking",
+        });
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, settings.IncrementalStrategyOverrides["SomeTable"]);
+    }
+
+    [Fact]
     public void IncrementalStrategyOverrides_UnparseableValue_IsDropped()
     {
         var settings = Bind(new Dictionary<string, string?>

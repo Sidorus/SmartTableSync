@@ -78,6 +78,42 @@ public sealed class TableSyncCommandFactory
         return cmd;
     }
 
+    /// <summary>Name of the extra bit column BuildChangeTrackingCommand appends: 1 when the
+    /// changed key no longer exists in the parent table (a delete), 0 otherwise.
+    /// ChangeTrackingSyncRunner removes it before handing the rows to the merge strategy.</summary>
+    public const string ChangeTrackingRowMissingColumn = "__SmartTableSync_RowMissing";
+
+    /// <summary>SQL Server Change Tracking strategy's incremental query: every key changed since
+    /// lastVersion (one row per key — CHANGETABLE already collapses repeated changes), LEFT
+    /// JOINed back to the table for current values. Columns come back in the table's own
+    /// column order with the same names as SELECT *, so the result feeds the existing merge
+    /// strategies unchanged; key columns are taken from CHANGETABLE because the table side is
+    /// NULL for a deleted row. A row is a delete exactly when the join finds nothing — that
+    /// covers SYS_CHANGE_OPERATION = 'D' and, outside snapshot isolation, a row deleted after
+    /// the change was recorded. Must run on the caller's transaction (snapshot isolation) so
+    /// it sees the same point in time as the version bounds read before it.</summary>
+    public SqlCommand BuildChangeTrackingCommand(SqlConnection parent, SqlTransaction transaction, long lastVersion)
+    {
+        var keyColumns = _profile.PrimaryKeyColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectList = _profile.Columns.Select(c => keyColumns.Contains(c.Name)
+            ? $"CT.{QuoteIdentifier(c.Name)}"
+            : $"T.{QuoteIdentifier(c.Name)}");
+        var joinPredicate = string.Join(" AND ", _profile.PrimaryKeyColumns.Select(c =>
+            $"T.{QuoteIdentifier(c)} = CT.{QuoteIdentifier(c)}"));
+        var firstKey = QuoteIdentifier(_profile.PrimaryKeyColumns[0]);
+        var table = $"[dbo].{QuoteIdentifier(_profile.TableName)}";
+
+        var cmd = new SqlCommand($"""
+            SELECT {string.Join(", ", selectList)},
+                   CAST(CASE WHEN T.{firstKey} IS NULL THEN 1 ELSE 0 END AS BIT) AS {QuoteIdentifier(ChangeTrackingRowMissingColumn)}
+            FROM   CHANGETABLE(CHANGES {table}, @LastVersion) AS CT
+            LEFT JOIN {table} AS T ON {joinPredicate}
+            """, parent, transaction) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
+
+        cmd.Parameters.Add("@LastVersion", SqlDbType.BigInt).Value = lastVersion;
+        return cmd;
+    }
+
     public SqlCommand BuildParentKeyCommand(SqlConnection parent) =>
         new($"SELECT {BuildKeySelectExpression()} FROM [dbo].[{_profile.TableName}]", parent)
         { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
@@ -93,4 +129,6 @@ public sealed class TableSyncCommandFactory
 
     private string ColumnType(string columnName) =>
         _profile.Columns.First(c => c.Name == columnName).SqlTypeName;
+
+    private static string QuoteIdentifier(string identifier) => $"[{identifier.Replace("]", "]]")}]";
 }

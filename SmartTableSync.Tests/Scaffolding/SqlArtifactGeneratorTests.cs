@@ -249,6 +249,44 @@ public class SqlArtifactGeneratorTests
         Assert.Contains("CREATE NONCLUSTERED INDEX [IX_PricePoint_RowVer] ON [dbo].[PricePoint] ([RowVer]);", script);
     }
 
+    // --- GenerateChangeTrackingSetupScript: parent-side, hand-applied-only DDL ---
+
+    [Fact]
+    public void GenerateChangeTrackingSetupScript_EnablesDatabaseAndTableAndGrantsViewChangeTracking()
+    {
+        var script = _generator.GenerateChangeTrackingSetupScript(NoRowVersionProfile());
+
+        Assert.Contains("ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);", script);
+        Assert.Contains("ALTER TABLE [dbo].[OrderStatus] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);", script);
+        Assert.Contains("GRANT VIEW CHANGE TRACKING ON [dbo].[OrderStatus] TO [smarttablesync-runtime];", script);
+    }
+
+    [Fact]
+    public void GenerateChangeTrackingSetupScript_EnableStatementsAreGuardedByIfNotExists()
+    {
+        var script = _generator.GenerateChangeTrackingSetupScript(NoRowVersionProfile());
+
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_databases WHERE database_id = DB_ID())", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID('dbo.OrderStatus'))", script);
+    }
+
+    [Fact]
+    public void GenerateChangeTrackingSetupScript_CustomRetentionAndPrincipal_AreUsed()
+    {
+        var script = _generator.GenerateChangeTrackingSetupScript(NoRowVersionProfile(), retentionDays: 7, runtimePrincipal: "sync_rt");
+
+        Assert.Contains("CHANGE_RETENTION = 7 DAYS", script);
+        Assert.Contains("TO [sync_rt];", script);
+    }
+
+    [Fact]
+    public void GenerateChangeTrackingSetupScript_TableWithoutPrimaryKey_Throws()
+    {
+        var keyless = NoRowVersionProfile() with { PrimaryKeyColumns = [] };
+
+        Assert.Throws<InvalidOperationException>(() => _generator.GenerateChangeTrackingSetupScript(keyless));
+    }
+
     [Fact]
     public void GenerateRowVersionSetupScript_EveryStatementIsGuardedByIfNotExists()
     {

@@ -13,6 +13,7 @@ public sealed class SchemaReader : ISchemaReader
         var columns = await GetColumnsAsync(parent, tableName, ct);
         var primaryKeyColumns = await GetPrimaryKeyColumnsAsync(parent, tableName, ct);
         var identityColumn = await GetIdentityColumnAsync(parent, tableName, ct);
+        var isChangeTrackingEnabled = await GetIsChangeTrackingEnabledAsync(parent, tableName, ct);
 
         return new TableProfile(
             TableName: tableName,
@@ -23,7 +24,10 @@ public sealed class SchemaReader : ISchemaReader
             HasIncomingForeignKeys: false,
             RowCount: 0,
             AvgRowSizeBytes: 0,
-            MaxLobColumnSizeBytes: new Dictionary<string, long>());
+            MaxLobColumnSizeBytes: new Dictionary<string, long>())
+        {
+            IsChangeTrackingEnabled = isChangeTrackingEnabled,
+        };
     }
 
     public async Task<TableProfile> ProfileTableAsync(SqlConnection parent, string tableName, CancellationToken ct)
@@ -145,6 +149,20 @@ public sealed class SchemaReader : ISchemaReader
         cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    private static async Task<bool> GetIsChangeTrackingEnabledAsync(SqlConnection parent, string tableName, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT CAST(CASE WHEN EXISTS (
+                SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(@TableName)
+            ) THEN 1 ELSE 0 END AS BIT)
+            """;
+
+        await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is bool boolResult && boolResult;
     }
 
     private static async Task<IReadOnlyList<string>> GetIndexedLobColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)

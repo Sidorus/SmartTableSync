@@ -8,12 +8,14 @@ public sealed class DeleteReconciler
 {
     private readonly TableProfile _profile;
     private readonly TableSyncCommandFactory _commandFactory;
+    private readonly ChildRowDeleter _rowDeleter;
     private readonly ILogger _logger;
 
     public DeleteReconciler(TableProfile profile, TableSyncCommandFactory commandFactory, ILogger logger)
     {
         _profile = profile;
         _commandFactory = commandFactory;
+        _rowDeleter = new ChildRowDeleter(profile);
         _logger = logger;
     }
 
@@ -33,7 +35,7 @@ public sealed class DeleteReconciler
             ct.ThrowIfCancellationRequested();
             try
             {
-                await DeleteRowAsync(key, child, ct);
+                await _rowDeleter.DeleteAsync(key, child, ct);
                 deleted++;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -43,26 +45,6 @@ public sealed class DeleteReconciler
         }
 
         return deleted;
-    }
-
-    private async Task DeleteRowAsync(string key, SqlConnection child, CancellationToken ct)
-    {
-        var keyParts = CompositeKey.Parse(key, _profile.PrimaryKeyColumns);
-        var whereClauses = new List<string>();
-
-        await using var cmd = new SqlCommand { Connection = child, CommandTimeout = 60 };
-        for (var i = 0; i < _profile.PrimaryKeyColumns.Count; i++)
-        {
-            var col = _profile.PrimaryKeyColumns[i];
-            var colType = ColumnType(col);
-            var paramName = $"@Key{i}";
-            whereClauses.Add($"[{col}] = {paramName}");
-            cmd.Parameters.Add(paramName, SqlTypeMapping.ToSqlDbType(colType)).Value =
-                SqlTypeMapping.ParseKeyComponent(keyParts[i], colType);
-        }
-
-        cmd.CommandText = $"DELETE FROM [dbo].[{_profile.TableName}] WHERE {string.Join(" AND ", whereClauses)}";
-        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private async Task<HashSet<string>> LoadKeysAsync(SqlCommand cmd, CancellationToken ct)
@@ -78,7 +60,4 @@ public sealed class DeleteReconciler
             keys.Add(reader.GetString(0));
         return keys;
     }
-
-    private string ColumnType(string columnName) =>
-        _profile.Columns.First(c => c.Name == columnName).SqlTypeName;
 }

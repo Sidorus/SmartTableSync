@@ -29,4 +29,14 @@ public interface ISqlArtifactGenerator
     /// (or should have) DDL access to it. Purely generated text for review, same trust model
     /// as sql/07_permissions.sql.</summary>
     string GenerateRowVersionSetupScript(TableProfile profile, string columnName = "RowVer");
+
+    /// <summary>Generates the one-time script a DBA applies BY HAND against the PARENT database
+    /// to opt a table into the SqlChangeTracking incremental strategy: database-level
+    /// CHANGE_TRACKING = ON (skipped if already on — retention/auto-cleanup are database-wide,
+    /// so an existing setting is left alone), table-level ENABLE CHANGE_TRACKING with
+    /// TRACK_COLUMNS_UPDATED = OFF, and the VIEW CHANGE TRACKING grant the runtime identity
+    /// needs to read CHANGETABLE. Same trust model as GenerateRowVersionSetupScript — never
+    /// executed by SmartTableSync in either mode.</summary>
+    string GenerateChangeTrackingSetupScript(
+        TableProfile profile, int retentionDays = 2, string runtimePrincipal = "smarttablesync-runtime");
 }

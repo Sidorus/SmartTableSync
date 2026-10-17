@@ -338,6 +338,28 @@ public static class SyncerTestHelpers
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>Row helpers for ChangeTrackingTestTables.sql - all five tables share the same
+    /// (Id, Value, LastUpdate) shape, so the table name is a parameter. tableName always comes
+    /// from a test's own constant, never external input.</summary>
+    public static async Task InsertChangeTrackingTestRowAsync(SqlConnection connection, string tableName, int id, string value)
+    {
+        await using var cmd = new SqlCommand(
+            $"INSERT INTO [dbo].[{tableName}] ([Id], [Value], [LastUpdate]) VALUES (@Id, @Value, GETUTCDATE())", connection);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, value, 200);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public static async Task UpdateChangeTrackingTestValueAsync(
+        SqlConnection connection, string tableName, int id, string newValue, SqlTransaction? transaction = null)
+    {
+        await using var cmd = new SqlCommand(
+            $"UPDATE [dbo].[{tableName}] SET [Value] = @Value, [LastUpdate] = GETUTCDATE() WHERE [Id] = @Id", connection, transaction);
+        cmd.AddParam("@Value", SqlDbType.NVarChar, newValue, 200);
+        cmd.AddParam("@Id", SqlDbType.Int, id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public static async Task<string> ReadScalarStringAsync(
         SqlConnection connection, string sql, params (string Name, SqlDbType Type, object Value, int Size)[] parameters)
     {

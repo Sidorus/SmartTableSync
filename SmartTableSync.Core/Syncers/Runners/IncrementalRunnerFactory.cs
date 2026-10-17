@@ -12,6 +12,10 @@ public static class IncrementalRunnerFactory
             IncrementalStrategy.Timestamp => new IncrementalSyncRunner(commandFactory, mergeStrategy),
             IncrementalStrategy.FullRescan => new FullRescanSyncRunner(profile, plan, commandFactory, mergeStrategy, logger),
             IncrementalStrategy.RowVersion => new RowVersionSyncRunner(profile, commandFactory, mergeStrategy, syncState, logger),
+            IncrementalStrategy.SqlChangeTracking => new ChangeTrackingSyncRunner(
+                profile, commandFactory, mergeStrategy,
+                new FullRescanSyncRunner(profile, plan, commandFactory, mergeStrategy, logger),
+                syncState, logger),
             _ => throw new NotSupportedException($"Unhandled incremental strategy: {plan.IncrementalStrategy}"),
         };
 }

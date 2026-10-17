@@ -47,9 +47,24 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
             "IncrementalStrategyFullRescanTestTable.sql", "IncrementalStrategyConfiguredColumnTestTable.sql",
             "IdentityTvpTestTable.sql", "RowVersionTestTable.sql", "IncrementalStrategyOverrideTestTable.sql",
             "IncrementalStrategyOverrideTimestampTestTable.sql", "IncrementalStrategyOverrideBadColumnTestTable.sql",
+            "ChangeTrackingTestTables.sql",
         };
 
         await RunScriptsAsync(ParentConnectionString, tableScripts.Select(f => Path.Combine(schemaDir, f)));
+
+        // Parent-only, mirroring what a DBA does in production (SmartTableSync never enables
+        // CT itself). ALLOW_SNAPSHOT_ISOLATION is ON by default in Azure SQL Database but OFF
+        // in a boxed SQL Server, so it's set here to exercise the runner's snapshot read path.
+        await RunGeneratedScriptAsync(ParentConnectionString, """
+            ALTER DATABASE CURRENT SET ALLOW_SNAPSHOT_ISOLATION ON;
+            ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+            GO
+            ALTER TABLE [dbo].[ChangeTrackingTestTable]         ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            ALTER TABLE [dbo].[ChangeTrackingInFlightTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            ALTER TABLE [dbo].[ChangeTrackingRescanTestTable]   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            ALTER TABLE [dbo].[ChangeTrackingBaselineTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            ALTER TABLE [dbo].[ChangeTrackingOverrideTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            """, "Change Tracking setup (parent)");
 
         var childScripts = tableScripts.Concat(
         [
@@ -63,7 +78,8 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
         // --infrastructure output and Auto mode's IChildDdlProvisioner.EnsureInfrastructureExistsAsync
         // both come from this same generator, so exercising it here proves that generated
         // content is what test setup actually relies on, not a hand-copied file that could drift.
-        await RunGeneratedScriptAsync(ChildConnectionString, new SqlArtifactGenerator().GenerateInfrastructureScript());
+        await RunGeneratedScriptAsync(ChildConnectionString, new SqlArtifactGenerator().GenerateInfrastructureScript(),
+            "SqlArtifactGenerator.GenerateInfrastructureScript()");
         await RunScriptsAsync(ChildConnectionString, childScripts);
 
         Configuration = new ConfigurationBuilder()
@@ -86,11 +102,11 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
             await ExecuteBatchesAsync(connection, await File.ReadAllTextAsync(path), Path.GetFileName(path));
     }
 
-    private static async Task RunGeneratedScriptAsync(string connectionString, string script)
+    private static async Task RunGeneratedScriptAsync(string connectionString, string script, string scriptLabel)
     {
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
-        await ExecuteBatchesAsync(connection, script, "SqlArtifactGenerator.GenerateInfrastructureScript()");
+        await ExecuteBatchesAsync(connection, script, scriptLabel);
     }
 
     private static async Task ExecuteBatchesAsync(SqlConnection connection, string script, string scriptLabel)

@@ -80,16 +80,23 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
 
     // No gate on the safe case (a usable column exists), explicit consent for the expensive
     // case (a full re-scan every cycle) — same philosophy as Auto-mode DDL execution, here
-    // applied per-table instead of globally. rowVersionColumn is checked first — a detected
-    // rowversion column is a fact, not a guess, so it wins over a configured/default datetime
-    // column whenever both are present. strategyOverride, when set, wins over everything
-    // below it, but is still validated against what's actually available on the table.
+    // applied per-table instead of globally. SQL Server Change Tracking is checked first, then
+    // rowVersionColumn — both are facts, not guesses (a DBA enabled CT on this table; the
+    // engine maintains a rowversion column), so they win over a configured/default datetime
+    // column. CT wins over rowversion: it also reports deletes and needs no index or
+    // in-flight-transaction workaround. strategyOverride, when set, wins over everything
+    // below it (including CT), but is still validated against what's actually available.
     private static IncrementalStrategy DeriveIncrementalStrategy(
         TableProfile profile, PlanHeuristicOptions options, string? changeTrackingColumn, bool allowFullRescan,
         string? rowVersionColumn, IncrementalStrategy? strategyOverride)
     {
         if (strategyOverride is not null)
             return ValidateOverride(profile, changeTrackingColumn, rowVersionColumn, strategyOverride.Value);
+
+        // PrimaryKeyColumns check is belt-and-braces: SQL Server refuses to enable CT on a
+        // table without a PRIMARY KEY constraint in the first place.
+        if (profile.IsChangeTrackingEnabled && profile.PrimaryKeyColumns.Count > 0)
+            return IncrementalStrategy.SqlChangeTracking;
 
         if (rowVersionColumn is not null)
             return IncrementalStrategy.RowVersion;
@@ -122,6 +129,12 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             throw new InvalidOperationException(
                 $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces Timestamp, but the " +
                 $"configured (or default \"LastUpdate\") change-tracking column doesn't exist on this table.");
+
+        if (strategyOverride == IncrementalStrategy.SqlChangeTracking && !profile.IsChangeTrackingEnabled)
+            throw new InvalidOperationException(
+                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces SqlChangeTracking, but " +
+                $"SQL Server Change Tracking is not enabled on this table — a DBA must run " +
+                $"ALTER TABLE ... ENABLE CHANGE_TRACKING first (see SmartTableSync.Scaffold --change-tracking-setup).");
 
         return strategyOverride;
     }
