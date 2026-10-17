@@ -50,16 +50,23 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 2, "Two");
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 3, "Three");
 
+        // Keys at or below zero: the first page used to start from a "0" placeholder key
+        // (WHERE [Id] > 0), which skipped these rows entirely.
+        await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 0, "Zero");
+        await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, -5, "Negative");
+
         var (profile, plan, syncer) = await BuildAsync(parent, child, table);
 
         // Auto-detected with no config, and preferred over the table's LastUpdate column.
         Assert.True(profile.IsChangeTrackingEnabled);
         Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
-        Assert.Null(plan.ChangeTrackingColumn);
+        Assert.Null(plan.IncrementalColumn);
 
         var initial = await syncer.SyncAsync(parent, child, SyncConstants.InitialDate, CancellationToken.None);
         Assert.True(initial.IsInitialSync);
-        Assert.Equal(3, initial.RowsSynced);
+        Assert.Equal(5, initial.RowsSynced);
+        Assert.Equal("Zero", await ReadValueAsync(child, table, 0));
+        Assert.Equal("Negative", await ReadValueAsync(child, table, -5));
         Assert.StartsWith("CT:", await _syncState.GetIncrementalPositionAsync(child, table));
 
         // The baseline was recorded before the copy, so the first incremental cycle reads
@@ -73,7 +80,8 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 4, "Four");
 
         var changes = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
-        Assert.Equal(3, changes.RowsSynced); // 1 update + 1 insert + 1 delete
+        Assert.Equal(2, changes.RowsSynced); // 1 update + 1 insert
+        Assert.Equal(1, changes.RowsDeleted);
         Assert.Equal(0, changes.RowsErrored);
         Assert.Equal("Two-updated", await ReadValueAsync(child, table, 2));
         Assert.Equal(0, await CountAsync(child, table, 3));
@@ -83,7 +91,8 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
         await ExecuteAsync(parent, $"UPDATE [dbo].[{table}] SET [Id] = 10 WHERE [Id] = 1");
 
         var keyChange = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
-        Assert.Equal(2, keyChange.RowsSynced);
+        Assert.Equal(1, keyChange.RowsSynced);
+        Assert.Equal(1, keyChange.RowsDeleted);
         Assert.Equal(0, keyChange.RowsErrored);
         Assert.Equal(0, await CountAsync(child, table, 1));
         Assert.Equal("One", await ReadValueAsync(child, table, 10));
@@ -133,7 +142,8 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 1, "One");
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 2, "Two");
-        var (_, _, syncer) = await BuildAsync(parent, child, table);
+        var metrics = new FullRescanRecorder();
+        var (_, _, syncer) = await BuildAsync(parent, child, table, metrics: metrics);
         await syncer.SyncAsync(parent, child, SyncConstants.InitialDate, CancellationToken.None);
         await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
 
@@ -162,6 +172,11 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         var resumedAgain = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
         Assert.Equal(0, resumedAgain.RowsSynced);
+
+        // Each fallback is reported once, with a fixed category usable as a metric tag.
+        Assert.Equal(
+            [(table, "position_ahead"), (table, "position_expired")],
+            metrics.FullRescans);
     }
 
     [Fact]
@@ -186,7 +201,8 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         var afterReenable = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
 
-        Assert.Equal(3, afterReenable.RowsSynced); // 2 rows re-scanned + 1 orphan deleted
+        Assert.Equal(2, afterReenable.RowsSynced); // both remaining rows re-scanned
+        Assert.Equal(1, afterReenable.RowsDeleted); // the orphan found by the reconciliation
         Assert.Equal(0, afterReenable.RowsErrored);
         Assert.Equal(0, await CountAsync(child, table, 3));
         Assert.Equal("One", await ReadValueAsync(child, table, 1));
@@ -240,11 +256,11 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         Assert.True(profile.IsChangeTrackingEnabled);
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
     }
 
     private static async Task<(TableProfile Profile, SyncPlan Plan, ITableSyncer Syncer)> BuildAsync(
-        SqlConnection parent, SqlConnection child, string table, SyncSettings? settings = null)
+        SqlConnection parent, SqlConnection child, string table, SyncSettings? settings = null, ISyncMetricsReporter? metrics = null)
     {
         var provisioner = new SyncTableProvisioner(
             new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
@@ -256,8 +272,23 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
         await new ChildDdlProvisioner(new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance)
             .EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
 
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(
+            new BatchLogger(), new SyncStateRepository(), metrics ?? new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance)
+            .Create(profile, plan);
         return (profile, plan, syncer);
+    }
+
+    private sealed class FullRescanRecorder : ISyncMetricsReporter
+    {
+        public List<(string Table, string Reason)> FullRescans { get; } = [];
+
+        public void RowsSynced(string tableName, string syncMode, int count) { }
+        public void RowsErrored(string tableName, string syncMode, int count) { }
+        public void SyncDuration(string tableName, string syncMode, TimeSpan duration) { }
+        public void RowsDeleted(string tableName, int count) { }
+        public void SyncLag(string tableName, TimeSpan lag) { }
+        public void TableProvisioned(string tableName) { }
+        public void FullRescan(string tableName, string reason) => FullRescans.Add((tableName, reason));
     }
 
     private static async Task<SqlConnection> OpenAsync(string connectionString)

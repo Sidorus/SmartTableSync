@@ -1,11 +1,13 @@
 namespace SmartTableSync.Planning;
 
 /// <summary>The resolved, ready-to-use configuration for syncing one table — derived by
-/// ISyncPlanHeuristic from a TableProfile, or overridden by hand in SyncTableConfig.</summary>
-/// <param name="ChangeTrackingColumn">The column driving incremental detection — a datetime
-/// column name when IncrementalStrategy is Timestamp, a rowversion column name when
-/// RowVersion, or null when FullRescan (nothing to filter by).</param>
-public sealed record SyncPlan(
+/// ISyncPlanHeuristic from a TableProfile, with any overrides from SyncTableConfig applied.</summary>
+/// <param name="BulkCopyTimeoutSeconds">Command timeout for every statement against the table,
+/// not only bulk copy. The name matches the persisted SyncTableConfig column.</param>
+/// <param name="IncrementalColumn">The column the incremental strategy filters on: the
+/// datetime column for Timestamp, the rowversion column for RowVersion, null for FullRescan and
+/// SqlChangeTracking.</param>
+internal sealed record SyncPlan(
     string TableName,
     MergeStrategy MergeStrategy,
     int BatchSize,
@@ -13,5 +15,5 @@ public sealed record SyncPlan(
     int BulkCopyTimeoutSeconds,
     IReadOnlyList<int> RetryableSqlErrorNumbers,
     string? TvpTypeName,
-    string? ChangeTrackingColumn = null,
+    string? IncrementalColumn = null,
     IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp);

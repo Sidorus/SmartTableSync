@@ -31,6 +31,8 @@ direction but not fully executed yet. `Superseded` — replaced by a later ADR (
 | [0013](0013-position-as-general-data-sync-replacement.md) | Position SmartTableSync as a general-purpose Data Sync replacement, not just an exception-table patch | Proposed | 2026-08-04 |
 | [0014](0014-reject-cdc-prefer-change-tracking.md) | Reject transaction-log-based CDC; prefer Change Tracking for the deferred third incremental strategy | Accepted | 2026-08-01 |
 | [0015](0015-implement-rowversion-as-second-strategy.md) | Implement Rowversion as the second incremental strategy | Accepted | 2026-08-01 |
+| [0016](0016-implement-change-tracking-as-third-strategy.md) | Implement SQL Server Change Tracking as the third incremental strategy | Accepted | 2026-10-17 |
+| [0017](0017-strategy-registry-and-template-method-runners.md) | Strategy registry, template-method runners, and a minimal public API | Accepted | 2026-10-17 |
 
 See also: the top-level [README](../../README.md) for architecture and getting-started
 instructions.

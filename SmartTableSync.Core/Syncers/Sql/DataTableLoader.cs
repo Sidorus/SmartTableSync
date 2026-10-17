@@ -3,7 +3,7 @@ namespace SmartTableSync.Syncers.Sql;
 /// <summary>Drains a SqlDataReader into an in-memory DataTable, inferring columns from the
 /// reader's first row. Shared by InitialSyncRunner and IncrementalSyncRunner — both read a
 /// batch of parent rows the same way, only what happens to the batch afterward differs.</summary>
-public static class DataTableLoader
+internal static class DataTableLoader
 {
     public static async Task<DataTable> LoadAsync(SqlDataReader reader, CancellationToken ct)
     {

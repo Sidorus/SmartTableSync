@@ -6,7 +6,7 @@ namespace SmartTableSync.Scaffolding;
 /// Scaffold) is what actually writes the returned text to a .sql file for human review;
 /// nothing here ever executes DDL.
 /// </summary>
-public interface ISqlArtifactGenerator
+internal interface ISqlArtifactGenerator
 {
     string GenerateCreateTableScript(TableProfile profile);
     string GenerateTvpUdtScript(TableProfile profile, string typeName);

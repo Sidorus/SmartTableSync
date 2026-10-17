@@ -22,7 +22,7 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 /// against real introspection and a real sync run, not just the unit-level heuristic math:
 ///   - a table with the default "LastUpdate" column resolves Timestamp with zero config
 ///   - a table whose tracking column is named something else resolves Timestamp once
-///     configured via SmartTableSync:ChangeTrackingColumns
+///     configured via SmartTableSync:TimestampColumns
 ///   - a table with no matching column and no config resolves FullRescan, and an
 ///     incremental run still picks up changes despite ignoring lastSyncDate entirely
 ///
@@ -49,7 +49,7 @@ public class IncrementalStrategyTests
         var (_, plan) = await SyncerTestHelpers.BuildConfigurableSyncerAsync(parent, child, "ProductCatalogItem");
 
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class IncrementalStrategyTests
 
         var settings = new SyncSettings
         {
-            ChangeTrackingColumns = new Dictionary<string, string> { [tableName] = "ModifiedAt" },
+            TimestampColumns = new Dictionary<string, string> { [tableName] = "ModifiedAt" },
         };
 
         const int rowId = 1;
@@ -73,10 +73,10 @@ public class IncrementalStrategyTests
 
         var (profile, plan) = await ProvisionAsync(parent, child, tableName, settings);
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("ModifiedAt", plan.ChangeTrackingColumn);
+        Assert.Equal("ModifiedAt", plan.IncrementalColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateIncrementalStrategyConfiguredColumnValueAsync(parent, rowId, "Updated", syncPoint.AddSeconds(5));
@@ -109,10 +109,10 @@ public class IncrementalStrategyTests
 
         var (profile, plan) = await ProvisionAsync(parent, child, tableName);
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
-        Assert.Null(plan.ChangeTrackingColumn);
+        Assert.Null(plan.IncrementalColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         // A row that exists only in Parent (never synced) and an update to an existing row -
         // neither has any change-tracking column to be detected by, so only a full re-scan

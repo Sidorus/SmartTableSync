@@ -7,7 +7,7 @@ namespace SmartTableSync.Configuration;
 /// isn't datetime-typed is a real operator mistake — it's rejected immediately rather than
 /// silently accepted and left to fail on every incremental cycle forever
 /// (TableSyncCommandFactory.BuildIncrementalCommand binds the comparison as SqlDbType.DateTime).</summary>
-public static class ChangeTrackingColumnResolver
+internal static class TimestampColumnResolver
 {
     public static string? Resolve(TableProfile profile, IReadOnlyDictionary<string, string> changeTrackingColumns)
     {
@@ -23,7 +23,7 @@ public static class ChangeTrackingColumnResolver
 
         if (wasExplicitlyConfigured)
             throw new InvalidOperationException(
-                $"{profile.TableName}: SmartTableSync:ChangeTrackingColumns:{profile.TableName} names column " +
+                $"{profile.TableName}: SmartTableSync:TimestampColumns:{profile.TableName} names column " +
                 $"'{columnName}', but its type ('{column.SqlTypeName}') isn't a datetime type — point it at a " +
                 $"datetime/datetime2/smalldatetime/date column instead.");
 

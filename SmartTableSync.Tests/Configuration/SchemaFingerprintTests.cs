@@ -16,7 +16,7 @@ public class SchemaFingerprintTests
             PrimaryKeyColumns: primaryKeyColumns ?? ["Id"],
             IdentityColumn: identityColumn,
             IndexedLobColumns: [],
-            HasIncomingForeignKeys: false,
+            ReferencesOtherTables: false,
             RowCount: 0,
             AvgRowSizeBytes: 0,
             MaxLobColumnSizeBytes: new Dictionary<string, long>());

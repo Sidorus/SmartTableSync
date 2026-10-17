@@ -7,7 +7,7 @@ namespace SmartTableSync.Configuration;
 /// fingerprint-check one on the no-drift path, the full ProfileTableAsync result when it
 /// just re-provisioned) so callers building a syncer from the result never need a second,
 /// redundant introspection call of their own.</summary>
-public interface ISyncTableProvisioner
+internal interface ISyncTableProvisioner
 {
     /// <summary>WasFreshlyProvisioned is true only on the new-table-or-schema-drift path
     /// (false on the common fast path where an existing config's fingerprint still matches).

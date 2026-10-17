@@ -24,7 +24,7 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 /// one - SyncTableProvisioner caches the derived plan by schema fingerprint only, not by the
 /// settings passed in, so two calls against the same table name with different settings but an
 /// unchanged schema would silently return whichever one ran first (the same fingerprint-match
-/// fast path documented as a known limitation for ChangeTrackingColumns/AllowFullRescanFor).
+/// fast path documented as a known limitation for TimestampColumns/AllowFullRescanFor).
 /// </summary>
 [Collection("SqlServer")]
 public class IncrementalStrategyOverrideTests
@@ -44,7 +44,7 @@ public class IncrementalStrategyOverrideTests
         var (_, plan) = await ProvisionAsync(parent, child, "IncrementalStrategyOverrideTestTable", new SyncSettings());
 
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
-        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+        Assert.Equal("RowVer", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -68,10 +68,10 @@ public class IncrementalStrategyOverrideTests
 
         var (profile, plan) = await ProvisionAsync(parent, child, tableName, settings);
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateIncrementalStrategyOverrideTimestampValueAsync(parent, rowId, "Updated", syncPoint.AddSeconds(5));
@@ -98,7 +98,7 @@ public class IncrementalStrategyOverrideTests
         // time rather than silently accepting it and failing every incremental cycle forever.
         var settings = new SyncSettings
         {
-            ChangeTrackingColumns = new Dictionary<string, string> { [tableName] = "Id" },
+            TimestampColumns = new Dictionary<string, string> { [tableName] = "Id" },
         };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ProvisionAsync(parent, child, tableName, settings));

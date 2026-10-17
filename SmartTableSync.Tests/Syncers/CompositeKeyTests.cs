@@ -88,4 +88,31 @@ public class CompositeKeyTests
             CultureInfo.CurrentCulture = originalCulture;
         }
     }
+
+    [Fact]
+    public void Extract_DateTimeAndDateTimeOffsetColumns_KeepFullFractionalPrecisionAsIso8601()
+    {
+        // The invariant default ("MM/dd/yyyy HH:mm:ss") dropped fractional seconds, so two
+        // datetime2 keys within the same second produced the same resume cursor.
+        var dateTime = new DateTime(2026, 1, 15, 10, 30, 15).AddTicks(1234567);
+        var dateTimeOffset = new DateTimeOffset(dateTime, TimeSpan.FromHours(5.5));
+        var row = CreateRow(("ValidFrom", dateTime), ("ChangedAt", dateTimeOffset));
+
+        var extracted = CompositeKey.Extract(row, ["ValidFrom", "ChangedAt"]);
+
+        Assert.Equal("2026-01-15T10:30:15.1234567|2026-01-15T10:30:15.1234567+05:30", extracted);
+        var parts = CompositeKey.Parse(extracted, ["ValidFrom", "ChangedAt"]);
+        Assert.Equal(dateTime, SqlTypeMapping.ParseKeyComponent(parts[0], "datetime2"));
+        var parsedOffset = (DateTimeOffset)SqlTypeMapping.ParseKeyComponent(parts[1], "datetimeoffset");
+        Assert.Equal(dateTimeOffset, parsedOffset);
+        Assert.Equal(dateTimeOffset.Offset, parsedOffset.Offset);
+    }
+
+    [Fact]
+    public void Extract_DateTimeWithoutFraction_OmitsDecimalPoint()
+    {
+        var row = CreateRow(("ValidFrom", new DateTime(2026, 1, 15, 10, 30, 0)));
+
+        Assert.Equal("2026-01-15T10:30:00", CompositeKey.Extract(row, ["ValidFrom"]));
+    }
 }

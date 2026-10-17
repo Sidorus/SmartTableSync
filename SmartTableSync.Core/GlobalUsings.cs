@@ -16,6 +16,7 @@ global using SmartTableSync.Observability;
 global using SmartTableSync.Options;
 global using SmartTableSync.Orchestration;
 global using SmartTableSync.State;
+global using SmartTableSync.Strategies;
 global using SmartTableSync.Syncers;
 global using SmartTableSync.Syncers.Keys;
 global using SmartTableSync.Syncers.MergeStrategies;

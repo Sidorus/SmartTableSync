@@ -1,6 +1,6 @@
 namespace SmartTableSync.Infrastructure;
 
-public static class SqlCommandExtensions
+internal static class SqlCommandExtensions
 {
     /// <summary>
     /// Adds a parameter, converting null / DBNull to DBNull.Value.

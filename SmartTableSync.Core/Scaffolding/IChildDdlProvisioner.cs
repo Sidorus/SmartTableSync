@@ -7,7 +7,7 @@ namespace SmartTableSync.Scaffolding;
 /// review and apply by hand. Only ever called by SyncOrchestrator when SyncSettings.Mode is
 /// Auto, and only on the same infrequent occasions ISyncTableProvisioner would otherwise
 /// re-provision (new table or parent schema drift) - never on the routine sync path.</summary>
-public interface IChildDdlProvisioner
+internal interface IChildDdlProvisioner
 {
     Task EnsureChildObjectsExistAsync(
         SqlConnection childProvisioning, TableProfile profile, SyncPlan plan, CancellationToken ct);

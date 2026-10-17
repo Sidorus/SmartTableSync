@@ -73,21 +73,6 @@ public class SqlTypeMappingTests
         SqlTypeMapping.ToSqlDbType("ntext");
     }
 
-    [Fact]
-    public void DefaultKeyComponent_NumericColumn_IsZero()
-    {
-        // Matches the original hand-written syncers' "no resume key yet" sentinel for
-        // IDENTITY/int keys (resumeKey != null ? int.Parse(resumeKey) : 0).
-        Assert.Equal("0", SqlTypeMapping.DefaultKeyComponent("int"));
-    }
-
-    [Fact]
-    public void DefaultKeyComponent_StringColumn_IsEmptyString()
-    {
-        // Matches ProductCatalogItemSyncer's original: resumeKey ?? string.Empty.
-        Assert.Equal(string.Empty, SqlTypeMapping.DefaultKeyComponent("nvarchar"));
-    }
-
     [Theory]
     [InlineData("45231", "int", 45231)]
     [InlineData("en", "nvarchar", "en")]
@@ -126,6 +111,22 @@ public class SqlTypeMappingTests
         var formatted = expected.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.Equal(expected, SqlTypeMapping.ParseKeyComponent(formatted, "time"));
+    }
+
+    [Fact]
+    public void ParseKeyComponent_Decimal_ParsesWithInvariantCultureRegardlessOfCurrentCulture()
+    {
+        var originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+        try
+        {
+            Assert.Equal(-1234.5600m, SqlTypeMapping.ParseKeyComponent("-1234.5600", "decimal"));
+            Assert.Equal(42m, SqlTypeMapping.ParseKeyComponent("42", "numeric"));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]

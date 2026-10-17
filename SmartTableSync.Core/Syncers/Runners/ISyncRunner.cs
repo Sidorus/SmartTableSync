@@ -1,15 +1,11 @@
 namespace SmartTableSync.Syncers.Runners;
 
-/// <summary>
-/// Strategy for running one sync pass over a table. ConfigurableTableSyncer depends on this
-/// interface alone — it doesn't know "initial" and "incremental" exist as separate concepts,
-/// let alone how many implementations there are or how one gets picked over another.
-/// TableSyncerFactory and ConfigurableTableSyncer.GetSyncRunner together are the ones that
-/// know both concrete strategies exist: TableSyncerFactory builds them, and
-/// ConfigurableTableSyncer.GetSyncRunner selects between them by lastSyncDate.
-/// </summary>
-public interface ISyncRunner
+/// <summary>One sync pass over one table: the initial copy (InitialSyncRunner) or an
+/// incremental pass (one ChangeWindowSyncRunner subclass per IncrementalStrategy).
+/// ConfigurableTableSyncer picks which one runs; TableSyncerFactory builds them.</summary>
+internal interface ISyncRunner
 {
-    Task<(int synced, int errored, bool retryable)> RunAsync(
-        SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct);
+    /// <param name="lastSyncDate">The orchestrator's last successful sync time for the table.
+    /// Only the Timestamp strategy filters by it; strategies with their own position ignore it.</param>
+    Task<SyncOutcome> RunAsync(SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct);
 }

@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Configuration;
 using SmartTableSync.IntegrationTests.Fixtures;
+using SmartTableSync.IntegrationTests.Support;
 using SmartTableSync.Infrastructure;
 using SmartTableSync.Introspection;
 using SmartTableSync.Logging;
@@ -58,7 +59,8 @@ public class SyncOrchestratorReconcileTests : IClassFixture<MsSqlTestFixture>
             provisioner,
             new FixedSyncerFactory(fakeSyncer),
             childDdlProvisioner,
-            new DbConnectionFactory(_fixture.Configuration),
+            SyncerTestHelpers.CreateConnectionFactory(_fixture.Configuration),
+            new ChildDatabaseRunLock(SyncerTestHelpers.CreateConnectionFactory(_fixture.Configuration)),
             new SyncStateRepository(),
             new NoOpSyncMetricsReporter(),
             Microsoft.Extensions.Options.Options.Create(new SyncSettings { Tables = [TableName] }),
@@ -105,6 +107,25 @@ public class SyncOrchestratorReconcileTests : IClassFixture<MsSqlTestFixture>
         Assert.Equal(0, fakeSyncer.ReconcileCallCount);
     }
 
+    [Fact]
+    public async Task RunAsync_AnotherInstanceHoldsTheDatabaseLock_SkipsTheRun()
+    {
+        var fakeSyncer = new CountingSyncer("ChangeTrackingTestTable");
+        var orchestrator = BuildOrchestrator(fakeSyncer, new SyncSettings { Tables = [fakeSyncer.TableName] });
+
+        // Stands in for another host instance that is mid-run against the same child database.
+        var otherInstance = new ChildDatabaseRunLock(SyncerTestHelpers.CreateConnectionFactory(_fixture.Configuration));
+        await using (var heldByOtherInstance = await otherInstance.TryAcquireAsync(CancellationToken.None))
+        {
+            Assert.NotNull(heldByOtherInstance);
+            await orchestrator.RunAsync(CancellationToken.None);
+            Assert.Equal(0, fakeSyncer.SyncCallCount);
+        }
+
+        await orchestrator.RunAsync(CancellationToken.None);
+        Assert.Equal(1, fakeSyncer.SyncCallCount);
+    }
+
     private SyncOrchestrator BuildOrchestrator(ITableSyncer syncer, SyncSettings settings)
     {
         var provisioner = new SyncTableProvisioner(
@@ -116,7 +137,8 @@ public class SyncOrchestratorReconcileTests : IClassFixture<MsSqlTestFixture>
             provisioner,
             new FixedSyncerFactory(syncer),
             new ChildDdlProvisioner(new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance),
-            new DbConnectionFactory(_fixture.Configuration),
+            SyncerTestHelpers.CreateConnectionFactory(_fixture.Configuration),
+            new ChildDatabaseRunLock(SyncerTestHelpers.CreateConnectionFactory(_fixture.Configuration)),
             new SyncStateRepository(),
             new NoOpSyncMetricsReporter(),
             Microsoft.Extensions.Options.Options.Create(settings),
@@ -129,11 +151,16 @@ public class SyncOrchestratorReconcileTests : IClassFixture<MsSqlTestFixture>
 
         public string TableName { get; }
 
+        public int SyncCallCount { get; private set; }
+
         public int ReconcileCallCount { get; private set; }
 
         public Task<SyncResult> SyncAsync(
-            SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default) =>
-            Task.FromResult(new SyncResult(TableName, RowsSynced: 0, RowsErrored: 0, HasRetryableErrors: false, IsInitialSync: false, Duration: TimeSpan.Zero));
+            SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default)
+        {
+            SyncCallCount++;
+            return Task.FromResult(new SyncResult(TableName, RowsSynced: 0, RowsErrored: 0, HasRetryableErrors: false, IsInitialSync: false, Duration: TimeSpan.Zero));
+        }
 
         public Task<int> ReconcileDeletesAsync(
             SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default)

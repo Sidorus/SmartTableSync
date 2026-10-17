@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.MergeStrategies;
 /// the strategy doesn't change mid-run, so ConfigurableTableSyncer resolves it once at
 /// construction and shares the same instance between InitialSyncRunner and
 /// IncrementalSyncRunner rather than re-branching on the enum per batch.</summary>
-public static class BatchMergeStrategyFactory
+internal static class BatchMergeStrategyFactory
 {
     public static IBatchMergeStrategy Create(TableProfile profile, SyncPlan plan, ILogger logger) =>
         plan.MergeStrategy switch

@@ -1,6 +1,6 @@
 namespace SmartTableSync.Introspection;
 
-public interface ISchemaReader
+internal interface ISchemaReader
 {
     /// <summary>Cheap, catalog-metadata-only profile: columns/types + primary key order +
     /// identity column. Safe to run on every cold start to check for schema drift.</summary>

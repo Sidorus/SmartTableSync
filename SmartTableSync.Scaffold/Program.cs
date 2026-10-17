@@ -8,8 +8,9 @@ using SmartTableSync.Scaffolding;
 
 // Manual, on-demand tool — never run by the timer-triggered Function. Reads schema
 // (read-only) and writes reviewable .sql files; never executes anything against a
-// database itself. See Plan.md Phase 9/10 for why this uses its own connection strings
-// instead of the Function's runtime ones.
+// database itself. It uses its own connection strings (the parent-introspection and
+// child-provisioning identities in sql/07_permissions.sql), never the Function's runtime
+// identity, which has no schema rights.
 
 if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 {
@@ -197,7 +198,7 @@ var schemaReader = new SchemaReader();
 var heuristic = new SyncPlanHeuristic();
 var generator = new SqlArtifactGenerator();
 
-// Binds the same SyncSettings the runtime does (ChangeTrackingColumns/AllowFullRescanFor/
+// Binds the same SyncSettings the runtime does (TimestampColumns/AllowFullRescanFor/
 // IncrementalStrategyOverrides), from an IConfiguration over environment variables, via the
 // shared SyncSettingsServiceCollectionExtensions.Bind - so a table's generated artifacts
 // match what SyncTableProvisioner will actually derive for the same settings, instead of
@@ -220,12 +221,12 @@ foreach (var tableName in tableNames)
     {
         var profile = await schemaReader.ProfileTableAsync(parent, tableName, CancellationToken.None);
 
-        var changeTrackingColumn = ChangeTrackingColumnResolver.Resolve(profile, syncSettings.ChangeTrackingColumns);
+        var timestampColumn = TimestampColumnResolver.Resolve(profile, syncSettings.TimestampColumns);
         var allowFullRescan = syncSettings.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);
         var strategyOverride = syncSettings.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
-        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride);
+        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride);
         var childExists = await schemaReader.TableExistsAsync(child, tableName, CancellationToken.None);
 
         Console.WriteLine($"  MergeStrategy={plan.MergeStrategy}, BatchSize={plan.BatchSize}, " +
@@ -257,7 +258,7 @@ foreach (var tableName in tableNames)
     catch (InvalidOperationException ex)
     {
         // Same errors SyncTableProvisioner would throw for this table at runtime (bad
-        // ChangeTrackingColumns type, unsatisfiable IncrementalStrategyOverrides, no usable
+        // TimestampColumns type, unsatisfiable IncrementalStrategyOverrides, no usable
         // column on a large table with no AllowFullRescanFor opt-in) - surfaced here instead
         // of silently generating artifacts for a configuration the runtime would refuse.
         Console.Error.WriteLine($"  FAILED: {ex.Message}");
