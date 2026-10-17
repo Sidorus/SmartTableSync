@@ -98,6 +98,17 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void IncrementalStrategyOverrides_BindsSqlChangeTracking()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:IncrementalStrategyOverrides:SomeTable"] = "SqlChangeTracking",
+        });
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, settings.IncrementalStrategyOverrides["SomeTable"]);
+    }
+
+    [Fact]
     public void IncrementalStrategyOverrides_UnparseableValue_IsDropped()
     {
         var settings = Bind(new Dictionary<string, string?>
@@ -106,6 +117,43 @@ public class SyncSettingsServiceCollectionExtensionsTests
         });
 
         Assert.Empty(settings.IncrementalStrategyOverrides);
+    }
+
+    [Fact]
+    public void ChangeTrackingReconcileIntervalHours_BindsWholeHours()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = "6",
+        });
+
+        Assert.Equal(TimeSpan.FromHours(6), settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Fact]
+    public void ChangeTrackingReconcileIntervalHours_Zero_DisablesThePeriodicRun()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = "0",
+        });
+
+        Assert.Equal(TimeSpan.Zero, settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("-5")]
+    [InlineData("daily")]
+    public void ChangeTrackingReconcileIntervalHours_MissingOrInvalid_DefaultsTo24Hours(string? value)
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = value,
+        });
+
+        Assert.Equal(TimeSpan.FromHours(24), settings.ChangeTrackingReconcileInterval);
     }
 
     [Fact]

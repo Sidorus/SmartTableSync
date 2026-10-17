@@ -269,4 +269,73 @@ public class SyncPlanHeuristicTests
 
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
     }
+
+    [Fact]
+    public void DerivePlan_ChangeTrackingEnabled_ChoosesSqlChangeTrackingWithNoColumn()
+    {
+        var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions);
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
+        Assert.Null(plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_ChangeTrackingEnabled_TakesPriorityOverRowVersionAndTimestampColumns()
+    {
+        // CT being enabled is a fact a DBA established - it wins over both column-based
+        // strategies, and ChangeTrackingColumn must not keep pointing at either column.
+        var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
+        Assert.Null(plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_ChangeTrackingEnabled_LargeTableWithNoColumn_DoesNotThrow()
+    {
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1) with { IsChangeTrackingEnabled = true };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false);
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideTimestamp_WinsOverEnabledChangeTracking()
+    {
+        // The manual opt-out: CT enabled on the table (maybe for another consumer), but the
+        // operator pins this table to its existing strategy.
+        var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
+
+        var plan = _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", strategyOverride: IncrementalStrategy.Timestamp);
+
+        Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
+        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideSqlChangeTracking_WithChangeTrackingDisabled_Throws()
+    {
+        var profile = CreateProfile();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
+            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", strategyOverride: IncrementalStrategy.SqlChangeTracking));
+
+        Assert.Contains("ENABLE CHANGE_TRACKING", ex.Message);
+    }
+
+    [Fact]
+    public void DerivePlan_StrategyOverrideSqlChangeTracking_WithChangeTrackingEnabled_IsAccepted()
+    {
+        var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, strategyOverride: IncrementalStrategy.SqlChangeTracking);
+
+        Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
+    }
 }

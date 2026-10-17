@@ -21,8 +21,9 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 /// _lastReconcileUtc after every table's SyncTableAsync call regardless of whether that call
 /// actually succeeded, so a table whose reconcile step threw would silently wait a full extra
 /// hour (_reconcileInterval) before its next reconcile attempt, even though nothing had been
-/// resolved. Fixed by only advancing the timestamp when every table's pass this cycle
-/// succeeded.
+/// resolved. Fixed by only advancing a table's timestamp when its own pass succeeded. Also
+/// covers the per-strategy interval: SqlChangeTracking tables reconcile on
+/// SyncSettings.ChangeTrackingReconcileInterval instead of hourly.
 ///
 /// Uses its own dedicated container (IClassFixture, not the shared [Collection("SqlServer")]
 /// or OrchestratorEndToEndTests' fixture) because it runs a real SyncOrchestrator twice back to
@@ -72,6 +73,74 @@ public class SyncOrchestratorReconcileTests : IClassFixture<MsSqlTestFixture>
         // _lastReconcileUtc, making the second run's "due for reconcile" check false - so
         // ReconcileDeletesAsync would only ever be attempted once instead of twice.
         Assert.Equal(2, fakeSyncer.ReconcileCallCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_ChangeTrackingTable_ReconcilesOnItsOwnLongerInterval()
+    {
+        // ChangeTrackingTestTable has CT enabled on the parent (see MsSqlTestFixture), so it
+        // provisions as SqlChangeTracking and uses ChangeTrackingReconcileInterval (default
+        // 24 hours) instead of the hourly one: due on the first run, not again on the second.
+        var fakeSyncer = new CountingSyncer("ChangeTrackingTestTable");
+        var orchestrator = BuildOrchestrator(fakeSyncer, new SyncSettings { Tables = [fakeSyncer.TableName] });
+
+        await orchestrator.RunAsync(CancellationToken.None);
+        await orchestrator.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, fakeSyncer.ReconcileCallCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_ChangeTrackingTable_ZeroInterval_NeverReconcilesPeriodically()
+    {
+        var fakeSyncer = new CountingSyncer("ChangeTrackingTestTable");
+        var orchestrator = BuildOrchestrator(fakeSyncer, new SyncSettings
+        {
+            Tables = [fakeSyncer.TableName],
+            ChangeTrackingReconcileInterval = TimeSpan.Zero,
+        });
+
+        await orchestrator.RunAsync(CancellationToken.None);
+
+        Assert.Equal(0, fakeSyncer.ReconcileCallCount);
+    }
+
+    private SyncOrchestrator BuildOrchestrator(ITableSyncer syncer, SyncSettings settings)
+    {
+        var provisioner = new SyncTableProvisioner(
+            new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
+            new NoOpSyncMetricsReporter(), Microsoft.Extensions.Options.Options.Create(new SyncSettings()),
+            NullLogger<SyncTableProvisioner>.Instance);
+
+        return new SyncOrchestrator(
+            provisioner,
+            new FixedSyncerFactory(syncer),
+            new ChildDdlProvisioner(new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance),
+            new DbConnectionFactory(_fixture.Configuration),
+            new SyncStateRepository(),
+            new NoOpSyncMetricsReporter(),
+            Microsoft.Extensions.Options.Options.Create(settings),
+            NullLogger<SyncOrchestrator>.Instance);
+    }
+
+    private sealed class CountingSyncer : ITableSyncer
+    {
+        public CountingSyncer(string tableName) => TableName = tableName;
+
+        public string TableName { get; }
+
+        public int ReconcileCallCount { get; private set; }
+
+        public Task<SyncResult> SyncAsync(
+            SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default) =>
+            Task.FromResult(new SyncResult(TableName, RowsSynced: 0, RowsErrored: 0, HasRetryableErrors: false, IsInitialSync: false, Duration: TimeSpan.Zero));
+
+        public Task<int> ReconcileDeletesAsync(
+            SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct = default)
+        {
+            ReconcileCallCount++;
+            return Task.FromResult(0);
+        }
     }
 
     private sealed class ReconcileAlwaysThrowsSyncer : ITableSyncer

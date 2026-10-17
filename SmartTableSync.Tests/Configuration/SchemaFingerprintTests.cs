@@ -30,6 +30,29 @@ public class SchemaFingerprintTests
     }
 
     [Fact]
+    public void Compute_EnablingChangeTracking_ProducesDifferentHash()
+    {
+        // A DBA enabling (or disabling) CT must trigger re-provisioning, so the table's
+        // incremental strategy gets re-derived.
+        var original = CreateProfile();
+        var withChangeTracking = original with { IsChangeTrackingEnabled = true };
+
+        Assert.NotEqual(SchemaFingerprint.Compute(original), SchemaFingerprint.Compute(withChangeTracking));
+    }
+
+    [Fact]
+    public void Compute_ChangeTrackingDisabled_MatchesHashFromBeforeTheFieldExisted()
+    {
+        // Existing tables without CT must keep their persisted fingerprint across the upgrade
+        // that added IsChangeTrackingEnabled - otherwise every table re-provisions once for
+        // no reason. This is the SHA-256 of the exact pre-CT input string for CreateProfile().
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            "Table:TestTable|Id:int:4:False;Name:nvarchar:100:True;|PK:Id|Identity:(none)")));
+
+        Assert.Equal(expected, SchemaFingerprint.Compute(CreateProfile()));
+    }
+
+    [Fact]
     public void Compute_AddingAColumn_ProducesDifferentHash()
     {
         var original = CreateProfile();

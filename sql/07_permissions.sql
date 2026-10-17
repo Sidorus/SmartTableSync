@@ -87,6 +87,14 @@ GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-runtime];
 GRANT SELECT ON [dbo].[DocumentAsset]         TO [smarttablesync-runtime];
 GO
 
+-- Only for tables where a DBA has enabled SQL Server Change Tracking (the
+-- SqlChangeTracking incremental strategy): CHANGETABLE and
+-- CHANGE_TRACKING_MIN_VALID_VERSION also need VIEW CHANGE TRACKING. Without it,
+-- the runtime fails that table with a clear error instead of syncing it.
+-- `SmartTableSync.Scaffold --change-tracking-setup <Table>` generates this grant
+-- together with the CT enable statements. Example:
+-- GRANT VIEW CHANGE TRACKING ON [dbo].[ProductCatalogItem] TO [smarttablesync-runtime];
+
 -- Run on the CHILD database:
 
 -- CREATE USER [smarttablesync-runtime] FROM EXTERNAL PROVIDER;   -- Managed Identity

@@ -31,7 +31,12 @@ public sealed class RowVersionSyncRunner : ISyncRunner
         SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
     {
         var persistedPosition = await _syncState.GetIncrementalPositionAsync(child, _profile.TableName, ct);
-        var lastRowVersion = persistedPosition is null ? new byte[8] : FromHexString(persistedPosition);
+        // A position that isn't "0x..." hex was written by another strategy (e.g.
+        // ChangeTrackingSyncRunner's "CT:<version>") before this table switched to RowVersion —
+        // treat it like no position at all (start from 0x00...00) rather than misparse it.
+        var lastRowVersion = persistedPosition is null || !persistedPosition.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? new byte[8]
+            : FromHexString(persistedPosition);
 
         // Captured BEFORE the read, not after — any transaction still in flight right now is
         // guaranteed to commit with a rowversion >= this bound, so it remains visible to the

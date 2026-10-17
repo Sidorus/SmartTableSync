@@ -37,4 +37,13 @@ public sealed record TableProfile(
     /// lists, since SQL Server rejects any explicit value written into a rowversion column.</summary>
     public string? RowVersionColumn => Columns.FirstOrDefault(c =>
         string.Equals(c.SqlTypeName, "timestamp", StringComparison.OrdinalIgnoreCase))?.Name;
+
+    /// <summary>True when a DBA has enabled SQL Server Change Tracking on this table
+    /// (a row exists in sys.change_tracking_tables) — a fact, like RowVersionColumn, so it's
+    /// auto-detected rather than configured. Read by GetFingerprintInputsAsync, so enabling or
+    /// disabling CT changes the schema fingerprint and triggers re-provisioning.
+    /// Deliberately an init property, not a positional parameter: adding a positional
+    /// parameter to this public record would be a source-breaking change for every caller
+    /// that constructs it.</summary>
+    public bool IsChangeTrackingEnabled { get; init; }
 }

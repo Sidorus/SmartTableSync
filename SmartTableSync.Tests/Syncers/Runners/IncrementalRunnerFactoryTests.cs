@@ -69,4 +69,14 @@ public class IncrementalRunnerFactoryTests
 
         Assert.IsType<RowVersionSyncRunner>(runner);
     }
+
+    [Fact]
+    public void Create_SqlChangeTrackingStrategy_ReturnsChangeTrackingSyncRunner()
+    {
+        var plan = CreatePlan(IncrementalStrategy.SqlChangeTracking);
+
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+
+        Assert.IsType<ChangeTrackingSyncRunner>(runner);
+    }
 }

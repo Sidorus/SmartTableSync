@@ -20,12 +20,14 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
           dotnet run -- <TableName> [<TableName> ...] [--output <dir>]
           dotnet run -- --infrastructure [--output <dir>]
           dotnet run -- --rowversion-setup <TableName> [<TableName> ...] [--column <Name>] [--output <dir>]
+          dotnet run -- --change-tracking-setup <TableName> [<TableName> ...] [--retention-days <N>] [--output <dir>]
 
         Environment variables required (per-table generation — --infrastructure needs none):
           ParentIntrospectionConnectionString   (read-only: VIEW DEFINITION + SELECT on parent)
           ChildProvisioningConnectionString      (used only to check whether the child table
                                                    already exists — never executes DDL)
-                                                   Not needed for --rowversion-setup (parent-only).
+                                                   Not needed for --rowversion-setup or
+                                                   --change-tracking-setup (parent-only).
 
         Per-table generation also reads the same SmartTableSync:* settings the runtime does
         (SmartTableSync__ChangeTrackingColumns__<Table>, SmartTableSync__AllowFullRescanFor,
@@ -43,6 +45,13 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
         into the RowVersion incremental strategy. SmartTableSync never has, and never will
         have, DDL access to the parent database in either Manual or Auto mode — this script
         is generated for manual review only, same trust model as sql/07_permissions.sql.
+
+        --change-tracking-setup writes a script that enables SQL Server Change Tracking on the
+        database (if not already on; default 2-day retention, override with --retention-days)
+        and on the named table(s), plus the VIEW CHANGE TRACKING grant the runtime identity
+        needs — for a DBA to apply BY HAND against the PARENT database. Once applied, the table
+        is switched to the SqlChangeTracking incremental strategy automatically on its next
+        re-provisioning (unless SmartTableSync__IncrementalStrategyOverrides__<Table> pins it).
 
         Output defaults to sql/generated/ (relative to the current directory).
         """);
@@ -108,6 +117,63 @@ if (args.Contains("--rowversion-setup"))
     if (failedRowVersionTables.Count > 0)
     {
         Console.Error.WriteLine($"{failedRowVersionTables.Count} table(s) failed: {string.Join(", ", failedRowVersionTables)} — fix and re-run.");
+        return 1;
+    }
+
+    return 0;
+}
+
+if (args.Contains("--change-tracking-setup"))
+{
+    var retentionIndex = Array.IndexOf(args, "--retention-days");
+    var retentionDays = 2;
+    if (retentionIndex >= 0 && (retentionIndex + 1 >= args.Length || !int.TryParse(args[retentionIndex + 1], out retentionDays) || retentionDays < 1))
+    {
+        Console.Error.WriteLine("--retention-days must be followed by a positive whole number of days.");
+        return 1;
+    }
+
+    var changeTrackingTableNames = args.Where((a, i) =>
+        a != "--change-tracking-setup" && a != "--output" && a != "--retention-days" &&
+        (outputIndex < 0 || i != outputIndex + 1) &&
+        (retentionIndex < 0 || i != retentionIndex + 1)).ToList();
+
+    var changeTrackingParentConnString = Environment.GetEnvironmentVariable("ParentIntrospectionConnectionString");
+    if (string.IsNullOrWhiteSpace(changeTrackingParentConnString))
+    {
+        Console.Error.WriteLine("ParentIntrospectionConnectionString must be set.");
+        return 1;
+    }
+
+    Directory.CreateDirectory(outputDir);
+    var changeTrackingSchemaReader = new SchemaReader();
+    var changeTrackingGenerator = new SqlArtifactGenerator();
+
+    await using var changeTrackingParent = new SqlConnection(changeTrackingParentConnString);
+    await changeTrackingParent.OpenAsync();
+
+    var failedChangeTrackingTables = new List<string>();
+
+    foreach (var tableName in changeTrackingTableNames)
+    {
+        try
+        {
+            // Catalog metadata only (columns + PK) — enough for the script, no row sampling.
+            var profile = await changeTrackingSchemaReader.GetFingerprintInputsAsync(changeTrackingParent, tableName, CancellationToken.None);
+            var path = Path.Combine(outputDir, $"{tableName}_ChangeTrackingSetup.sql");
+            await File.WriteAllTextAsync(path, changeTrackingGenerator.GenerateChangeTrackingSetupScript(profile, retentionDays));
+            Console.WriteLine($"wrote {path} — apply manually against the PARENT database");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Console.Error.WriteLine($"{tableName}: FAILED: {ex.Message}");
+            failedChangeTrackingTables.Add(tableName);
+        }
+    }
+
+    if (failedChangeTrackingTables.Count > 0)
+    {
+        Console.Error.WriteLine($"{failedChangeTrackingTables.Count} table(s) failed: {string.Join(", ", failedChangeTrackingTables)} — fix and re-run.");
         return 1;
     }
 

@@ -35,6 +35,14 @@ public sealed class SyncSettings
     /// throws) rather than silently accepting an impossible choice.</summary>
     public IReadOnlyDictionary<string, IncrementalStrategy> IncrementalStrategyOverrides { get; set; } =
         new Dictionary<string, IncrementalStrategy>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How often SqlChangeTracking tables run the full key-set delete reconciliation.
+    /// CT already reports deletes every cycle, and ChangeTrackingSyncRunner reconciles right
+    /// after any fallback re-scan, so this is only a safety net for a failed child delete or a
+    /// manual change in the child — default once a day instead of every hour. Zero disables the
+    /// periodic run (reconciliation then happens only after a fallback re-scan). Tables on
+    /// every other strategy keep the hourly reconciliation, their only source of deletes.</summary>
+    public TimeSpan ChangeTrackingReconcileInterval { get; set; } = TimeSpan.FromHours(24);
 }
 
 public enum SyncMode
