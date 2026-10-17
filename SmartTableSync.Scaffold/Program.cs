@@ -1,9 +1,9 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
-using SmartTableSync.Configuration;
-using SmartTableSync.Introspection;
-using SmartTableSync.Options;
 using SmartTableSync.Planning;
+using SmartTableSync.Strategies.Timestamp;
+using SmartTableSync.Introspection;
+using SmartTableSync.Hosting;
 using SmartTableSync.Scaffolding;
 
 // Manual, on-demand tool — never run by the timer-triggered Function. Reads schema

@@ -1,1 +1,1 @@
-global using SmartTableSync.Orchestration;
+global using SmartTableSync.Abstractions;

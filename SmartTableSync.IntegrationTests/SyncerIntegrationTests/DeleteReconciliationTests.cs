@@ -2,7 +2,7 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.IntegrationTests.Support;
-using SmartTableSync.Infrastructure;
+using SmartTableSync.Sql;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 

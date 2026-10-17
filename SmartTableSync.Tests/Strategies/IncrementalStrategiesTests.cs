@@ -1,12 +1,16 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Introspection;
-using SmartTableSync.Observability;
+using SmartTableSync.Diagnostics;
 using SmartTableSync.Planning;
 using SmartTableSync.State;
 using SmartTableSync.Strategies;
-using SmartTableSync.Syncers.MergeStrategies;
-using SmartTableSync.Syncers.Runners;
-using SmartTableSync.Syncers.Sql;
+using SmartTableSync.Strategies.Abstractions;
+using SmartTableSync.Strategies.SqlChangeTracking;
+using SmartTableSync.Strategies.RowVersion;
+using SmartTableSync.Strategies.Timestamp;
+using SmartTableSync.Strategies.FullRescan;
+using SmartTableSync.Merge;
+using SmartTableSync.Sql;
 using Xunit;
 
 namespace SmartTableSync.Tests.Strategies;

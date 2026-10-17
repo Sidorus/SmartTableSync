@@ -1,4 +1,4 @@
-using SmartTableSync.Syncers.Keys;
+using SmartTableSync.Sql.Keys;
 using Xunit;
 
 namespace SmartTableSync.Tests.Syncers;

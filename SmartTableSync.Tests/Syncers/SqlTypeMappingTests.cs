@@ -1,5 +1,5 @@
 using SmartTableSync.Introspection;
-using SmartTableSync.Syncers.Sql;
+using SmartTableSync.Sql;
 using Xunit;
 
 namespace SmartTableSync.Tests.Syncers;

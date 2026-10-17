@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using SmartTableSync.DependencyInjection;
-using SmartTableSync.Options;
+using SmartTableSync.Hosting;
 using SmartTableSync.Orchestration;
+using SmartTableSync.Abstractions;
 using Xunit;
 
 namespace SmartTableSync.Tests.DependencyInjection;

@@ -1,7 +1,7 @@
 using System.Data;
 using System.Globalization;
-using SmartTableSync.Syncers.Keys;
-using SmartTableSync.Syncers.Sql;
+using SmartTableSync.Sql.Keys;
+using SmartTableSync.Sql;
 using Xunit;
 
 namespace SmartTableSync.Tests.Syncers;

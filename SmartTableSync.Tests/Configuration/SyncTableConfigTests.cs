@@ -1,5 +1,4 @@
 using Microsoft.Data.SqlClient;
-using SmartTableSync.Configuration;
 using SmartTableSync.Planning;
 using Xunit;
 

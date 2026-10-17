@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using SmartTableSync.Options;
+using SmartTableSync.Hosting;
 using SmartTableSync.Planning;
 using Xunit;
 

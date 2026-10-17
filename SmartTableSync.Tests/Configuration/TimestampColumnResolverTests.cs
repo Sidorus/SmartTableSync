@@ -1,4 +1,4 @@
-using SmartTableSync.Configuration;
+using SmartTableSync.Strategies.Timestamp;
 using SmartTableSync.Introspection;
 using Xunit;
 

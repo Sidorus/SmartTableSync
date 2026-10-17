@@ -1,11 +1,10 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging.Abstractions;
-using SmartTableSync.Configuration;
+using SmartTableSync.Planning;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.Introspection;
-using SmartTableSync.Observability;
-using SmartTableSync.Options;
-using SmartTableSync.Planning;
+using SmartTableSync.Diagnostics;
+using SmartTableSync.Hosting;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 

@@ -1,7 +1,6 @@
 using Microsoft.Data.SqlClient;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.Introspection;
-using SmartTableSync.Models;
 using SmartTableSync.State;
 
 namespace SmartTableSync.IntegrationTests;

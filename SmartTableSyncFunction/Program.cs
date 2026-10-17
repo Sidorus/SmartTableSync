@@ -1,7 +1,7 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using SmartTableSync.DependencyInjection;
+using SmartTableSync.Hosting;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
@@ -14,7 +14,7 @@ var host = new HostBuilder()
         services.ConfigureFunctionsApplicationInsights();
 
         // Registers the sync engine, including its default ISyncMetricsReporter
-        // (SmartTableSync.Observability.SyncMetricsReporter) — emits via
+        // (SmartTableSync.Diagnostics.SyncMetricsReporter) — emits via
         // System.Diagnostics.Metrics under the "SmartTableSync" meter name, so it's
         // collectible by whatever OpenTelemetry exporter this host wants (Azure Monitor's
         // OpenTelemetry distro, OTLP, Prometheus, ...), not tied to any one vendor. Wire up

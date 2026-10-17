@@ -2,7 +2,7 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using SmartTableSync.IntegrationTests.Fixtures;
 using SmartTableSync.IntegrationTests.Support;
-using SmartTableSync.Infrastructure;
+using SmartTableSync.Sql;
 
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
@@ -121,7 +121,7 @@ public class DeleteReconciliationKeyTypeTests
         }
 
         // Act
-        var keyExpression = SmartTableSync.Syncers.Keys.KeysetPredicateBuilder.BuildKeySelectExpression(columnNames, c => baseType[c]);
+        var keyExpression = SmartTableSync.Sql.Keys.KeysetPredicateBuilder.BuildKeySelectExpression(columnNames, c => baseType[c]);
         await using var select = new SqlCommand(
             $"SELECT {keyExpression}, {string.Join(", ", columnNames.Select(SqlIdentifier.Quote))} FROM #KeyTypes", child);
         await using var reader = await select.ExecuteReaderAsync();
@@ -129,11 +129,11 @@ public class DeleteReconciliationKeyTypeTests
         var key = reader.GetString(0);
 
         // Assert
-        var parts = SmartTableSync.Syncers.Keys.CompositeKey.Parse(key, columnNames);
+        var parts = SmartTableSync.Sql.Keys.CompositeKey.Parse(key, columnNames);
         for (var i = 0; i < columnNames.Count; i++)
         {
             var stored = reader.GetValue(i + 1);
-            var parsed = SmartTableSync.Syncers.Sql.SqlTypeMapping.ParseKeyComponent(parts[i], baseType[columnNames[i]]);
+            var parsed = SmartTableSync.Sql.SqlTypeMapping.ParseKeyComponent(parts[i], baseType[columnNames[i]]);
             Assert.True(Equals(stored, parsed), $"{columnNames[i]}: stored '{stored}', key component '{parts[i]}' parsed to '{parsed}'");
             if (stored is DateTimeOffset storedOffset)
                 Assert.Equal(storedOffset.Offset, ((DateTimeOffset)parsed).Offset);
