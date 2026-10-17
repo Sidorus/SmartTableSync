@@ -16,9 +16,9 @@
     "_ChildProvisioningConnectionString_readme": "Only required when SmartTableSync:Mode is Auto. Uses the smarttablesync-child-provisioning identity (see sql/07_permissions.sql) - the same one SmartTableSync.Scaffold already uses, never the runtime identity above.",
     "ChildProvisioningConnectionString": "<child-db-provisioning-connection-string>",
 
-    "_SmartTableSync:ChangeTrackingColumns_readme": "Per-table override of the incremental change-tracking column name. A table not listed here defaults to 'LastUpdate'. Example: \"SmartTableSync:ChangeTrackingColumns:SomeOtherTable\": \"ModifiedAt\".",
+    "_SmartTableSync:TimestampColumns_readme": "Per-table datetime column the Timestamp strategy filters on. A table not listed here defaults to 'LastUpdate'. Example: \"SmartTableSync:TimestampColumns:SomeOtherTable\": \"ModifiedAt\". The original key name, SmartTableSync:ChangeTrackingColumns:<Table>, is still read; the new name wins if both are set.",
 
-    "_SmartTableSync:AllowFullRescanFor_readme": "Comma-separated table names explicitly allowed to fall back to a full-table re-scan every incremental cycle when their change-tracking column doesn't exist, even above PlanHeuristicOptions.FullRescanRowCountThreshold (50,000 rows by default). Small tables below that threshold fall back automatically without needing to be listed here.",
+    "_SmartTableSync:AllowFullRescanFor_readme": "Comma-separated table names explicitly allowed to fall back to a full-table re-scan every run when no other strategy applies, even above 50,000 rows. Smaller tables fall back automatically without being listed here.",
     "SmartTableSync:AllowFullRescanFor": "",
 
     "_SmartTableSync:IncrementalStrategyOverrides_readme": "Per-table override of the auto-derived incremental strategy (Timestamp/FullRescan/RowVersion/SqlChangeTracking). Without this, a table with SQL Server Change Tracking enabled uses SqlChangeTracking, and a detected rowversion column wins over a configured/default datetime column. The override is validated against the table's actual schema at provisioning time - e.g. forcing RowVersion on a table with no rowversion column throws. Example: \"SmartTableSync:IncrementalStrategyOverrides:SomeTable\": \"Timestamp\".",

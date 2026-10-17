@@ -1,7 +1,8 @@
 # ADR-0010: Incremental-strategy selection hierarchy, with an explicit per-table override
 
 ## Status
-Accepted
+Accepted — updated 2026-10-17 for SqlChangeTracking ([ADR-0016](0016-implement-change-tracking-as-third-strategy.md))
+and the strategy registry ([ADR-0017](0017-strategy-registry-and-template-method-runners.md)).
 
 ## Date
 2026-08-01
@@ -15,26 +16,31 @@ different setup cost, reliability, and blast radius on the parent database.
 ## Decision
 A layered, auto-detected hierarchy, checked in this order per table:
 1. **Explicit override** (`SmartTableSync:IncrementalStrategyOverrides:<Table>`), if set —
-   wins over everything below, but validated against the table's real columns (forcing
-   `RowVersion` on a table with no rowversion column throws, rather than silently producing a
-   plan with nothing to query).
-2. **RowVersion**, if the table has a `rowversion`/`timestamp` column — a *fact*, not a guess
+   wins over everything below, but must be applicable to the table (forcing `RowVersion` on a
+   table with no rowversion column throws, rather than silently producing a plan with nothing
+   to query). An override to `FullRescan` counts as consent to re-scan a large table.
+2. **SqlChangeTracking**, if a DBA enabled SQL Server Change Tracking on the table — a fact, and
+   the strongest mechanism: deletes reported directly, versions assigned at commit
+   ([ADR-0016](0016-implement-change-tracking-as-third-strategy.md)).
+3. **RowVersion**, if the table has a `rowversion`/`timestamp` column — a *fact*, not a guess
    (the engine unconditionally maintains it on every write), so it wins over a configured
    datetime column whenever both exist.
-3. **Timestamp**, if a configured (or default `"LastUpdate"`) datetime column exists — an
-   operator-asserted fact, not auto-detected, since a column merely existing doesn't prove the
-   application actually maintains it on every `UPDATE`.
-4. **FullRescan**, for a small table (≤ a row-count threshold) with neither of the above — safe
-   and free of friction, since `MERGE` is already idempotent everywhere.
-5. Otherwise: **throw**, naming the exact setting to fix, rather than silently re-scanning a
+4. **Timestamp**, if a configured (`SmartTableSync:TimestampColumns:<Table>`, default
+   `"LastUpdate"`) datetime column exists — an operator-asserted fact, not auto-detected, since a
+   column merely existing doesn't prove the application maintains it on every `UPDATE`.
+5. **FullRescan**, for a small table (≤ a row-count threshold) with none of the above, or a
+   table listed in `SmartTableSync:AllowFullRescanFor` — safe, since `MERGE` is idempotent.
+6. Otherwise: **throw**, naming the exact setting to fix, rather than silently re-scanning a
    large table every 5 minutes.
 
-Change Tracking (a future 5th option) is specced but not implemented — see
-[ADR-0014](0014-reject-cdc-prefer-change-tracking.md) for why it, not CDC, is the mechanism
-chosen for that slot. RowVersion's own selection over alternatives (and the correctness bugs
-its implementation surfaced) is covered in
+The order lives in one place, `IncrementalStrategies.All`, and each step's applicability check
+is the strategy's own `WhyNotApplicable` — used both for auto-selection and to validate an
+override ([ADR-0017](0017-strategy-registry-and-template-method-runners.md)).
+
+Why Change Tracking rather than CDC: [ADR-0014](0014-reject-cdc-prefer-change-tracking.md).
+RowVersion's selection and the bugs its implementation surfaced:
 [ADR-0015](0015-implement-rowversion-as-second-strategy.md). Transactional replication was
-rejected outright for this project's topology, independent of this hierarchy — see
+rejected outright for this project's topology —
 [ADR-0003](0003-reject-transactional-replication-and-data-factory.md).
 
 ## Alternatives Considered
@@ -54,6 +60,7 @@ rejected outright for this project's topology, independent of this hierarchy —
 `LastUpdate`/rowversion column already); a table only needs operator attention when it
 genuinely doesn't fit any automatic case, and the error message says exactly what to do.
 
-**Negative:** the priority order (override > RowVersion > Timestamp > FullRescan) is a real
+**Negative:** the priority order (override > SqlChangeTracking > RowVersion > Timestamp >
+FullRescan) is a real
 piece of implicit knowledge an operator must understand to predict what a given table will do —
 worth documenting clearly for operators, not something this hierarchy eliminates by itself.
