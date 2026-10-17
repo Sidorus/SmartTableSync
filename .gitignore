@@ -19,3 +19,14 @@ obj/
 *.md
 !README.md
 !docs/adr/*.md
+
+# Terraform (demo) - state holds resource IDs and the lock file is created by terraform init
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+
+# SQL the demo script generates with SmartTableSync.Scaffold
+demo/generated/

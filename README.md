@@ -141,6 +141,9 @@ Settings are validated at startup: an empty or duplicated table list stops the h
 
 ## Getting started
 
+To see it run on Azure first, [`demo/`](demo/README.md) deploys a parent and a child database,
+the Function and three demo tables to your own subscription with one script, then syncs them.
+
 ```bash
 cd SmartTableSyncFunction
 dotnet build
@@ -179,11 +182,13 @@ package. SQL authentication doesn't need it.
 | `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
 | `SmartTableSync.Tests` | Unit tests |
 | `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker) |
+| `demo/` | Terraform, SQL and a script that deploy and run the whole setup on Azure |
 
-Inside Core, each incremental strategy is one class in `Strategies/` (when it applies, which
-column it reads, which runner executes it), and every runner derives from
-`ChangeWindowSyncRunner<TPosition>`, which owns paging, deletes, merging and the position rule —
-see [ADR-0017](docs/adr/0017-strategy-registry-and-template-method-runners.md).
+Inside Core, each incremental strategy has its own folder under `Strategies/` holding the
+strategy (when it applies, which column it reads) and its runner. Every runner derives from
+`ChangeWindowSyncRunner<TPosition>` in `Strategies/Abstractions/`, which owns paging, deletes,
+merging and the position rule — see
+[ADR-0017](docs/adr/0017-strategy-registry-and-template-method-runners.md).
 
 ## Architecture decisions
 
