@@ -6,7 +6,7 @@ public static class IncrementalRunnerFactory
 {
     public static ISyncRunner Create(
         TableProfile profile, SyncPlan plan, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy,
-        ISyncStateRepository syncState, ILogger logger) =>
+        ISyncStateRepository syncState, ISyncMetricsReporter metrics, ILogger logger) =>
         plan.IncrementalStrategy switch
         {
             IncrementalStrategy.Timestamp => new IncrementalSyncRunner(commandFactory, mergeStrategy),
@@ -16,7 +16,7 @@ public static class IncrementalRunnerFactory
                 profile, commandFactory, mergeStrategy,
                 new FullRescanSyncRunner(profile, plan, commandFactory, mergeStrategy, logger),
                 new DeleteReconciler(profile, commandFactory, logger),
-                syncState, logger),
+                syncState, metrics, logger),
             _ => throw new NotSupportedException($"Unhandled incremental strategy: {plan.IncrementalStrategy}"),
         };
 }

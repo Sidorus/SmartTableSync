@@ -74,7 +74,7 @@ public class RowVersionStrategyTests : IClassFixture<MsSqlTestFixture>
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         // Initial sync: bulk-copies the one existing row. Succeeding at all proves
         // BulkCopyWriter's rowversion-column exclusion works - without it, SqlBulkCopy

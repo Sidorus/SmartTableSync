@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Introspection;
+using SmartTableSync.Observability;
 using SmartTableSync.Planning;
 using SmartTableSync.State;
 using SmartTableSync.Syncers.MergeStrategies;
@@ -45,7 +46,7 @@ public class IncrementalRunnerFactoryTests
     {
         var plan = CreatePlan(IncrementalStrategy.Timestamp);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, new NoOpSyncMetricsReporter(), NullLogger.Instance);
 
         Assert.IsType<IncrementalSyncRunner>(runner);
     }
@@ -55,7 +56,7 @@ public class IncrementalRunnerFactoryTests
     {
         var plan = CreatePlan(IncrementalStrategy.FullRescan);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, new NoOpSyncMetricsReporter(), NullLogger.Instance);
 
         Assert.IsType<FullRescanSyncRunner>(runner);
     }
@@ -65,7 +66,7 @@ public class IncrementalRunnerFactoryTests
     {
         var plan = CreatePlan(IncrementalStrategy.RowVersion);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, new NoOpSyncMetricsReporter(), NullLogger.Instance);
 
         Assert.IsType<RowVersionSyncRunner>(runner);
     }
@@ -75,7 +76,7 @@ public class IncrementalRunnerFactoryTests
     {
         var plan = CreatePlan(IncrementalStrategy.SqlChangeTracking);
 
-        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, NullLogger.Instance);
+        var runner = IncrementalRunnerFactory.Create(Profile, plan, CommandFactory(plan), MergeStrategyFor(plan), SyncState, new NoOpSyncMetricsReporter(), NullLogger.Instance);
 
         Assert.IsType<ChangeTrackingSyncRunner>(runner);
     }

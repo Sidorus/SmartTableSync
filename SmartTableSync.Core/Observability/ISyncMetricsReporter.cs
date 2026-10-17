@@ -20,4 +20,12 @@ public interface ISyncMetricsReporter
     /// schema change (Configuration/ISyncTableProvisioner) — keeps otherwise-silent
     /// automatic provisioning observable.</summary>
     void TableProvisioned(string tableName);
+
+    /// <summary>A SqlChangeTracking table fell back to a full re-scan because its version chain
+    /// was broken. reason is a fixed category ("no_position", "position_expired",
+    /// "position_ahead", "cleaned_up_during_read"), never free text, so it is safe as a metric
+    /// tag. Has a default no-op body so existing implementations keep compiling.</summary>
+    void FullRescan(string tableName, string reason)
+    {
+    }
 }

@@ -133,7 +133,8 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 1, "One");
         await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 2, "Two");
-        var (_, _, syncer) = await BuildAsync(parent, child, table);
+        var metrics = new FullRescanRecorder();
+        var (_, _, syncer) = await BuildAsync(parent, child, table, metrics: metrics);
         await syncer.SyncAsync(parent, child, SyncConstants.InitialDate, CancellationToken.None);
         await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
 
@@ -162,6 +163,11 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
 
         var resumedAgain = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
         Assert.Equal(0, resumedAgain.RowsSynced);
+
+        // Each fallback is reported once, with a fixed category usable as a metric tag.
+        Assert.Equal(
+            [(table, "position_ahead"), (table, "position_expired")],
+            metrics.FullRescans);
     }
 
     [Fact]
@@ -244,7 +250,7 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
     }
 
     private static async Task<(TableProfile Profile, SyncPlan Plan, ITableSyncer Syncer)> BuildAsync(
-        SqlConnection parent, SqlConnection child, string table, SyncSettings? settings = null)
+        SqlConnection parent, SqlConnection child, string table, SyncSettings? settings = null, ISyncMetricsReporter? metrics = null)
     {
         var provisioner = new SyncTableProvisioner(
             new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
@@ -256,8 +262,23 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
         await new ChildDdlProvisioner(new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance)
             .EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
 
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(
+            new BatchLogger(), new SyncStateRepository(), metrics ?? new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance)
+            .Create(profile, plan);
         return (profile, plan, syncer);
+    }
+
+    private sealed class FullRescanRecorder : ISyncMetricsReporter
+    {
+        public List<(string Table, string Reason)> FullRescans { get; } = [];
+
+        public void RowsSynced(string tableName, string syncMode, int count) { }
+        public void RowsErrored(string tableName, string syncMode, int count) { }
+        public void SyncDuration(string tableName, string syncMode, TimeSpan duration) { }
+        public void RowsDeleted(string tableName, int count) { }
+        public void SyncLag(string tableName, TimeSpan lag) { }
+        public void TableProvisioned(string tableName) { }
+        public void FullRescan(string tableName, string reason) => FullRescans.Add((tableName, reason));
     }
 
     private static async Task<SqlConnection> OpenAsync(string connectionString)

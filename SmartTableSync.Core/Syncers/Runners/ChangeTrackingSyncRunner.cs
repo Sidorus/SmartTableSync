@@ -24,11 +24,13 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
     private readonly ISyncStateRepository _syncState;
     private readonly DeleteReconciler _deleteReconciler;
     private readonly ChildRowDeleter _rowDeleter;
+    private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger _logger;
 
     public ChangeTrackingSyncRunner(
         TableProfile profile, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy,
-        ISyncRunner fullRescanRunner, DeleteReconciler deleteReconciler, ISyncStateRepository syncState, ILogger logger)
+        ISyncRunner fullRescanRunner, DeleteReconciler deleteReconciler, ISyncStateRepository syncState,
+        ISyncMetricsReporter metrics, ILogger logger)
     {
         _profile = profile;
         _commandFactory = commandFactory;
@@ -36,6 +38,7 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         _fullRescanRunner = fullRescanRunner;
         _deleteReconciler = deleteReconciler;
         _syncState = syncState;
+        _metrics = metrics;
         _rowDeleter = new ChildRowDeleter(profile);
         _logger = logger;
     }
@@ -125,8 +128,8 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
                 {
                     changes.Dispose();
                     await transaction.CommitAsync(ct);
-                    return new ChangeRead(null, current,
-                        $"tracking data was cleaned up during the read (min valid version moved to {minValidAfterRead})");
+                    return new ChangeRead(null, current, new RescanReason("cleaned_up_during_read",
+                        $"tracking data was cleaned up during the read (min valid version moved to {minValidAfterRead})"));
                 }
             }
 
@@ -172,25 +175,26 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         }
     }
 
-    private static string? GetRescanReason(long? lastVersion, long minValidVersion, long currentVersion) =>
+    private static RescanReason? GetRescanReason(long? lastVersion, long minValidVersion, long currentVersion) =>
         lastVersion switch
         {
-            null => "no Change Tracking position yet",
-            var position when position < minValidVersion =>
+            null => new RescanReason("no_position", "no Change Tracking position yet"),
+            var position when position < minValidVersion => new RescanReason("position_expired",
                 $"position {position} is older than CHANGE_TRACKING_MIN_VALID_VERSION ({minValidVersion}) — " +
-                "retention exceeded, table truncated, or Change Tracking re-enabled",
-            var position when position > currentVersion =>
+                "retention exceeded, table truncated, or Change Tracking re-enabled"),
+            var position when position > currentVersion => new RescanReason("position_ahead",
                 $"position {position} is ahead of CHANGE_TRACKING_CURRENT_VERSION ({currentVersion}) — " +
-                "was the parent database restored from a backup?",
+                "was the parent database restored from a backup?"),
             _ => null,
         };
 
     private async Task<(int synced, int errored, bool retryable)> RescanAndRebaselineAsync(
-        SqlConnection parent, SqlConnection child, DateTime lastSyncDate, long versionBeforeRescan, string reason, CancellationToken ct)
+        SqlConnection parent, SqlConnection child, DateTime lastSyncDate, long versionBeforeRescan, RescanReason reason, CancellationToken ct)
     {
         _logger.LogWarning(
             "{Table}: {Reason} — running a full re-scan, then resuming Change Tracking from version {Version}",
-            _profile.TableName, reason, versionBeforeRescan);
+            _profile.TableName, reason.Description, versionBeforeRescan);
+        _metrics.FullRescan(_profile.TableName, reason.Category);
 
         var (synced, errored, retryable) = await _fullRescanRunner.RunAsync(parent, child, lastSyncDate, ct);
 
@@ -267,5 +271,8 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         return (deleted, errored);
     }
 
-    private sealed record ChangeRead(DataTable? Changes, long CurrentVersion, string? RescanReason);
+    private sealed record ChangeRead(DataTable? Changes, long CurrentVersion, RescanReason? RescanReason);
+
+    /// <summary>Category is a fixed value used as a metric tag; Description is the log text.</summary>
+    private sealed record RescanReason(string Category, string Description);
 }

@@ -21,6 +21,15 @@
     "_SmartTableSync:AllowFullRescanFor_readme": "Comma-separated table names explicitly allowed to fall back to a full-table re-scan every incremental cycle when their change-tracking column doesn't exist, even above PlanHeuristicOptions.FullRescanRowCountThreshold (50,000 rows by default). Small tables below that threshold fall back automatically without needing to be listed here.",
     "SmartTableSync:AllowFullRescanFor": "",
 
-    "_SmartTableSync:IncrementalStrategyOverrides_readme": "Per-table override of the auto-derived incremental strategy (Timestamp/FullRescan/RowVersion). Without this, a detected rowversion column always wins over a configured/default datetime column. The override is validated against the table's actual columns at provisioning time - e.g. forcing RowVersion on a table with no rowversion column throws. Example: \"SmartTableSync:IncrementalStrategyOverrides:SomeTable\": \"Timestamp\"."
+    "_SmartTableSync:IncrementalStrategyOverrides_readme": "Per-table override of the auto-derived incremental strategy (Timestamp/FullRescan/RowVersion/SqlChangeTracking). Without this, a table with SQL Server Change Tracking enabled uses SqlChangeTracking, and a detected rowversion column wins over a configured/default datetime column. The override is validated against the table's actual schema at provisioning time - e.g. forcing RowVersion on a table with no rowversion column throws. Example: \"SmartTableSync:IncrementalStrategyOverrides:SomeTable\": \"Timestamp\".",
+
+    "_SmartTableSync:ReconcileIntervalHours_readme": "How often (whole hours, default 1) tables on every strategy except SqlChangeTracking compare parent and child keys to remove deleted rows - their only source of deletes, so 0 is not allowed.",
+    "SmartTableSync:ReconcileIntervalHours": "1",
+
+    "_SmartTableSync:ChangeTrackingReconcileIntervalHours_readme": "Same safety net for SqlChangeTracking tables, which already receive deletes every cycle (default 24; 0 = only after a fallback full re-scan).",
+    "SmartTableSync:ChangeTrackingReconcileIntervalHours": "24",
+
+    "_SmartTableSync:ConnectionOpenAttempts_readme": "Total attempts (1-60, default 5) to open a database connection on a transient error such as an Azure SQL failover or throttling, with exponential backoff. 1 disables retries.",
+    "SmartTableSync:ConnectionOpenAttempts": "5"
   }
 }

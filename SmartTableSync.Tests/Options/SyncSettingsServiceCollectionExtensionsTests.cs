@@ -157,6 +157,50 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void ReconcileIntervalHours_BindsWholeHours()
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ReconcileIntervalHours"] = "3" });
+
+        Assert.Equal(TimeSpan.FromHours(3), settings.ReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("hourly")]
+    public void ReconcileIntervalHours_MissingZeroOrInvalid_DefaultsToOneHour(string? value)
+    {
+        // Zero is not allowed here: for non-CT strategies reconciliation is the only source of deletes.
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ReconcileIntervalHours"] = value });
+
+        Assert.Equal(TimeSpan.FromHours(1), settings.ReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("10", 10)]
+    [InlineData("60", 60)]
+    public void ConnectionOpenAttempts_BindsValuesSqlClientAccepts(string value, int expected)
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ConnectionOpenAttempts"] = value });
+
+        Assert.Equal(expected, settings.ConnectionOpenAttempts);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("61")]
+    [InlineData("many")]
+    public void ConnectionOpenAttempts_MissingOrOutOfRange_DefaultsToFive(string? value)
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ConnectionOpenAttempts"] = value });
+
+        Assert.Equal(5, settings.ConnectionOpenAttempts);
+    }
+
+    [Fact]
     public void IncrementalStrategyOverrides_Missing_IsEmpty()
     {
         var settings = Bind([]);

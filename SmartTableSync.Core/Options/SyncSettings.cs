@@ -43,6 +43,18 @@ public sealed class SyncSettings
     /// periodic run (reconciliation then happens only after a fallback re-scan). Tables on
     /// every other strategy keep the hourly reconciliation, their only source of deletes.</summary>
     public TimeSpan ChangeTrackingReconcileInterval { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>How often tables on every strategy except SqlChangeTracking run the full
+    /// key-set delete reconciliation — their only source of deletes. Default one hour.</summary>
+    public TimeSpan ReconcileInterval { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>Total attempts (initial + retries) to open a parent/child connection when it
+    /// fails with a transient error — Azure SQL failover, throttling, or brief unavailability —
+    /// using SqlClient's built-in transient error list and exponential backoff with jitter.
+    /// 1 disables retries. Only opening a connection is retried, never a command: a table whose
+    /// command fails is retried as a whole on the next run, which is safe because every write
+    /// is an idempotent MERGE.</summary>
+    public int ConnectionOpenAttempts { get; set; } = 5;
 }
 
 public enum SyncMode

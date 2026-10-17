@@ -49,9 +49,23 @@ public static class SyncSettingsServiceCollectionExtensions
         // Whole hours, so it's easy to enter as one App Setting. Missing, unparseable or
         // negative keeps the 24-hour default; 0 explicitly disables the periodic run.
         options.ChangeTrackingReconcileInterval =
-            int.TryParse(configuration["SmartTableSync:ChangeTrackingReconcileIntervalHours"], NumberStyles.None,
-                CultureInfo.InvariantCulture, out var reconcileHours)
-                ? TimeSpan.FromHours(reconcileHours)
+            TryParseNonNegativeInt(configuration["SmartTableSync:ChangeTrackingReconcileIntervalHours"], out var changeTrackingReconcileHours)
+                ? TimeSpan.FromHours(changeTrackingReconcileHours)
                 : TimeSpan.FromHours(24);
+
+        // No zero here: for these strategies reconciliation is the only way deletes arrive.
+        options.ReconcileInterval =
+            TryParseNonNegativeInt(configuration["SmartTableSync:ReconcileIntervalHours"], out var reconcileHours) && reconcileHours > 0
+                ? TimeSpan.FromHours(reconcileHours)
+                : TimeSpan.FromHours(1);
+
+        // SqlClient accepts 1..60 total attempts; anything outside that keeps the default.
+        options.ConnectionOpenAttempts =
+            TryParseNonNegativeInt(configuration["SmartTableSync:ConnectionOpenAttempts"], out var attempts) && attempts is >= 1 and <= 60
+                ? attempts
+                : 5;
     }
+
+    private static bool TryParseNonNegativeInt(string? value, out int result) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result);
 }

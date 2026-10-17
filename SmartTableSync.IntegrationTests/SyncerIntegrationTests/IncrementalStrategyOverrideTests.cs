@@ -71,7 +71,7 @@ public class IncrementalStrategyOverrideTests
         Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
 
         await BuildChildDdlProvisioner().EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var syncPoint = DateTime.UtcNow.AddHours(-9);
         await SyncerTestHelpers.UpdateIncrementalStrategyOverrideTimestampValueAsync(parent, rowId, "Updated", syncPoint.AddSeconds(5));

@@ -37,9 +37,14 @@ public static class SyncerTestHelpers
 
         var (profile, plan, _) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
-        var factory = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance);
+        var factory = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance);
         return (factory.Create(profile, plan), plan);
     }
+
+    /// <summary>The production DbConnectionFactory over the fixture's connection strings, with
+    /// default SyncSettings (5 connection-open attempts).</summary>
+    public static DbConnectionFactory CreateConnectionFactory(Microsoft.Extensions.Configuration.IConfiguration configuration) =>
+        new(configuration, Microsoft.Extensions.Options.Options.Create(new SyncSettings()), NullLogger<DbConnectionFactory>.Instance);
 
     public static async Task InsertNewProductAttributeValueRowAsync(
         SqlConnection parent, int attributeId, string slug, DateTime lastUpdate)

@@ -4,12 +4,15 @@ public sealed class TableSyncerFactory : ITableSyncerFactory
 {
     private readonly IBatchLogger _batchLogger;
     private readonly ISyncStateRepository _syncState;
+    private readonly ISyncMetricsReporter _metrics;
     private readonly ILoggerFactory _loggerFactory;
 
-    public TableSyncerFactory(IBatchLogger batchLogger, ISyncStateRepository syncState, ILoggerFactory loggerFactory)
+    public TableSyncerFactory(
+        IBatchLogger batchLogger, ISyncStateRepository syncState, ISyncMetricsReporter metrics, ILoggerFactory loggerFactory)
     {
         _batchLogger = batchLogger;
         _syncState = syncState;
+        _metrics = metrics;
         _loggerFactory = loggerFactory;
     }
 
@@ -24,7 +27,7 @@ public sealed class TableSyncerFactory : ITableSyncerFactory
         var syncRunners = new Dictionary<SyncPhase, Lazy<ISyncRunner>>
         {
             [SyncPhase.Initial] = new(() => CreateInitialRunner(profile, plan, commandFactory, mergeStrategy, logger)),
-            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, _syncState, logger)),
+            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, _syncState, _metrics, logger)),
         };
 
         var deleteReconciler = new DeleteReconciler(profile, commandFactory, logger);
