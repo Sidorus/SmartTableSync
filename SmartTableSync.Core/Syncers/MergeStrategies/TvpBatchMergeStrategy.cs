@@ -21,7 +21,7 @@ internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 
     public async Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct)
     {
-        await using var sp = new SqlCommand($"[dbo].[sp_Sync{_profile.TableName}Batch]", child)
+        await using var sp = new SqlCommand(SqlArtifactGenerator.TvpProcedureName(_profile.TableName), child)
         {
             CommandType = CommandType.StoredProcedure,
             CommandTimeout = _plan.BulkCopyTimeoutSeconds
@@ -29,7 +29,7 @@ internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 
         sp.Parameters.Add(new SqlParameter("@Rows", SqlDbType.Structured)
         {
-            TypeName = $"dbo.{_plan.TvpTypeName}",
+            TypeName = SqlIdentifier.DboTable(_plan.TvpTypeName!),
             Value = TvpShapedRows(batch)
         });
 

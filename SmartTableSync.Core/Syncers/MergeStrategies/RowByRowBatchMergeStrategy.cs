@@ -51,7 +51,7 @@ internal sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 
     private async Task MergeSingleRowAsync(DataRow row, SqlConnection child, CancellationToken ct)
     {
-        await using var sp = new SqlCommand($"[dbo].[sp_Sync{_profile.TableName}]", child)
+        await using var sp = new SqlCommand(SqlArtifactGenerator.RowByRowProcedureName(_profile.TableName), child)
         {
             CommandType = CommandType.StoredProcedure,
             CommandTimeout = _plan.BulkCopyTimeoutSeconds
@@ -65,7 +65,7 @@ internal sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             if (col.Name == _profile.RowVersionColumn) continue;
 
             var size = SqlTypeMapping.GetParameterSize(col);
-            sp.AddParam($"@{col.Name}", SqlTypeMapping.ToSqlDbType(col.SqlTypeName), row[col.Name], size);
+            sp.AddParam(SqlIdentifier.Parameter(col.Name), SqlTypeMapping.ToSqlDbType(col.SqlTypeName), row[col.Name], size);
         }
 
         await sp.ExecuteNonQueryAsync(ct);

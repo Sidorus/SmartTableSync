@@ -57,7 +57,8 @@ internal static class KeysetPredicateBuilder
     /// CompositeKey.</summary>
     public static string BuildKeySelectExpression(IReadOnlyList<string> primaryKeyColumns, Func<string, bool> isStringColumn)
     {
-        var parts = primaryKeyColumns.Select(c => isStringColumn(c) ? $"[{c}]" : $"CAST([{c}] AS NVARCHAR(20))");
+        var parts = primaryKeyColumns.Select(c =>
+            isStringColumn(c) ? SqlIdentifier.Quote(c) : $"CAST({SqlIdentifier.Quote(c)} AS NVARCHAR(20))");
         return string.Join(" + '|' + ", parts);
     }
 

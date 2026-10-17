@@ -12,7 +12,7 @@ internal static class BulkCopyWriter
     {
         using var bulk = new SqlBulkCopy(child, options, externalTransaction: null)
         {
-            DestinationTableName = $"[dbo].[{tableName}]",
+            DestinationTableName = SqlIdentifier.DboTable(tableName),
             BulkCopyTimeout = timeoutSeconds
         };
 

@@ -61,6 +61,9 @@ GRANT VIEW DEFINITION TO [smarttablesync-parent-introspection];
 -- VIEW DEFINITION is what lets SchemaReader query sys.columns / sys.indexes /
 -- sys.key_constraints / sys.identity_columns / sys.foreign_keys / sys.dm_db_partition_stats
 -- for tables this principal can otherwise SELECT from.
+-- Database-wide is the simplest grant. To limit it to the synced tables only, grant it per
+-- table instead (repeat for each managed table):
+-- GRANT VIEW DEFINITION ON OBJECT::[dbo].[ProductCatalogItem] TO [smarttablesync-parent-introspection];
 
 GRANT SELECT ON [dbo].[ProductAttributeValue] TO [smarttablesync-parent-introspection];
 GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-parent-introspection];

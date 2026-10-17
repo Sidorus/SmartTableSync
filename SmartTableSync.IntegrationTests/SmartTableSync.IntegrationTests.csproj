@@ -10,6 +10,9 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Testcontainers.MsSql" Version="4.13.0" />
+    <!-- Lifts Testcontainers' transitive SSH.NET past GHSA-q939-rpr3-3284 / GHSA-mggc-4xg6-vcxf.
+         Remove once Testcontainers depends on a fixed version. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
