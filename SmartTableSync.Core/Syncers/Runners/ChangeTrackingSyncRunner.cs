@@ -10,7 +10,9 @@ namespace SmartTableSync.Syncers.Runners;
 /// CHANGE_TRACKING_MIN_VALID_VERSION (retention exceeded, TRUNCATE TABLE, CT re-enabled), or
 /// position newer than CHANGE_TRACKING_CURRENT_VERSION (parent restored from a backup) — it
 /// falls back to one full re-scan and re-baselines at the version captured BEFORE that re-scan,
-/// so no change made during the re-scan is lost.</summary>
+/// so no change made during the re-scan is lost. A full re-scan only inserts and updates, so it
+/// is followed by a delete reconciliation in the same cycle: deletes made while the chain was
+/// broken are exactly what CT can no longer report.</summary>
 public sealed class ChangeTrackingSyncRunner : ISyncRunner
 {
     private const string RowMissingColumn = TableSyncCommandFactory.ChangeTrackingRowMissingColumn;
@@ -20,17 +22,19 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
     private readonly IBatchMergeStrategy _mergeStrategy;
     private readonly ISyncRunner _fullRescanRunner;
     private readonly ISyncStateRepository _syncState;
+    private readonly DeleteReconciler _deleteReconciler;
     private readonly ChildRowDeleter _rowDeleter;
     private readonly ILogger _logger;
 
     public ChangeTrackingSyncRunner(
         TableProfile profile, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy,
-        ISyncRunner fullRescanRunner, ISyncStateRepository syncState, ILogger logger)
+        ISyncRunner fullRescanRunner, DeleteReconciler deleteReconciler, ISyncStateRepository syncState, ILogger logger)
     {
         _profile = profile;
         _commandFactory = commandFactory;
         _mergeStrategy = mergeStrategy;
         _fullRescanRunner = fullRescanRunner;
+        _deleteReconciler = deleteReconciler;
         _syncState = syncState;
         _rowDeleter = new ChildRowDeleter(profile);
         _logger = logger;
@@ -190,6 +194,12 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
 
         var (synced, errored, retryable) = await _fullRescanRunner.RunAsync(parent, child, lastSyncDate, ct);
 
+        // The re-scan only inserts and updates. Rows deleted in the parent while the version
+        // chain was broken (outage past retention, TRUNCATE TABLE, CT re-enabled, restore) are
+        // no longer reported by CT, so compare the key sets once now instead of waiting for the
+        // periodic safety-net reconciliation.
+        var deleted = await _deleteReconciler.ReconcileAsync(parent, child, ct);
+
         // Baseline only after a clean re-scan: any row that failed to merge must be re-read,
         // and only another full re-scan can guarantee that (CT won't report it again unless it
         // changes). The version was captured BEFORE the re-scan, so changes made during it are
@@ -206,7 +216,7 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
                 _profile.TableName, errored);
         }
 
-        return (synced, errored, retryable);
+        return (synced + deleted, errored, retryable);
     }
 
     /// <summary>Removes rows whose key no longer exists in the parent (deletes) from the change

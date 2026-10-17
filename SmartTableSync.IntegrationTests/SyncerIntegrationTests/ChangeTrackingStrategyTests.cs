@@ -165,6 +165,34 @@ public class ChangeTrackingStrategyTests : IClassFixture<MsSqlTestFixture>
     }
 
     [Fact]
+    public async Task FallbackRescan_AlsoRemovesRowsDeletedWhileTheChainWasBroken()
+    {
+        const string table = "ChangeTrackingReconcileTestTable";
+        await using var parent = await OpenAsync(_fixture.ParentConnectionString);
+        await using var child = await OpenAsync(_fixture.ChildConnectionString);
+
+        await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 1, "One");
+        await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 2, "Two");
+        await SyncerTestHelpers.InsertChangeTrackingTestRowAsync(parent, table, 3, "Three");
+        var (_, _, syncer) = await BuildAsync(parent, child, table);
+        await syncer.SyncAsync(parent, child, SyncConstants.InitialDate, CancellationToken.None);
+        await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
+
+        // The delete is recorded by CT, then CT is disabled and re-enabled, which throws that
+        // tracking data away - CT alone can never report this delete any more.
+        await ExecuteAsync(parent, $"DELETE FROM [dbo].[{table}] WHERE [Id] = 3");
+        await ExecuteAsync(parent, $"ALTER TABLE [dbo].[{table}] DISABLE CHANGE_TRACKING");
+        await ExecuteAsync(parent, $"ALTER TABLE [dbo].[{table}] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF)");
+
+        var afterReenable = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
+
+        Assert.Equal(3, afterReenable.RowsSynced); // 2 rows re-scanned + 1 orphan deleted
+        Assert.Equal(0, afterReenable.RowsErrored);
+        Assert.Equal(0, await CountAsync(child, table, 3));
+        Assert.Equal("One", await ReadValueAsync(child, table, 1));
+    }
+
+    [Fact]
     public async Task ResumedInitialSync_KeepsOriginalBaseline()
     {
         const string table = "ChangeTrackingBaselineTestTable";

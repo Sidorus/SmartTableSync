@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace SmartTableSync.Options;
 
 public static class SyncSettingsServiceCollectionExtensions
@@ -43,5 +45,13 @@ public static class SyncSettingsServiceCollectionExtensions
             .GetChildren()
             .Where(c => Enum.TryParse<IncrementalStrategy>(c.Value, ignoreCase: true, out _))
             .ToDictionary(c => c.Key, c => Enum.Parse<IncrementalStrategy>(c.Value!, ignoreCase: true), StringComparer.OrdinalIgnoreCase);
+
+        // Whole hours, so it's easy to enter as one App Setting. Missing, unparseable or
+        // negative keeps the 24-hour default; 0 explicitly disables the periodic run.
+        options.ChangeTrackingReconcileInterval =
+            int.TryParse(configuration["SmartTableSync:ChangeTrackingReconcileIntervalHours"], NumberStyles.None,
+                CultureInfo.InvariantCulture, out var reconcileHours)
+                ? TimeSpan.FromHours(reconcileHours)
+                : TimeSpan.FromHours(24);
     }
 }

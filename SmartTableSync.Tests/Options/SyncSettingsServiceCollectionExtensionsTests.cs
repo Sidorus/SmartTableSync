@@ -120,6 +120,43 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void ChangeTrackingReconcileIntervalHours_BindsWholeHours()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = "6",
+        });
+
+        Assert.Equal(TimeSpan.FromHours(6), settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Fact]
+    public void ChangeTrackingReconcileIntervalHours_Zero_DisablesThePeriodicRun()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = "0",
+        });
+
+        Assert.Equal(TimeSpan.Zero, settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("-5")]
+    [InlineData("daily")]
+    public void ChangeTrackingReconcileIntervalHours_MissingOrInvalid_DefaultsTo24Hours(string? value)
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingReconcileIntervalHours"] = value,
+        });
+
+        Assert.Equal(TimeSpan.FromHours(24), settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Fact]
     public void IncrementalStrategyOverrides_Missing_IsEmpty()
     {
         var settings = Bind([]);

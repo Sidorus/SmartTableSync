@@ -15,6 +15,7 @@ public static class IncrementalRunnerFactory
             IncrementalStrategy.SqlChangeTracking => new ChangeTrackingSyncRunner(
                 profile, commandFactory, mergeStrategy,
                 new FullRescanSyncRunner(profile, plan, commandFactory, mergeStrategy, logger),
+                new DeleteReconciler(profile, commandFactory, logger),
                 syncState, logger),
             _ => throw new NotSupportedException($"Unhandled incremental strategy: {plan.IncrementalStrategy}"),
         };

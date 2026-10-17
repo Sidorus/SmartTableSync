@@ -13,6 +13,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
     private readonly IReadOnlyList<string> _tableNames;
     private readonly SyncMode _mode;
+    private readonly TimeSpan _changeTrackingReconcileInterval;
     private readonly ISyncTableProvisioner _provisioner;
     private readonly ITableSyncerFactory _syncerFactory;
     private readonly IChildDdlProvisioner _childDdlProvisioner;
@@ -21,8 +22,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
-    // Also instance, not static — see rationale above _runLock.
-    private DateTime _lastReconcileUtc = DateTime.MinValue;
+    // Also instance, not static — see rationale above _runLock. Per table, because tables on
+    // different incremental strategies reconcile on different intervals. A table missing from
+    // the dictionary has never reconciled in this process, so it's due on its first run.
+    private readonly Dictionary<string, DateTime> _lastReconcileUtc = new(StringComparer.OrdinalIgnoreCase);
 
     public SyncOrchestrator(
         ISyncTableProvisioner provisioner,
@@ -43,6 +46,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 "SmartTableSync:TableList must list at least one table name.");
 
         _mode = settings.Value.Mode;
+        _changeTrackingReconcileInterval = settings.Value.ChangeTrackingReconcileInterval;
         _provisioner = provisioner;
         _syncerFactory = syncerFactory;
         _childDdlProvisioner = childDdlProvisioner;
@@ -71,21 +75,11 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 await _childDdlProvisioner.EnsureInfrastructureExistsAsync(childProvisioning, ct);
             }
 
-            var shouldReconcile = DateTime.UtcNow - _lastReconcileUtc >= _reconcileInterval;
-            var allTablesSucceeded = true;
-
             foreach (var tableName in _tableNames)
             {
                 ct.ThrowIfCancellationRequested();
-                var succeeded = await SyncTableAsync(tableName, shouldReconcile, ct);
-                allTablesSucceeded &= succeeded;
+                await SyncTableAsync(tableName, ct);
             }
-
-            // Only advance if every table's pass (sync + reconcile) actually succeeded this
-            // cycle — otherwise a table whose reconcile threw would silently wait a full extra
-            // hour before its next reconcile attempt, even though nothing was actually resolved.
-            if (shouldReconcile && allTablesSucceeded)
-                _lastReconcileUtc = DateTime.UtcNow;
 
             _logger.LogInformation("SmartTableSync run completed at {Time}", DateTimeOffset.UtcNow);
         }
@@ -95,7 +89,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
     }
 
-    private async Task<bool> SyncTableAsync(string tableName, bool shouldReconcile, CancellationToken ct)
+    private async Task SyncTableAsync(string tableName, CancellationToken ct)
     {
         try
         {
@@ -122,6 +116,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             }
 
             var syncer = _syncerFactory.Create(profile, plan);
+            var shouldReconcile = IsReconcileDue(tableName, plan.IncrementalStrategy);
 
             // Use the parent DB clock so LastSyncDate is comparable to column LastUpdate
             // values that SQL Server stamped — eliminates any app-server clock skew gap.
@@ -161,13 +156,35 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 _metrics.SyncLag(result.TableName, syncStartedAt - lastSync);
             }
 
-            return true;
+            // Only advance once this table's whole pass (sync + reconcile) succeeded - a table
+            // whose reconcile threw must not wait a full interval before its next attempt.
+            if (shouldReconcile)
+            {
+                _lastReconcileUtc[tableName] = DateTime.UtcNow;
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "{Table}: sync failed — will retry on next run", tableName);
+        }
+    }
+
+    // SqlChangeTracking tables get deletes from CT itself every cycle, so their full key-set
+    // comparison is only a rare safety net (SyncSettings.ChangeTrackingReconcileInterval,
+    // zero = never). Every other strategy has no other source of deletes and stays hourly.
+    private bool IsReconcileDue(string tableName, IncrementalStrategy strategy)
+    {
+        var interval = strategy == IncrementalStrategy.SqlChangeTracking
+            ? _changeTrackingReconcileInterval
+            : _reconcileInterval;
+
+        if (interval <= TimeSpan.Zero)
+        {
             return false;
         }
+
+        var lastReconcileUtc = _lastReconcileUtc.GetValueOrDefault(tableName, DateTime.MinValue);
+        return DateTime.UtcNow - lastReconcileUtc >= interval;
     }
 
     private static async Task<DateTime> GetDbUtcNowAsync(SqlConnection connection, CancellationToken ct)

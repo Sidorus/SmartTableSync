@@ -46,6 +46,14 @@ CREATE TABLE [dbo].[ChangeTrackingBaselineTestTable](
 )
 GO
 
+CREATE TABLE [dbo].[ChangeTrackingReconcileTestTable](
+	[Id] [int] NOT NULL,
+	[Value] [nvarchar](200) NULL,
+	[LastUpdate] [datetime] NULL,
+ CONSTRAINT [PK_ChangeTrackingReconcileTestTable] PRIMARY KEY CLUSTERED ([Id] ASC)
+)
+GO
+
 CREATE TABLE [dbo].[ChangeTrackingOverrideTestTable](
 	[Id] [int] NOT NULL,
 	[Value] [nvarchar](200) NULL,

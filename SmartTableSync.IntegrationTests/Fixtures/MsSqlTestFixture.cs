@@ -63,6 +63,7 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
             ALTER TABLE [dbo].[ChangeTrackingInFlightTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
             ALTER TABLE [dbo].[ChangeTrackingRescanTestTable]   ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
             ALTER TABLE [dbo].[ChangeTrackingBaselineTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+            ALTER TABLE [dbo].[ChangeTrackingReconcileTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
             ALTER TABLE [dbo].[ChangeTrackingOverrideTestTable] ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
             """, "Change Tracking setup (parent)");
 
