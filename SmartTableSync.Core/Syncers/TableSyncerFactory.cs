@@ -1,5 +1,7 @@
 namespace SmartTableSync.Syncers;
 
+/// <summary>Composition root for one table's syncer: wires the plan's merge strategy and
+/// incremental strategy (from the IncrementalStrategies registry) into a ConfigurableTableSyncer.</summary>
 public sealed class TableSyncerFactory : ITableSyncerFactory
 {
     private readonly IBatchLogger _batchLogger;
@@ -19,31 +21,29 @@ public sealed class TableSyncerFactory : ITableSyncerFactory
     public ITableSyncer Create(TableProfile profile, SyncPlan plan)
     {
         var logger = _loggerFactory.CreateLogger<ConfigurableTableSyncer>();
-        var commandFactory = new TableSyncCommandFactory(profile, plan);
+        var commands = new TableSyncCommandFactory(profile, plan);
         var mergeStrategy = BatchMergeStrategyFactory.Create(profile, plan, logger);
+        var strategy = IncrementalStrategies.For(plan.IncrementalStrategy);
 
-        // Keyed by SyncPhase so ConfigurableTableSyncer's lookup reads by name, not position.
-        // Lazy so whichever phase doesn't apply to a given SyncAsync call is never constructed.
+        // Lazy: only the phase a given run needs is ever built.
         var syncRunners = new Dictionary<SyncPhase, Lazy<ISyncRunner>>
         {
-            [SyncPhase.Initial] = new(() => CreateInitialRunner(profile, plan, commandFactory, mergeStrategy, logger)),
-            [SyncPhase.Incremental] = new(() => IncrementalRunnerFactory.Create(profile, plan, commandFactory, mergeStrategy, _syncState, _metrics, logger)),
+            [SyncPhase.Initial] = new(() => CreateInitialRunner(profile, plan, commands, mergeStrategy, strategy.Baseline, logger)),
+            [SyncPhase.Incremental] = new(() => strategy.CreateRunner(
+                new RunnerServices(profile, plan, commands, mergeStrategy, _syncState, _metrics, logger))),
         };
 
-        var deleteReconciler = new DeleteReconciler(profile, commandFactory, logger);
-
-        return new ConfigurableTableSyncer(profile.TableName, syncRunners, deleteReconciler);
+        return new ConfigurableTableSyncer(profile.TableName, syncRunners, new DeleteReconciler(profile, commands, logger));
     }
 
-    // A SqlChangeTracking table records its CT baseline before the initial copy starts, so the
-    // first incremental cycle reads only what changed since then (see ChangeTrackingBaselineSyncRunner).
     private ISyncRunner CreateInitialRunner(
-        TableProfile profile, SyncPlan plan, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy, ILogger logger)
+        TableProfile profile, SyncPlan plan, TableSyncCommandFactory commands, IBatchMergeStrategy mergeStrategy,
+        IncrementalBaseline? baseline, ILogger logger)
     {
-        var initialSyncRunner = new InitialSyncRunner(profile, plan, commandFactory, mergeStrategy, _batchLogger, logger);
+        var initialSyncRunner = new InitialSyncRunner(profile, plan, commands, mergeStrategy, _batchLogger, logger);
 
-        return plan.IncrementalStrategy == IncrementalStrategy.SqlChangeTracking
-            ? new ChangeTrackingBaselineSyncRunner(initialSyncRunner, profile.TableName, _syncState, logger)
-            : initialSyncRunner;
+        return baseline is null
+            ? initialSyncRunner
+            : new BaselineCapturingSyncRunner(initialSyncRunner, baseline, profile.TableName, _syncState, logger);
     }
 }

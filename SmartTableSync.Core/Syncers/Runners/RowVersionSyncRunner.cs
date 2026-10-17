@@ -1,83 +1,59 @@
 namespace SmartTableSync.Syncers.Runners;
 
-/// <summary>Runs the incremental-sync path for a table with a rowversion/timestamp column —
-/// an exact, engine-maintained cutoff instead of a windowed datetime query. Owns its own
-/// position state entirely via ISyncStateRepository (CustomSyncState.IncrementalPosition),
-/// independent of LastSyncDate, the same way InitialSyncRunner already owns its own
-/// resume-key state via IBatchLogger rather than routing through SyncOrchestrator.</summary>
-public sealed class RowVersionSyncRunner : ISyncRunner
+/// <summary>RowVersion strategy: rows whose rowversion column is at or after the stored
+/// position. SQL Server maintains that column on every write, so no change can be missed by
+/// application code forgetting to update it. The position lives in
+/// CustomSyncState.IncrementalPosition as "0x" + hex.</summary>
+public sealed class RowVersionSyncRunner : ChangeWindowSyncRunner<byte[]>
 {
-    private readonly TableProfile _profile;
-    private readonly TableSyncCommandFactory _commandFactory;
-    private readonly IBatchMergeStrategy _mergeStrategy;
+    private const string HexPrefix = "0x";
+
     private readonly ISyncStateRepository _syncState;
-    private readonly ILogger _logger;
 
     public RowVersionSyncRunner(
-        TableProfile profile, TableSyncCommandFactory commandFactory, IBatchMergeStrategy mergeStrategy,
+        TableProfile profile, SyncPlan plan, TableSyncCommandFactory commands, IBatchMergeStrategy mergeStrategy,
         ISyncStateRepository syncState, ILogger logger)
+        : base(profile, plan, commands, mergeStrategy, logger)
     {
-        _profile = profile;
-        _commandFactory = commandFactory;
-        _mergeStrategy = mergeStrategy;
         _syncState = syncState;
-        _logger = logger;
     }
 
-    // lastSyncDate is unused — this strategy's position is CustomSyncState.IncrementalPosition,
-    // a separate, opaque value this runner owns entirely. Present only so this satisfies
-    // ISyncRunner.
-    public async Task<(int synced, int errored, bool retryable)> RunAsync(
+    /// <summary>MIN_ACTIVE_ROWVERSION(), not @@DBTS: a transaction still in flight commits with
+    /// a rowversion at or above this value, so a window ending here never skips it. @@DBTS (the
+    /// last value handed out) can be above such a row and would skip it forever.</summary>
+    public static async Task<byte[]> CaptureMinActiveRowVersionAsync(SqlConnection parent, CancellationToken ct)
+    {
+        await using var capture = new SqlCommand("SELECT MIN_ACTIVE_ROWVERSION()", parent);
+        return (byte[])(await capture.ExecuteScalarAsync(ct))!;
+    }
+
+    public static string FormatPosition(byte[] rowVersion) => HexPrefix + Convert.ToHexString(rowVersion);
+
+    public static bool IsRowVersionPosition(string? storedPosition) =>
+        storedPosition is not null && storedPosition.StartsWith(HexPrefix, StringComparison.OrdinalIgnoreCase);
+
+    // The new position is captured BEFORE reading, so rows committed during the read fall
+    // inside the next window.
+    protected override async Task<ChangeWindow<byte[]>> OpenWindowAsync(
         SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
     {
-        var persistedPosition = await _syncState.GetIncrementalPositionAsync(child, _profile.TableName, ct);
-        // A position that isn't "0x..." hex was written by another strategy (e.g.
-        // ChangeTrackingSyncRunner's "CT:<version>") before this table switched to RowVersion —
-        // treat it like no position at all (start from 0x00...00) rather than misparse it.
-        var lastRowVersion = persistedPosition is null || !persistedPosition.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-            ? new byte[8]
-            : FromHexString(persistedPosition);
+        var storedPosition = await _syncState.GetIncrementalPositionAsync(child, Profile.TableName, ct);
+        var to = await CaptureMinActiveRowVersionAsync(parent, ct);
 
-        // Captured BEFORE the read, not after — any transaction still in flight right now is
-        // guaranteed to commit with a rowversion >= this bound, so it remains visible to the
-        // NEXT cycle's "> position" filter. Capturing after the read (or using @@DBTS, the
-        // last-assigned rather than lowest-in-flight version) risks permanently skipping a
-        // row that committed between the read and the capture.
-        var newPosition = await GetMinActiveRowVersionAsync(parent, ct);
-
-        await using var cmd = _commandFactory.BuildRowVersionIncrementalCommand(parent, lastRowVersion);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        using var batch = await DataTableLoader.LoadAsync(reader, ct);
-
-        if (batch.Rows.Count == 0)
-        {
-            await _syncState.UpdateIncrementalPositionAsync(child, _profile.TableName, ToHexString(newPosition), ct);
-            return (0, 0, false);
-        }
-
-        var (synced, errored, retryable) = await _mergeStrategy.MergeBatchAsync(batch, child, ct);
-
-        // Only advance once this window is fully processed — a retryable error (e.g. FK
-        // timing race) must keep the old position so the failed rows remain inside the next
-        // cycle's "> position" filter and get retried. Unlike the datetime strategy's 1-minute
-        // overlap, rowversion filtering is an exact cutoff with no cushion of its own, so
-        // not advancing here is the only thing that prevents permanently losing those rows.
-        // MERGE is idempotent, so re-processing this window's already-succeeded rows next
-        // cycle is harmless.
-        if (!retryable)
-            await _syncState.UpdateIncrementalPositionAsync(child, _profile.TableName, ToHexString(newPosition), ct);
-
-        return (synced, errored, retryable);
+        return new ChangeWindow<byte[]>(From: ParsePosition(storedPosition), To: to);
     }
 
-    private static async Task<byte[]> GetMinActiveRowVersionAsync(SqlConnection parent, CancellationToken ct)
-    {
-        await using var cmd = new SqlCommand("SELECT MIN_ACTIVE_ROWVERSION()", parent);
-        return (byte[])(await cmd.ExecuteScalarAsync(ct))!;
-    }
+    protected override Task<DataTable> ReadPageAsync(
+        SqlConnection parent, ChangeWindow<byte[]> window, string? afterKey, int pageSize, CancellationToken ct) =>
+        LoadPageAsync(Commands.BuildRowVersionPageCommand(parent, window.From, afterKey, pageSize), ct);
 
-    private static string ToHexString(byte[] bytes) => "0x" + Convert.ToHexString(bytes);
+    protected override Task CommitWindowAsync(SqlConnection child, ChangeWindow<byte[]> window, CancellationToken ct) =>
+        _syncState.UpdateIncrementalPositionAsync(child, Profile.TableName, FormatPosition(window.To), ct);
 
-    private static byte[] FromHexString(string hex) =>
-        Convert.FromHexString(hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? hex[2..] : hex);
+    // No position yet, or one written by another strategy before this table switched to
+    // RowVersion (e.g. Change Tracking's "CT:<version>"): start from the lowest rowversion.
+    private static byte[] ParsePosition(string? storedPosition) =>
+        IsRowVersionPosition(storedPosition)
+            ? Convert.FromHexString(storedPosition![HexPrefix.Length..])
+            : new byte[8];
 }

@@ -1,14 +1,12 @@
 namespace SmartTableSync.Syncers.MergeStrategies;
 
-/// <summary>
-/// Strategy for merging one already-loaded batch of parent rows into the child table.
-/// Picked once per table by BatchMergeStrategyFactory from SyncPlan.MergeStrategy — Tvp
-/// (one stored-procedure call via a table-valued parameter) or RowByRow (one call per row,
-/// for FK-timing isolation or oversized-row isolation) — and shared by both
-/// InitialSyncRunner (PK-violation fallback) and IncrementalSyncRunner (every batch).
-/// </summary>
+/// <summary>Merges one loaded batch of parent rows into the child table (insert or update).
+/// Tvp sends the whole batch in one stored-procedure call; RowByRow calls the procedure once
+/// per row so one bad row can't fail the rest. Chosen per table by BatchMergeStrategyFactory
+/// from SyncPlan.MergeStrategy.</summary>
 public interface IBatchMergeStrategy
 {
-    Task<(int synced, int errored, bool retryable)> MergeBatchAsync(
-        DataTable batch, SqlConnection child, CancellationToken ct);
+    /// <summary>Throws only for a failure of the whole batch; per-row failures are counted in
+    /// the returned outcome.</summary>
+    Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct);
 }

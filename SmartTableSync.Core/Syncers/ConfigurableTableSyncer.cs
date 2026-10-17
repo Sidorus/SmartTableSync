@@ -36,10 +36,10 @@ public sealed class ConfigurableTableSyncer : ITableSyncer
     {
         var stopwatch = Stopwatch.StartNew();
         var isInitial = SyncConstants.IsInitial(lastSyncDate);
-        var runner = GetSyncRunner(isInitial);
-        var (synced, errored, hasRetryable) = await runner.RunAsync(parent, child, lastSyncDate, ct);
+        var outcome = await GetSyncRunner(isInitial).RunAsync(parent, child, lastSyncDate, ct);
 
-        return new SyncResult(TableName, synced, errored, hasRetryable, isInitial, stopwatch.Elapsed);
+        return new SyncResult(
+            TableName, outcome.Merged, outcome.Errored, outcome.HasRetryableErrors, isInitial, stopwatch.Elapsed, outcome.Deleted);
     }
 
     public Task<int> ReconcileDeletesAsync(

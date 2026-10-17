@@ -12,7 +12,7 @@ public class ChangeTrackingColumnResolverTests
         PrimaryKeyColumns: ["Id"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 100,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -24,7 +24,7 @@ public class ChangeTrackingColumnResolverTests
     {
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false), new ColumnProfile("LastUpdate", "datetime", 8, false));
 
-        Assert.Equal("LastUpdate", ChangeTrackingColumnResolver.Resolve(profile, NoConfig));
+        Assert.Equal("LastUpdate", TimestampColumnResolver.Resolve(profile, NoConfig));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class ChangeTrackingColumnResolverTests
     {
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false));
 
-        Assert.Null(ChangeTrackingColumnResolver.Resolve(profile, NoConfig));
+        Assert.Null(TimestampColumnResolver.Resolve(profile, NoConfig));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class ChangeTrackingColumnResolverTests
         // FullRescan/AllowFullRescanFor, not a thrown exception.
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false), new ColumnProfile("LastUpdate", "int", 4, false));
 
-        Assert.Null(ChangeTrackingColumnResolver.Resolve(profile, NoConfig));
+        Assert.Null(TimestampColumnResolver.Resolve(profile, NoConfig));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public class ChangeTrackingColumnResolverTests
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false), new ColumnProfile("ModifiedAt", "datetime2", 8, false));
         var config = new Dictionary<string, string> { ["TestTable"] = "ModifiedAt" };
 
-        Assert.Equal("ModifiedAt", ChangeTrackingColumnResolver.Resolve(profile, config));
+        Assert.Equal("ModifiedAt", TimestampColumnResolver.Resolve(profile, config));
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class ChangeTrackingColumnResolverTests
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false));
         var config = new Dictionary<string, string> { ["TestTable"] = "ModifiedAt" };
 
-        Assert.Null(ChangeTrackingColumnResolver.Resolve(profile, config));
+        Assert.Null(TimestampColumnResolver.Resolve(profile, config));
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class ChangeTrackingColumnResolverTests
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false));
         var config = new Dictionary<string, string> { ["TestTable"] = "Id" };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => ChangeTrackingColumnResolver.Resolve(profile, config));
+        var ex = Assert.Throws<InvalidOperationException>(() => TimestampColumnResolver.Resolve(profile, config));
         Assert.Contains("Id", ex.Message);
         Assert.Contains("int", ex.Message);
     }
@@ -80,12 +80,12 @@ public class ChangeTrackingColumnResolverTests
     [Fact]
     public void Resolve_ConfiguredColumnLookupIsCaseInsensitive()
     {
-        // Mirrors how SyncSettings.ChangeTrackingColumns is actually constructed
+        // Mirrors how SyncSettings.TimestampColumns is actually constructed
         // (StringComparer.OrdinalIgnoreCase) - Resolve relies on the dictionary's own
         // comparer rather than normalizing case itself.
         var profile = CreateProfile(new ColumnProfile("Id", "int", 4, false), new ColumnProfile("ModifiedAt", "datetime", 8, false));
         var config = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["testtable"] = "ModifiedAt" };
 
-        Assert.Equal("ModifiedAt", ChangeTrackingColumnResolver.Resolve(profile, config));
+        Assert.Equal("ModifiedAt", TimestampColumnResolver.Resolve(profile, config));
     }
 }

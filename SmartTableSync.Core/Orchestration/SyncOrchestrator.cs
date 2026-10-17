@@ -136,9 +136,11 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             var lastSync = await _syncState.GetLastSyncDateAsync(child, syncer.TableName, ct);
             var result = await syncer.SyncAsync(parent, child, lastSync, ct);
-            var deleted = shouldReconcile
+            // Deletes applied during the pass itself (SqlChangeTracking) plus any found by the
+            // periodic key-set reconciliation.
+            var deleted = result.RowsDeleted + (shouldReconcile
                 ? await syncer.ReconcileDeletesAsync(parent, child, lastSync, ct)
-                : 0;
+                : 0);
 
             // Don't advance the timestamp in two cases:
             // 1. Initial sync had errors — keeps InitialDate so next run re-enters initial sync

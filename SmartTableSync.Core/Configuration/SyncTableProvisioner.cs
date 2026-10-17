@@ -47,16 +47,16 @@ public sealed class SyncTableProvisioner : ISyncTableProvisioner
 
         var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, ct);
 
-        var changeTrackingColumn = ChangeTrackingColumnResolver.Resolve(fullProfile, _settings.Value.ChangeTrackingColumns);
+        var timestampColumn = TimestampColumnResolver.Resolve(fullProfile, _settings.Value.TimestampColumns);
         var allowFullRescan = _settings.Value.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);
         var strategyOverride = _settings.Value.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
         var plan = _heuristic.DerivePlan(
-            fullProfile, new PlanHeuristicOptions(), changeTrackingColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride);
+            fullProfile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride);
 
         var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.HasIncomingForeignKeys);
+            existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.ReferencesOtherTables);
 
         // Preserve any hand-set overrides across re-provisioning — they're reviewable data
         // an operator set deliberately, not something a fresh heuristic run should erase.

@@ -24,7 +24,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["AttributeValueId"],
         IdentityColumn: "AttributeValueId",
         IndexedLobColumns: ["Description"],
-        HasIncomingForeignKeys: true,
+        ReferencesOtherTables: true,
         RowCount: 100,
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -94,7 +94,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["Sku"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 1000,
         AvgRowSizeBytes: 2000,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -150,14 +150,14 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["PricePointId"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 200,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
 
     private static SyncPlan RowVersionTvpPlan() => new(
         "PricePoint", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "PricePointTableType",
-        ChangeTrackingColumn: "RowVer", IncrementalStrategy: IncrementalStrategy.RowVersion);
+        IncrementalColumn: "RowVer", IncrementalStrategy: IncrementalStrategy.RowVersion);
 
     [Fact]
     public void GenerateTvpUdtScript_WithRowVersionColumn_ExcludesItFromTvpType()
@@ -212,7 +212,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["OrderStatusId"],
         IdentityColumn: "OrderStatusId",
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 100,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -309,7 +309,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["LookupCodeId"],
         IdentityColumn: "LookupCodeId",
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -353,7 +353,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["DocumentId", "LanguageCode"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 500,
         AvgRowSizeBytes: 1000,
         MaxLobColumnSizeBytes: new Dictionary<string, long> { ["FileContent"] = 52_000_000 });

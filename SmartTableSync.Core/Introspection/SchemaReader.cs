@@ -21,7 +21,7 @@ public sealed class SchemaReader : ISchemaReader
             PrimaryKeyColumns: primaryKeyColumns,
             IdentityColumn: identityColumn,
             IndexedLobColumns: [],
-            HasIncomingForeignKeys: false,
+            ReferencesOtherTables: false,
             RowCount: 0,
             AvgRowSizeBytes: 0,
             MaxLobColumnSizeBytes: new Dictionary<string, long>())
@@ -35,7 +35,7 @@ public sealed class SchemaReader : ISchemaReader
         var cheap = await GetFingerprintInputsAsync(parent, tableName, ct);
 
         var indexedLobColumns = await GetIndexedLobColumnsAsync(parent, tableName, ct);
-        var hasIncomingForeignKeys = await GetHasIncomingForeignKeysAsync(parent, tableName, ct);
+        var referencesOtherTables = await GetReferencesOtherTablesAsync(parent, tableName, ct);
         var (rowCount, avgRowSizeBytes) = await GetRowCountAndAvgSizeAsync(parent, tableName, ct);
 
         var lobColumnNames = cheap.Columns.Where(c => c.IsLob).Select(c => c.Name).ToList();
@@ -46,7 +46,7 @@ public sealed class SchemaReader : ISchemaReader
         return cheap with
         {
             IndexedLobColumns = indexedLobColumns,
-            HasIncomingForeignKeys = hasIncomingForeignKeys,
+            ReferencesOtherTables = referencesOtherTables,
             RowCount = rowCount,
             AvgRowSizeBytes = avgRowSizeBytes,
             MaxLobColumnSizeBytes = maxLobColumnSizeBytes,
@@ -188,7 +188,7 @@ public sealed class SchemaReader : ISchemaReader
         return columns;
     }
 
-    private static async Task<bool> GetHasIncomingForeignKeysAsync(SqlConnection parent, string tableName, CancellationToken ct)
+    private static async Task<bool> GetReferencesOtherTablesAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {
         const string sql = """
             SELECT CAST(CASE WHEN EXISTS (

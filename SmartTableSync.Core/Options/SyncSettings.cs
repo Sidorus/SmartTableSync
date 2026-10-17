@@ -17,7 +17,7 @@ public sealed class SyncSettings
     /// <summary>Per-table override of the incremental change-tracking column name, keyed by
     /// table name. A table not listed here defaults to "LastUpdate" — today's hardcoded
     /// behavior, reproduced automatically with zero config needed.</summary>
-    public IReadOnlyDictionary<string, string> ChangeTrackingColumns { get; set; } =
+    public IReadOnlyDictionary<string, string> TimestampColumns { get; set; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Tables explicitly allowed to fall back to a full-table re-scan every

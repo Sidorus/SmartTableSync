@@ -37,7 +37,7 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
             BatchSizeOverride: reader.IsDBNull(11) ? null : reader.GetInt32(11),
             BulkCopyTimeoutSecondsOverride: reader.IsDBNull(12) ? null : reader.GetInt32(12),
             RetryableSqlErrorsOverride: reader.IsDBNull(13) ? null : SplitCsvInts(reader.GetString(13)),
-            ChangeTrackingColumn: reader.IsDBNull(14) ? null : reader.GetString(14),
+            IncrementalColumn: reader.IsDBNull(14) ? null : reader.GetString(14),
             IncrementalStrategy: Enum.Parse<IncrementalStrategy>(reader.GetString(15)));
     }
 
@@ -95,7 +95,9 @@ public sealed class SyncTableConfigRepository : ISyncTableConfigRepository
         cmd.AddParam("@BulkCopyTimeoutSecondsOverride", SqlDbType.Int, config.BulkCopyTimeoutSecondsOverride);
         cmd.AddParam("@RetryableSqlErrorsOverride", SqlDbType.NVarChar,
             config.RetryableSqlErrorsOverride is null ? null : string.Join(",", config.RetryableSqlErrorsOverride), 200);
-        cmd.AddParam("@ChangeTrackingColumn", SqlDbType.NVarChar, config.ChangeTrackingColumn, 100);
+        // The column keeps its original name, ChangeTrackingColumn, so existing databases need no
+        // migration; in code it is IncrementalColumn, to avoid confusion with SQL Server Change Tracking.
+        cmd.AddParam("@ChangeTrackingColumn", SqlDbType.NVarChar, config.IncrementalColumn, 100);
         cmd.AddParam("@IncrementalStrategy", SqlDbType.NVarChar, config.IncrementalStrategy.ToString(), 20);
 
         await cmd.ExecuteNonQueryAsync(ct);

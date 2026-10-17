@@ -7,7 +7,7 @@ namespace SmartTableSync.Introspection;
 /// Produced two ways — see ISchemaReader:
 ///   - GetFingerprintInputsAsync: Columns + PrimaryKeyColumns + IdentityColumn only
 ///     (cheap, catalog-metadata-only — safe to run on every cold start to detect drift).
-///   - ProfileTableAsync: the above plus IndexedLobColumns, HasIncomingForeignKeys,
+///   - ProfileTableAsync: the above plus IndexedLobColumns, ReferencesOtherTables,
 ///     RowCount, AvgRowSizeBytes, MaxLobColumnSizeBytes (adds row/size sampling —
 ///     only run when (re)provisioning is actually needed).
 /// </summary>
@@ -17,7 +17,7 @@ public sealed record TableProfile(
     IReadOnlyList<string> PrimaryKeyColumns,
     string? IdentityColumn,
     IReadOnlyList<string> IndexedLobColumns,
-    bool HasIncomingForeignKeys,
+    bool ReferencesOtherTables,
     long RowCount,
     long AvgRowSizeBytes,
     IReadOnlyDictionary<string, long> MaxLobColumnSizeBytes)

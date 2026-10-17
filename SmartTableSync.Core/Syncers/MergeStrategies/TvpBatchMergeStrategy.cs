@@ -19,8 +19,7 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
         _plan = plan;
     }
 
-    public async Task<(int synced, int errored, bool retryable)> MergeBatchAsync(
-        DataTable batch, SqlConnection child, CancellationToken ct)
+    public async Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct)
     {
         await using var sp = new SqlCommand($"[dbo].[sp_Sync{_profile.TableName}Batch]", child)
         {
@@ -35,7 +34,7 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
         });
 
         await sp.ExecuteNonQueryAsync(ct);
-        return (batch.Rows.Count, 0, false);
+        return SyncOutcome.None with { Merged = batch.Rows.Count };
     }
 
     // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a real

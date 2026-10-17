@@ -18,13 +18,13 @@ public sealed record SyncTableConfig(
     int? BatchSizeOverride,
     int? BulkCopyTimeoutSecondsOverride,
     IReadOnlyList<int>? RetryableSqlErrorsOverride,
-    string? ChangeTrackingColumn = null,
+    string? IncrementalColumn = null,
     IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp)
 {
     /// <summary>Maps to a SyncPlan, applying any non-null override over the corresponding
     /// heuristically-derived value. BulkCopyOptions isn't stored separately — it's fully
     /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.
-    /// ChangeTrackingColumn/IncrementalStrategy have no override — the one configuration
+    /// IncrementalColumn/IncrementalStrategy have no override — the one configuration
     /// surface for them is SyncSettings (app config), resolved once at provisioning time.
     ///
     /// TvpTypeName must be derived from the RESOLVED merge strategy, not passed through
@@ -51,7 +51,7 @@ public sealed record SyncTableConfig(
             BulkCopyTimeoutSeconds: BulkCopyTimeoutSecondsOverride ?? BulkCopyTimeoutSeconds,
             RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
             TvpTypeName: resolvedTvpTypeName,
-            ChangeTrackingColumn: ChangeTrackingColumn,
+            IncrementalColumn: IncrementalColumn,
             IncrementalStrategy: IncrementalStrategy);
     }
 
@@ -78,7 +78,7 @@ public sealed record SyncTableConfig(
         BatchSizeOverride: batchSizeOverride,
         BulkCopyTimeoutSecondsOverride: bulkCopyTimeoutSecondsOverride,
         RetryableSqlErrorsOverride: retryableSqlErrorsOverride,
-        ChangeTrackingColumn: plan.ChangeTrackingColumn,
+        IncrementalColumn: plan.IncrementalColumn,
         IncrementalStrategy: plan.IncrementalStrategy);
 
     /// <summary>An operator overriding MergeStrategy to RowByRow for FK-timing reasons expects
@@ -88,8 +88,8 @@ public sealed record SyncTableConfig(
     /// unless the operator also knows to set RetryableSqlErrorsOverride separately. Pure, so
     /// it's unit-testable without the live SqlConnection EnsureProvisionedAsync needs.</summary>
     public static IReadOnlyList<int>? ResolveRetryableSqlErrorsOverride(
-        MergeStrategy? mergeStrategyOverride, IReadOnlyList<int>? existingRetryableSqlErrorsOverride, bool hasIncomingForeignKeys) =>
-        mergeStrategyOverride == MergeStrategy.RowByRow && existingRetryableSqlErrorsOverride is null && hasIncomingForeignKeys
+        MergeStrategy? mergeStrategyOverride, IReadOnlyList<int>? existingRetryableSqlErrorsOverride, bool referencesOtherTables) =>
+        mergeStrategyOverride == MergeStrategy.RowByRow && existingRetryableSqlErrorsOverride is null && referencesOtherTables
             ? [547]
             : existingRetryableSqlErrorsOverride;
 }

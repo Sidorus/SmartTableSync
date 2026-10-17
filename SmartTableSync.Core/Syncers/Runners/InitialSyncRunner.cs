@@ -37,8 +37,7 @@ public sealed class InitialSyncRunner : ISyncRunner
     // lastSyncDate is unused — initial sync always resumes from the persisted batch-log
     // cursor, never from the caller's timestamp. Present only so this satisfies ISyncRunner,
     // the interface ConfigurableTableSyncer holds both this and IncrementalSyncRunner behind.
-    public async Task<(int synced, int errored, bool retryable)> RunAsync(
-        SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
+    public async Task<SyncOutcome> RunAsync(SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
     {
         var tableName = _profile.TableName;
         var resumeKey = await _batchLogger.GetResumeKeyAsync(child, tableName, ct);
@@ -54,7 +53,7 @@ public sealed class InitialSyncRunner : ISyncRunner
 
         while (true)
         {
-            await using var cmd = _commandFactory.BuildInitialBatchCommand(parent, resumeKey, _batchSize);
+            await using var cmd = _commandFactory.BuildFullTablePageCommand(parent, resumeKey, _batchSize);
             var logId = await _batchLogger.LogBatchStartAsync(child, tableName, batchNum, resumeKey, ct);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             using var batch = await DataTableLoader.LoadAsync(reader, ct);
@@ -105,16 +104,16 @@ public sealed class InitialSyncRunner : ISyncRunner
                     tableName, batchNum, currentKey);
                 try
                 {
-                    var (s, e, _) = await _mergeStrategy.MergeBatchAsync(batch, child, ct);
-                    await _batchLogger.LogBatchCompleteAsync(child, logId, s, e, currentKey, CancellationToken.None);
-                    thisRunSynced += s;
-                    totalErr += e;
+                    var merged = await _mergeStrategy.MergeBatchAsync(batch, child, ct);
+                    await _batchLogger.LogBatchCompleteAsync(child, logId, merged.Merged, merged.Errored, currentKey, CancellationToken.None);
+                    thisRunSynced += merged.Merged;
+                    totalErr += merged.Errored;
                     resumeKey = currentKey;
                     batchOk = true;
 
                     _logger.LogInformation(
                         "{Table} batch {N}: {Count} rows merged (fallback), key '{Key}', {Ms} ms — {Total} cumulative",
-                        tableName, batchNum, s, currentKey, sw.ElapsedMilliseconds, totalPrior + thisRunSynced);
+                        tableName, batchNum, merged.Merged, currentKey, sw.ElapsedMilliseconds, totalPrior + thisRunSynced);
                 }
                 catch (Exception mergeEx) when (mergeEx is not OperationCanceledException)
                 {
@@ -137,6 +136,6 @@ public sealed class InitialSyncRunner : ISyncRunner
             batchNum++;
         }
 
-        return (thisRunSynced, totalErr, false);
+        return new SyncOutcome(thisRunSynced, Deleted: 0, totalErr, HasRetryableErrors: false);
     }
 }

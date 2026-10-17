@@ -15,12 +15,19 @@ namespace SmartTableSync.Syncers.Keys;
 /// </summary>
 public static class KeysetPredicateBuilder
 {
-    public static string Build(IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<string> parameterNames)
+    /// <param name="tableAlias">Optional alias (e.g. "CT") to qualify every key column with,
+    /// for queries that join more than one table.</param>
+    public static string Build(IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<string> parameterNames, string? tableAlias = null)
     {
         if (primaryKeyColumns.Count == 0)
+        {
             throw new ArgumentException("At least one primary key column is required.", nameof(primaryKeyColumns));
+        }
+
         if (primaryKeyColumns.Count != parameterNames.Count)
+        {
             throw new ArgumentException("primaryKeyColumns and parameterNames must have the same length.");
+        }
 
         var clauses = new List<string>(primaryKeyColumns.Count);
 
@@ -28,8 +35,11 @@ public static class KeysetPredicateBuilder
         {
             var parts = new List<string>(i + 1);
             for (var j = 0; j < i; j++)
-                parts.Add($"[{primaryKeyColumns[j]}] = {parameterNames[j]}");
-            parts.Add($"[{primaryKeyColumns[i]}] > {parameterNames[i]}");
+            {
+                parts.Add($"{Column(primaryKeyColumns[j], tableAlias)} = {parameterNames[j]}");
+            }
+
+            parts.Add($"{Column(primaryKeyColumns[i], tableAlias)} > {parameterNames[i]}");
 
             clauses.Add(i == 0 ? parts[0] : $"({string.Join(" AND ", parts)})");
         }
@@ -39,8 +49,8 @@ public static class KeysetPredicateBuilder
 
     /// <summary>Builds the matching "ORDER BY c1, c2, ..." clause — keyset pagination
     /// requires the query's sort order to match the predicate's column order exactly.</summary>
-    public static string BuildOrderBy(IReadOnlyList<string> primaryKeyColumns) =>
-        string.Join(", ", primaryKeyColumns.Select(c => $"[{c}]"));
+    public static string BuildOrderBy(IReadOnlyList<string> primaryKeyColumns, string? tableAlias = null) =>
+        string.Join(", ", primaryKeyColumns.Select(c => Column(c, tableAlias)));
 
     /// <summary>Builds the "key as a single string" SELECT expression used to compare
     /// parent/child key sets for delete reconciliation: no CAST for a lone string-typed key
@@ -52,4 +62,7 @@ public static class KeysetPredicateBuilder
         var parts = primaryKeyColumns.Select(c => isStringColumn(c) ? $"[{c}]" : $"CAST([{c}] AS NVARCHAR(20))");
         return string.Join(" + '|' + ", parts);
     }
+
+    private static string Column(string name, string? tableAlias) =>
+        tableAlias is null ? SqlIdentifier.Quote(name) : $"{tableAlias}.{SqlIdentifier.Quote(name)}";
 }

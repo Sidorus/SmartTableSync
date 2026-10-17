@@ -25,8 +25,8 @@ public enum IncrementalStrategy
     /// enables it). Reads CHANGETABLE(CHANGES ...) since the last version — only changed rows,
     /// deletes included, with commit-time versions (no in-flight-transaction workaround needed).
     /// Auto-detected and preferred over RowVersion whenever CT is enabled. Named
-    /// "SqlChangeTracking" rather than "ChangeTracking" because SyncSettings.ChangeTrackingColumns /
-    /// SyncPlan.ChangeTrackingColumn already use "change tracking" for Timestamp's datetime column.
+    /// "SqlChangeTracking" rather than "ChangeTracking" because SyncSettings.TimestampColumns /
+    /// SyncPlan.IncrementalColumn already use "change tracking" for Timestamp's datetime column.
     /// Position tracking (CustomSyncState.IncrementalPosition) is owned by
     /// ChangeTrackingSyncRunner.</summary>
     SqlChangeTracking,

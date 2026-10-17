@@ -17,11 +17,10 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
         _logger = logger;
     }
 
-    public async Task<(int synced, int errored, bool retryable)> MergeBatchAsync(
-        DataTable batch, SqlConnection child, CancellationToken ct)
+    public async Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct)
     {
-        int synced = 0, errored = 0;
-        bool retryable = false;
+        int merged = 0, errored = 0;
+        var retryable = false;
 
         foreach (DataRow row in batch.Rows)
         {
@@ -29,7 +28,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             try
             {
                 await MergeSingleRowAsync(row, child, ct);
-                synced++;
+                merged++;
             }
             catch (Exception ex) when (IsExpectedError(ex))
             {
@@ -44,7 +43,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             }
         }
 
-        return (synced, errored, retryable);
+        return new SyncOutcome(merged, Deleted: 0, errored, retryable);
     }
 
     private bool IsExpectedError(Exception ex) =>

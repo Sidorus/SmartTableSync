@@ -54,7 +54,7 @@ public class RowVersionStrategyTests : IClassFixture<MsSqlTestFixture>
         var (_, plan) = await ProvisionAsync(parent, child);
 
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
-        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+        Assert.Equal("RowVer", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -88,15 +88,13 @@ public class RowVersionStrategyTests : IClassFixture<MsSqlTestFixture>
         // no error inserting it (the value itself is engine-assigned, not copied from parent).
         Assert.NotNull(await ReadRowVerAsync(child, firstId));
 
-        // First incremental cycle: no persisted position yet, so this is the bootstrap call -
-        // it starts from "beginning of time" (0x00...00) and therefore re-processes the row
-        // initial sync already carried. Harmless (idempotent MERGE via TVP - also proves
-        // SqlArtifactGenerator's TVP-procedure rowversion exclusion works), and establishes a
-        // real position for subsequent cycles.
-        var bootstrapResult = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
-        Assert.False(bootstrapResult.IsInitialSync);
-        Assert.True(bootstrapResult.RowsSynced >= 1);
-        Assert.Equal(0, bootstrapResult.RowsErrored);
+        // Initial sync recorded MIN_ACTIVE_ROWVERSION() as the baseline before copying, so the
+        // first incremental pass reads nothing instead of re-reading every row.
+        Assert.StartsWith("0x", await new SyncStateRepository().GetIncrementalPositionAsync(child, TableName));
+        var firstIncremental = await syncer.SyncAsync(parent, child, DateTime.UtcNow, CancellationToken.None);
+        Assert.False(firstIncremental.IsInitialSync);
+        Assert.Equal(0, firstIncremental.RowsSynced);
+        Assert.Equal(0, firstIncremental.RowsErrored);
 
         // Now make real changes: a new row and an update to the existing one.
         await SyncerTestHelpers.InsertRowVersionTestTableRowAsync(parent, secondId, "New");

@@ -25,12 +25,12 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind(new Dictionary<string, string?>
         {
-            ["SmartTableSync:ChangeTrackingColumns:SomeOtherTable"] = "ModifiedAt",
-            ["SmartTableSync:ChangeTrackingColumns:AnotherTable"] = "UpdatedAt",
+            ["SmartTableSync:TimestampColumns:SomeOtherTable"] = "ModifiedAt",
+            ["SmartTableSync:TimestampColumns:AnotherTable"] = "UpdatedAt",
         });
 
-        Assert.Equal("ModifiedAt", settings.ChangeTrackingColumns["SomeOtherTable"]);
-        Assert.Equal("UpdatedAt", settings.ChangeTrackingColumns["AnotherTable"]);
+        Assert.Equal("ModifiedAt", settings.TimestampColumns["SomeOtherTable"]);
+        Assert.Equal("UpdatedAt", settings.TimestampColumns["AnotherTable"]);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind([]);
 
-        Assert.Empty(settings.ChangeTrackingColumns);
+        Assert.Empty(settings.TimestampColumns);
     }
 
     [Fact]
@@ -46,10 +46,10 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind(new Dictionary<string, string?>
         {
-            ["SmartTableSync:ChangeTrackingColumns:SomeTable"] = "ModifiedAt",
+            ["SmartTableSync:TimestampColumns:SomeTable"] = "ModifiedAt",
         });
 
-        Assert.True(settings.ChangeTrackingColumns.TryGetValue("sometable", out var column));
+        Assert.True(settings.TimestampColumns.TryGetValue("sometable", out var column));
         Assert.Equal("ModifiedAt", column);
     }
 
@@ -154,6 +154,20 @@ public class SyncSettingsServiceCollectionExtensionsTests
         });
 
         Assert.Equal(TimeSpan.FromHours(24), settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Fact]
+    public void TimestampColumns_StillReadsTheOriginalChangeTrackingColumnsKey_NewKeyWins()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingColumns:LegacyTable"] = "ModifiedAt",
+            ["SmartTableSync:ChangeTrackingColumns:BothTable"] = "OldColumn",
+            ["SmartTableSync:TimestampColumns:BothTable"] = "NewColumn",
+        });
+
+        Assert.Equal("ModifiedAt", settings.TimestampColumns["LegacyTable"]);
+        Assert.Equal("NewColumn", settings.TimestampColumns["BothTable"]);
     }
 
     [Fact]
