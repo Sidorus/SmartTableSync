@@ -49,6 +49,34 @@ public class SqlArtifactGeneratorTests
     }
 
     [Fact]
+    public void GenerateCreateTableScript_LargeObjectColumn_KeepsTextImageOn()
+    {
+        var script = _generator.GenerateCreateTableScript(ProductAttributeValueProfile());
+
+        Assert.Contains(") ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]", script);
+    }
+
+    [Fact]
+    public void GenerateCreateTableScript_NoLargeObjectColumn_OmitsTextImageOn()
+    {
+        // SQL Server rejects TEXTIMAGE_ON with error 1709 when no column is a large object.
+        var profile = ProductAttributeValueProfile() with
+        {
+            Columns =
+            [
+                new ColumnProfile("AttributeValueId", "int", 4, false),
+                new ColumnProfile("Slug", "nvarchar", 400, true),
+            ],
+            IndexedLobColumns = [],
+        };
+
+        var script = _generator.GenerateCreateTableScript(profile);
+
+        Assert.DoesNotContain("TEXTIMAGE_ON", script);
+        Assert.Contains(") ON [PRIMARY]", script);
+    }
+
+    [Fact]
     public void GenerateCreateTableScript_SizedNvarchar_HalvesByteLengthToCharacterLength()
     {
         // sys.columns reports 400 bytes for nvarchar(200) - script must show (200), not (400).
