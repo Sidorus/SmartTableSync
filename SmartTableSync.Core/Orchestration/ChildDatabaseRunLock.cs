@@ -33,7 +33,7 @@ internal sealed class ChildDatabaseRunLock : ISyncRunLock
             // 0 = granted, 1 = granted after waiting; negative = timeout, deadlock or error.
             if ((int)result.Value >= 0)
             {
-                return new Handle(connection);
+                return new AppLockReleaser(connection);
             }
         }
         catch
@@ -46,11 +46,13 @@ internal sealed class ChildDatabaseRunLock : ISyncRunLock
         return null;
     }
 
-    private sealed class Handle : IAsyncDisposable
+    /// <summary>Holds the acquired application lock; disposing it releases the lock and closes
+    /// the connection that owns it.</summary>
+    private sealed class AppLockReleaser : IAsyncDisposable
     {
         private readonly SqlConnection _connection;
 
-        public Handle(SqlConnection connection) => _connection = connection;
+        public AppLockReleaser(SqlConnection connection) => _connection = connection;
 
         // Released explicitly: with connection pooling, disposing only returns the session to
         // the pool, and a session-owned lock would stay held until that pooled connection is
