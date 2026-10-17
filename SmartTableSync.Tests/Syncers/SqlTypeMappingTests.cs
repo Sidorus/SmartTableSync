@@ -114,6 +114,22 @@ public class SqlTypeMappingTests
     }
 
     [Fact]
+    public void ParseKeyComponent_Decimal_ParsesWithInvariantCultureRegardlessOfCurrentCulture()
+    {
+        var originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+        try
+        {
+            Assert.Equal(-1234.5600m, SqlTypeMapping.ParseKeyComponent("-1234.5600", "decimal"));
+            Assert.Equal(42m, SqlTypeMapping.ParseKeyComponent("42", "numeric"));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    [Fact]
     public void GetParameterSize_MaxType_ReturnsNegativeOne()
     {
         var column = new ColumnProfile("Description", "nvarchar", -1, false);

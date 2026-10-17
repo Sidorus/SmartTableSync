@@ -71,6 +71,7 @@ internal static class SqlTypeMapping
         "bigint" => long.Parse(value),
         "smallint" => short.Parse(value),
         "tinyint" => byte.Parse(value),
+        "decimal" or "numeric" => decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
         "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext" => value,
         "uniqueidentifier" => Guid.Parse(value),
         "datetime" or "datetime2" or "smalldatetime" or "date" => DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture),

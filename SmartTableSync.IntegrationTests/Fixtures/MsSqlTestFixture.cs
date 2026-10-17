@@ -47,7 +47,7 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
             "IncrementalStrategyFullRescanTestTable.sql", "IncrementalStrategyConfiguredColumnTestTable.sql",
             "IdentityTvpTestTable.sql", "RowVersionTestTable.sql", "IncrementalStrategyOverrideTestTable.sql",
             "IncrementalStrategyOverrideTimestampTestTable.sql", "IncrementalStrategyOverrideBadColumnTestTable.sql",
-            "ChangeTrackingTestTables.sql",
+            "ChangeTrackingTestTables.sql", "DeleteReconciliationKeyTypeTestTables.sql",
         };
 
         await RunScriptsAsync(ParentConnectionString, tableScripts.Select(f => Path.Combine(schemaDir, f)));

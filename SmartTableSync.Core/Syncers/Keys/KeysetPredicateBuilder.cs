@@ -52,15 +52,30 @@ internal static class KeysetPredicateBuilder
         string.Join(", ", primaryKeyColumns.Select(c => Column(c, tableAlias)));
 
     /// <summary>Builds the "key as a single string" SELECT expression used to compare
-    /// parent/child key sets for delete reconciliation: string columns as they are, other
-    /// columns CAST to NVARCHAR, joined with '|' for composite keys — the same format as
-    /// CompositeKey.</summary>
-    public static string BuildKeySelectExpression(IReadOnlyList<string> primaryKeyColumns, Func<string, bool> isStringColumn)
+    /// parent/child key sets for delete reconciliation, joined with '|' for composite keys —
+    /// the same format as CompositeKey. Every conversion is lossless and culture-independent,
+    /// so two different keys never produce the same string and
+    /// SqlTypeMapping.ParseKeyComponent parses each component back to its exact value:
+    /// string columns as they are, uniqueidentifier in its 36-character form, date/time
+    /// types as ISO 8601 (style 126, full fractional precision), numbers with '.' as the
+    /// decimal separator.</summary>
+    /// <param name="columnType">Returns a key column's sys.types name (e.g. "datetime2").</param>
+    public static string BuildKeySelectExpression(IReadOnlyList<string> primaryKeyColumns, Func<string, string> columnType)
     {
-        var parts = primaryKeyColumns.Select(c =>
-            isStringColumn(c) ? SqlIdentifier.Quote(c) : $"CAST({SqlIdentifier.Quote(c)} AS NVARCHAR(20))");
+        var parts = primaryKeyColumns.Select(c => KeyComponentExpression(SqlIdentifier.Quote(c), columnType(c)));
         return string.Join(" + '|' + ", parts);
     }
+
+    private static string KeyComponentExpression(string quotedColumn, string sqlTypeName) => sqlTypeName.ToLowerInvariant() switch
+    {
+        "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext" => quotedColumn,
+        "int" or "bigint" or "smallint" or "tinyint" => $"CAST({quotedColumn} AS NVARCHAR(20))",
+        "decimal" or "numeric" => $"CONVERT(NVARCHAR(40), {quotedColumn})",
+        "uniqueidentifier" => $"CONVERT(NVARCHAR(36), {quotedColumn})",
+        "datetime" or "datetime2" or "smalldatetime" or "date" or "datetimeoffset" or "time" =>
+            $"CONVERT(NVARCHAR(40), {quotedColumn}, 126)",
+        _ => throw new NotSupportedException($"Unsupported key column type for delete reconciliation: {sqlTypeName}"),
+    };
 
     private static string Column(string name, string? tableAlias) =>
         tableAlias is null ? SqlIdentifier.Quote(name) : $"{tableAlias}.{SqlIdentifier.Quote(name)}";

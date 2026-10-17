@@ -125,9 +125,7 @@ internal sealed class TableSyncCommandFactory
     }
 
     private string BuildKeySelectExpression() =>
-        KeysetPredicateBuilder.BuildKeySelectExpression(
-            _profile.PrimaryKeyColumns,
-            c => SqlTypeMapping.IsStringType(ColumnType(c)));
+        KeysetPredicateBuilder.BuildKeySelectExpression(_profile.PrimaryKeyColumns, ColumnType);
 
     private string ColumnType(string columnName) =>
         _profile.Columns.First(c => c.Name == columnName).SqlTypeName;

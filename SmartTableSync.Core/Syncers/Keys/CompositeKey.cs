@@ -9,14 +9,22 @@ internal static class CompositeKey
 {
     private const char Delimiter = '|';
 
+    // "FFFFFFF" omits trailing zeros (and the '.' when there is no fraction), like SQL
+    // Server's style 126 does for datetime.
+    private const string IsoDateTimeFormat = "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF";
+
     /// <summary>Builds the resume-cursor string for a row, e.g. "206|en" for a 2-column key.
     /// Formats with InvariantCulture explicitly — SqlTypeMapping.ParseKeyComponent parses
     /// with InvariantCulture, and a bare ToString() defaults to CurrentCulture, which can
     /// mismatch (and fail to round-trip) for DateTime/DateTimeOffset/decimal-typed keys on a
-    /// host whose culture isn't invariant/en-US-compatible.</summary>
+    /// host whose culture isn't invariant/en-US-compatible. DateTime/DateTimeOffset use ISO
+    /// 8601 with full fractional precision (the invariant default drops fractional seconds),
+    /// the same format KeysetPredicateBuilder.BuildKeySelectExpression gets from SQL Server.</summary>
     public static string Extract(DataRow row, IReadOnlyList<string> primaryKeyColumns) =>
         string.Join(Delimiter, primaryKeyColumns.Select(c => row[c] switch
         {
+            DateTime d => d.ToString(IsoDateTimeFormat, System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeOffset d => d.ToString(IsoDateTimeFormat + "zzz", System.Globalization.CultureInfo.InvariantCulture),
             IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
             var v => v!.ToString(),
         }));
