@@ -27,6 +27,41 @@ flowchart LR
     Parent -- "SmartTableSync<br/>(5-minute timer)" --> Child
 ```
 
+## Why build it: the alternatives and their cost
+
+It was built to solve a real production problem, and it runs in production. Microsoft's
+[Data Sync migration guide](https://learn.microsoft.com/azure/azure-sql/database/sql-data-sync-retirement-migration)
+lists the alternatives. None of them is a ready-made, table-level, one-way sync from one Azure SQL
+Database into another that also keeps the child's own tables:
+
+| Alternative | Why it doesn't fit this case | Cost |
+|---|---|---|
+| Transactional replication | Azure SQL Database can only be a subscriber, never the publisher | — |
+| Read replicas, active geo-replication, database copy | Whole database only, read-only or a one-time snapshot; the child can't have its own tables | A full secondary database |
+| Fabric mirroring | Replicates into OneLake as read-only Delta tables, not into another Azure SQL Database; needs a running Fabric capacity | F2 capacity ≈ **$320/month** |
+| Azure Data Factory, incremental copy | Works, but every run is billed, and deletes and upserts need extra pipeline design | ≈ **$170 per table per month** at a 5-minute schedule |
+| Azure Functions | Named in the guide, but you write the sync yourself | This project is that Function |
+
+**Data Factory estimate**, per table, every 5 minutes (8,640 runs a month):
+
+- Copy activity: at least 4 DIUs, billed per minute and rounded up, even when one row changed:
+  4 DIU × 1 min × $0.25/DIU-hour ≈ $0.017 a run, so **≈ $144**.
+- Orchestration: watermark lookup, copy and watermark update are 3 activity runs at $1 per 1,000,
+  so **≈ $26**.
+- That's ≈ **$170 per table**, ≈ **$1,700 a month for 10 tables**, before deletes are handled.
+
+**SmartTableSync** syncs all tables in one Function run: 8,640 executions a month, which usually
+stays inside the Azure Functions monthly free grant. What remains is the storage account and
+logging, typically a few dollars a month.
+
+Prices are Microsoft list prices from the
+[Azure Retail Prices API](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices)
+(West Europe, USD, pay-as-you-go, October 2026). The billing rules come from
+[Data Factory DIUs](https://learn.microsoft.com/azure/data-factory/copy-activity-performance-features#data-integration-units),
+[integration runtime charges](https://learn.microsoft.com/azure/data-factory/better-understand-different-integration-runtime-charges)
+and [Fabric mirroring cost](https://learn.microsoft.com/fabric/mirroring/overview#cost-of-mirroring).
+Check your own numbers in the [Azure pricing calculator](https://azure.microsoft.com/pricing/calculator/).
+
 ## How it works
 
 Every run, for each configured table:
@@ -158,3 +193,9 @@ Function App. Not yet published to NuGet.
 is now only what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and
 the replaceable services above). Hosts that only call `AddSmartTableSync()` are unaffected; the
 `SmartTableSync:ChangeTrackingColumns` setting keeps working.
+
+## License
+
+Copyright 2026 Ruslan Sidoriako. Licensed under the [Apache License, Version 2.0](LICENSE).
+Redistributions must keep the copyright and the [NOTICE](NOTICE) file, and modified files must
+say they were changed.

@@ -9,7 +9,7 @@
     <Version>0.3.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>Manual schema-scaffolding CLI for SmartTableSync — introspects a table (or generates the shared tracking infrastructure) and writes reviewable .sql files. Never executes anything against a database itself.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Sidorus/SmartTableSync</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Sidorus/SmartTableSync</RepositoryUrl>
     <PackageTags>sql;azure;azure-sql;data-sync;sync;cli;dotnet-tool</PackageTags>
@@ -27,6 +27,10 @@
          the runtime does, via SyncSettingsServiceCollectionExtensions.Bind. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\NOTICE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

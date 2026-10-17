@@ -5,7 +5,7 @@
     <Version>0.3.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>A self-configuring sync engine for SQL tables Azure SQL Data Sync can't handle — nvarchar(max)/varbinary(max) indexed keys, rows over Data Sync's 24 MB batch limit. Give it a table name; it introspects the schema, derives a sync plan, and generates reviewable SQL.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/Sidorus/SmartTableSync</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Sidorus/SmartTableSync</RepositoryUrl>
     <PackageTags>sql;azure;azure-sql;data-sync;sync</PackageTags>
@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\NOTICE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- The public API is only what a host calls, configures or replaces (AddSmartTableSync,
