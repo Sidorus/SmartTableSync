@@ -29,23 +29,29 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
     {
         var existing = await _configRepository.GetAsync(child, tableName, ct);
 
-        // Cheap, catalog-metadata-only check on every call — the expensive row/size
-        // sampling in ProfileTableAsync only runs when we're actually about to
-        // (re)provision, not just to check whether we need to.
-        var cheapProfile = await _schemaReader.GetFingerprintInputsAsync(parent, tableName, ct);
-        var currentFingerprint = SchemaFingerprint.Compute(cheapProfile);
-
-        if (existing is not null && existing.SchemaFingerprint == currentFingerprint)
-            return (cheapProfile, existing.ToSyncPlan(), false);
-
         if (existing is null)
+        {
             _logger.LogInformation("{Table}: not yet configured — introspecting and deriving a sync plan", tableName);
+        }
         else
+        {
+            // Routine path: a cheap, catalog-metadata-only drift check. The expensive row/size
+            // sampling in ProfileTableAsync only runs when the table must be (re)provisioned.
+            var cheapProfile = await _schemaReader.GetFingerprintInputsAsync(parent, tableName, ct);
+            var cheapFingerprint = SchemaFingerprint.Compute(cheapProfile);
+
+            if (existing.SchemaFingerprint == cheapFingerprint)
+                return (cheapProfile, existing.ToSyncPlan(), false);
+
             _logger.LogWarning(
                 "{Table}: parent schema changed (fingerprint {Old} -> {New}) — re-provisioning",
-                tableName, existing.SchemaFingerprint, currentFingerprint);
+                tableName, existing.SchemaFingerprint, cheapFingerprint);
+        }
 
+        // The full profile includes everything the fingerprint reads, so it hashes the same as
+        // the cheap one; a first-seen table needs only this one read.
         var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, ct);
+        var currentFingerprint = SchemaFingerprint.Compute(fullProfile);
 
         var timestampColumn = TimestampColumnResolver.Resolve(fullProfile, _settings.Value.TimestampColumns);
         var allowFullRescan = _settings.Value.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);

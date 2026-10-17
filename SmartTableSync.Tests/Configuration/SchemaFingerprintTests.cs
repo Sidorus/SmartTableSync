@@ -30,6 +30,27 @@ public class SchemaFingerprintTests
     }
 
     [Fact]
+    public void Compute_FullProfileOnlyFields_DoNotChangeHash()
+    {
+        // SyncTableProvisioner fingerprints a first-seen table from the full profile but later
+        // checks drift with the cheap one, so the sampling-only fields must not affect the hash.
+        var cheap = CreateProfile(columns: [
+            new ColumnProfile("Id", "int", 4, false),
+            new ColumnProfile("Body", "nvarchar", -1, true),
+        ]);
+        var full = cheap with
+        {
+            IndexedLobColumns = ["Body"],
+            ReferencesOtherTables = true,
+            RowCount = 1_000_000,
+            AvgRowSizeBytes = 4_096,
+            MaxLobColumnSizeBytes = new Dictionary<string, long> { ["Body"] = 50_000_000 },
+        };
+
+        Assert.Equal(SchemaFingerprint.Compute(cheap), SchemaFingerprint.Compute(full));
+    }
+
+    [Fact]
     public void Compute_EnablingChangeTracking_ProducesDifferentHash()
     {
         // A DBA enabling (or disabling) CT must trigger re-provisioning, so the table's
