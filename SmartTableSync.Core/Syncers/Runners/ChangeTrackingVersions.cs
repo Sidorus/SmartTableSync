@@ -41,9 +41,11 @@ internal static class ChangeTrackingVersions
         await reader.ReadAsync(ct);
 
         if (await reader.IsDBNullAsync(0, ct) || await reader.IsDBNullAsync(1, ct))
+        {
             throw new InvalidOperationException(
                 $"{tableName}: SQL Server Change Tracking is not enabled on this table (or its database), or the " +
                 $"runtime identity lacks VIEW CHANGE TRACKING on it — see sql/07_permissions.sql.");
+        }
 
         return (reader.GetInt64(0), reader.GetInt64(1));
     }

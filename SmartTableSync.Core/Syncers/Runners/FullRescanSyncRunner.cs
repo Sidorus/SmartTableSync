@@ -30,7 +30,9 @@ public sealed class FullRescanSyncRunner : ISyncRunner
     public async Task<(int synced, int errored, bool retryable)> RunAsync(
         SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
     {
-        _logger.LogWarning("{Table}: no change-tracking column — running a full re-scan this cycle", _profile.TableName);
+        // Generic wording on purpose: this runs both as the FullRescan strategy and as
+        // ChangeTrackingSyncRunner's fallback, which logs its own, more specific reason first.
+        _logger.LogWarning("{Table}: running a full re-scan this cycle", _profile.TableName);
 
         int totalSynced = 0;
         int totalErrored = 0;

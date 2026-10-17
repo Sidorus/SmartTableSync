@@ -25,10 +25,10 @@ public sealed class ChangeTrackingBaselineSyncRunner : ISyncRunner
     public async Task<(int synced, int errored, bool retryable)> RunAsync(
         SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
     {
-        var existing = ChangeTrackingVersions.ParsePosition(
+        var existingBaseline = ChangeTrackingVersions.ParsePosition(
             await _syncState.GetIncrementalPositionAsync(child, _tableName, ct));
 
-        if (existing is null)
+        if (existingBaseline is null)
         {
             var (_, currentVersion) = await ChangeTrackingVersions.GetBoundsAsync(parent, null, _tableName, ct);
             await _syncState.UpdateIncrementalPositionAsync(

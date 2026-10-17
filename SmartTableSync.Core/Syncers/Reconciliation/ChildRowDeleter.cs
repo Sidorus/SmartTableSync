@@ -20,12 +20,12 @@ public sealed class ChildRowDeleter
             var col = _profile.PrimaryKeyColumns[i];
             var colType = ColumnType(col);
             var paramName = $"@Key{i}";
-            whereClauses.Add($"[{col}] = {paramName}");
+            whereClauses.Add($"{SqlIdentifier.Quote(col)} = {paramName}");
             cmd.Parameters.Add(paramName, SqlTypeMapping.ToSqlDbType(colType)).Value =
                 SqlTypeMapping.ParseKeyComponent(keyParts[i], colType);
         }
 
-        cmd.CommandText = $"DELETE FROM [dbo].[{_profile.TableName}] WHERE {string.Join(" AND ", whereClauses)}";
+        cmd.CommandText = $"DELETE FROM [dbo].{SqlIdentifier.Quote(_profile.TableName)} WHERE {string.Join(" AND ", whereClauses)}";
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

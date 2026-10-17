@@ -232,8 +232,8 @@ public sealed class SchemaReader : ISchemaReader
     private static async Task<IReadOnlyDictionary<string, long>> GetMaxLobColumnSizesAsync(
         SqlConnection parent, string tableName, IReadOnlyList<string> lobColumnNames, CancellationToken ct)
     {
-        var selectList = string.Join(", ", lobColumnNames.Select(col => $"MAX(DATALENGTH({QuoteIdentifier(col)})) AS {QuoteIdentifier(col)}"));
-        var sql = $"SELECT {selectList} FROM {QuoteIdentifier(tableName)}";
+        var selectList = string.Join(", ", lobColumnNames.Select(col => $"MAX(DATALENGTH({SqlIdentifier.Quote(col)})) AS {SqlIdentifier.Quote(col)}"));
+        var sql = $"SELECT {selectList} FROM {SqlIdentifier.Quote(tableName)}";
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 120 };
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -250,6 +250,4 @@ public sealed class SchemaReader : ISchemaReader
 
         return sizes;
     }
-
-    private static string QuoteIdentifier(string identifier) => $"[{identifier.Replace("]", "]]")}]";
 }

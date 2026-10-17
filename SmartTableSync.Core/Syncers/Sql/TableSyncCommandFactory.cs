@@ -96,16 +96,16 @@ public sealed class TableSyncCommandFactory
     {
         var keyColumns = _profile.PrimaryKeyColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var selectList = _profile.Columns.Select(c => keyColumns.Contains(c.Name)
-            ? $"CT.{QuoteIdentifier(c.Name)}"
-            : $"T.{QuoteIdentifier(c.Name)}");
+            ? $"CT.{SqlIdentifier.Quote(c.Name)}"
+            : $"T.{SqlIdentifier.Quote(c.Name)}");
         var joinPredicate = string.Join(" AND ", _profile.PrimaryKeyColumns.Select(c =>
-            $"T.{QuoteIdentifier(c)} = CT.{QuoteIdentifier(c)}"));
-        var firstKey = QuoteIdentifier(_profile.PrimaryKeyColumns[0]);
-        var table = $"[dbo].{QuoteIdentifier(_profile.TableName)}";
+            $"T.{SqlIdentifier.Quote(c)} = CT.{SqlIdentifier.Quote(c)}"));
+        var firstKey = SqlIdentifier.Quote(_profile.PrimaryKeyColumns[0]);
+        var table = $"[dbo].{SqlIdentifier.Quote(_profile.TableName)}";
 
         var cmd = new SqlCommand($"""
             SELECT {string.Join(", ", selectList)},
-                   CAST(CASE WHEN T.{firstKey} IS NULL THEN 1 ELSE 0 END AS BIT) AS {QuoteIdentifier(ChangeTrackingRowMissingColumn)}
+                   CAST(CASE WHEN T.{firstKey} IS NULL THEN 1 ELSE 0 END AS BIT) AS {SqlIdentifier.Quote(ChangeTrackingRowMissingColumn)}
             FROM   CHANGETABLE(CHANGES {table}, @LastVersion) AS CT
             LEFT JOIN {table} AS T ON {joinPredicate}
             """, parent, transaction) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
@@ -129,6 +129,4 @@ public sealed class TableSyncCommandFactory
 
     private string ColumnType(string columnName) =>
         _profile.Columns.First(c => c.Name == columnName).SqlTypeName;
-
-    private static string QuoteIdentifier(string identifier) => $"[{identifier.Replace("]", "]]")}]";
 }

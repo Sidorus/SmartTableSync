@@ -13,6 +13,8 @@ namespace SmartTableSync.Syncers.Runners;
 /// so no change made during the re-scan is lost.</summary>
 public sealed class ChangeTrackingSyncRunner : ISyncRunner
 {
+    private const string RowMissingColumn = TableSyncCommandFactory.ChangeTrackingRowMissingColumn;
+
     private readonly TableProfile _profile;
     private readonly TableSyncCommandFactory _commandFactory;
     private readonly IBatchMergeStrategy _mergeStrategy;
@@ -44,31 +46,43 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
 
         var read = await ReadChangesAsync(parent, lastVersion, ct);
         if (read.RescanReason is not null)
+        {
             return await RescanAndRebaselineAsync(parent, child, lastSyncDate, read.CurrentVersion, read.RescanReason, ct);
+        }
 
         using var changes = read.Changes!;
         var deleteKeys = SplitOffDeletes(changes);
 
-        int synced = 0, errored = 0;
+        // Deletes first: a primary-key update arrives as a delete of the old key plus an insert
+        // of the new one, and inserting first could collide with the old row on any other unique
+        // index the child has. Re-applying a delete after a failed MERGE is a harmless no-op.
+        var (deleted, errored) = await ApplyDeletesAsync(deleteKeys, child, ct);
+
+        var synced = 0;
         var retryable = false;
         if (changes.Rows.Count > 0)
-            (synced, errored, retryable) = await _mergeStrategy.MergeBatchAsync(changes, child, ct);
-
-        var (deleted, deleteErrors) = await ApplyDeletesAsync(deleteKeys, child, ct);
-        errored += deleteErrors;
+        {
+            int mergeErrors;
+            (synced, mergeErrors, retryable) = await _mergeStrategy.MergeBatchAsync(changes, child, ct);
+            errored += mergeErrors;
+        }
 
         // Same rule as RowVersionSyncRunner: only advance once this window is fully processed —
         // a retryable error (e.g. FK timing race) keeps the old position so those keys are read
         // again next cycle. MERGE is idempotent, so re-processing the rows that did succeed is
         // harmless. A failed delete is not retryable; the hourly DeleteReconciler still catches it.
         if (!retryable)
+        {
             await _syncState.UpdateIncrementalPositionAsync(
                 child, _profile.TableName, ChangeTrackingVersions.FormatPosition(read.CurrentVersion), ct);
+        }
 
         if (synced + deleted + errored > 0)
+        {
             _logger.LogInformation(
                 "{Table}: Change Tracking {From} -> {To}: {Upserts} upserted, {Deleted} deleted, {Errors} errors",
                 _profile.TableName, lastVersion, read.CurrentVersion, synced, deleted, errored);
+        }
 
         return (synced + deleted, errored, retryable);
     }
@@ -98,10 +112,7 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
                 return new ChangeRead(null, current, rescanReason);
             }
 
-            DataTable changes;
-            await using (var cmd = _commandFactory.BuildChangeTrackingCommand(parent, transaction, lastVersion!.Value))
-            await using (var reader = await cmd.ExecuteReaderAsync(ct))
-                changes = await DataTableLoader.LoadAsync(reader, ct);
+            var changes = await LoadChangesAsync(parent, transaction, lastVersion!.Value, ct);
 
             if (!snapshotAllowed)
             {
@@ -120,13 +131,40 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         }
         finally
         {
-            // SET TRANSACTION ISOLATION LEVEL is session-scoped and outlives the transaction —
-            // reset it so later commands on this (pooled) connection run under the default.
-            if (snapshotAllowed && parent.State == ConnectionState.Open)
+            if (snapshotAllowed)
             {
-                await using var reset = new SqlCommand("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", parent);
-                await reset.ExecuteNonQueryAsync(CancellationToken.None);
+                await ResetIsolationLevelAsync(parent, ct);
             }
+        }
+    }
+
+    private async Task<DataTable> LoadChangesAsync(
+        SqlConnection parent, SqlTransaction transaction, long lastVersion, CancellationToken ct)
+    {
+        await using var cmd = _commandFactory.BuildChangeTrackingCommand(parent, transaction, lastVersion);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await DataTableLoader.LoadAsync(reader, ct);
+    }
+
+    /// <summary>SET TRANSACTION ISOLATION LEVEL is session-scoped and outlives the transaction —
+    /// reset it so later commands on this (pooled) connection run under the default. Runs from a
+    /// finally block, so a failure (including cancellation) is logged rather than thrown:
+    /// throwing would replace whatever exception is already propagating.</summary>
+    private async Task ResetIsolationLevelAsync(SqlConnection parent, CancellationToken ct)
+    {
+        if (parent.State != ConnectionState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var reset = new SqlCommand("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", parent);
+            await reset.ExecuteNonQueryAsync(ct);
+        }
+        catch (Exception ex) when (ex is SqlException or OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "{Table}: could not reset the parent connection's isolation level", _profile.TableName);
         }
     }
 
@@ -134,11 +172,11 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         lastVersion switch
         {
             null => "no Change Tracking position yet",
-            var v when v < minValidVersion =>
-                $"position {v} is older than CHANGE_TRACKING_MIN_VALID_VERSION ({minValidVersion}) — " +
+            var position when position < minValidVersion =>
+                $"position {position} is older than CHANGE_TRACKING_MIN_VALID_VERSION ({minValidVersion}) — " +
                 "retention exceeded, table truncated, or Change Tracking re-enabled",
-            var v when v > currentVersion =>
-                $"position {v} is ahead of CHANGE_TRACKING_CURRENT_VERSION ({currentVersion}) — " +
+            var position when position > currentVersion =>
+                $"position {position} is ahead of CHANGE_TRACKING_CURRENT_VERSION ({currentVersion}) — " +
                 "was the parent database restored from a backup?",
             _ => null,
         };
@@ -157,12 +195,16 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
         // changes). The version was captured BEFORE the re-scan, so changes made during it are
         // picked up by the next CT read.
         if (errored == 0 && !retryable)
+        {
             await _syncState.UpdateIncrementalPositionAsync(
                 child, _profile.TableName, ChangeTrackingVersions.FormatPosition(versionBeforeRescan), ct);
+        }
         else
+        {
             _logger.LogWarning(
                 "{Table}: full re-scan had {Errors} errors — Change Tracking position not set, the re-scan repeats next cycle",
                 _profile.TableName, errored);
+        }
 
         return (synced, errored, retryable);
     }
@@ -172,24 +214,25 @@ public sealed class ChangeTrackingSyncRunner : ISyncRunner
     /// table's own columns — the shape the merge strategies expect.</summary>
     private List<string> SplitOffDeletes(DataTable changes)
     {
-        const string rowMissingColumn = TableSyncCommandFactory.ChangeTrackingRowMissingColumn;
         var deleteKeys = new List<string>();
 
         // An empty result has no columns at all (DataTableLoader infers them from the first row).
-        if (!changes.Columns.Contains(rowMissingColumn))
+        if (!changes.Columns.Contains(RowMissingColumn))
+        {
             return deleteKeys;
+        }
 
         for (var i = changes.Rows.Count - 1; i >= 0; i--)
         {
             var row = changes.Rows[i];
-            if (row[rowMissingColumn] is true)
+            if (row[RowMissingColumn] is true)
             {
                 deleteKeys.Add(CompositeKey.Extract(row, _profile.PrimaryKeyColumns));
                 changes.Rows.RemoveAt(i);
             }
         }
 
-        changes.Columns.Remove(rowMissingColumn);
+        changes.Columns.Remove(RowMissingColumn);
         return deleteKeys;
     }
 
