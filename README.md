@@ -164,6 +164,12 @@ and invoke `ISyncOrchestrator.RunAsync` on your own schedule. `ISyncRunLock`,
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
 OpenTelemetry exporter can collect them.
 
+To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
+Directory ...` in the connection string), the host also needs the
+`Microsoft.Data.SqlClient.Extensions.Azure` package, in the same version as
+`Microsoft.Data.SqlClient`. Since SqlClient 7.0 those providers are no longer part of the core
+package. SQL authentication doesn't need it.
+
 ## Project layout
 
 | Project | What it is |
