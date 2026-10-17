@@ -15,7 +15,7 @@ namespace SmartTableSync.Syncers;
 /// that wires the concrete strategies (batch-merge, initial, incremental) together and
 /// hands this class the finished dictionary.
 /// </summary>
-public sealed class ConfigurableTableSyncer : ITableSyncer
+internal sealed class ConfigurableTableSyncer : ITableSyncer
 {
     private readonly string _tableName;
     private readonly IReadOnlyDictionary<SyncPhase, Lazy<ISyncRunner>> _syncRunners;

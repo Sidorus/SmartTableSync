@@ -1,6 +1,6 @@
 namespace SmartTableSync.Syncers;
 
-public interface ITableSyncer
+internal interface ITableSyncer
 {
     string TableName { get; }
 

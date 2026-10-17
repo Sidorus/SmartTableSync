@@ -1,6 +1,6 @@
 namespace SmartTableSync.Configuration;
 
-public sealed class SyncTableProvisioner : ISyncTableProvisioner
+internal sealed class SyncTableProvisioner : ISyncTableProvisioner
 {
     private readonly ISchemaReader _schemaReader;
     private readonly ISyncPlanHeuristic _heuristic;

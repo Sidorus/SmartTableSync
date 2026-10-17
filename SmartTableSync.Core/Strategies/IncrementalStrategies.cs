@@ -1,7 +1,7 @@
 namespace SmartTableSync.Strategies;
 
 /// <summary>The registry of incremental strategies.</summary>
-public static class IncrementalStrategies
+internal static class IncrementalStrategies
 {
     /// <summary>In auto-selection priority order — the first applicable strategy wins:
     /// <list type="number">

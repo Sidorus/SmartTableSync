@@ -1,6 +1,6 @@
 namespace SmartTableSync.Scaffolding;
 
-public sealed class SqlArtifactGenerator : ISqlArtifactGenerator
+internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 {
     public string GenerateCreateTableScript(TableProfile profile)
     {

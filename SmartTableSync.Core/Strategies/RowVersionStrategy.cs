@@ -2,7 +2,7 @@ namespace SmartTableSync.Strategies;
 
 /// <summary>Filters on the table's rowversion column. Detecting the column is enough to trust
 /// it: SQL Server updates it on every insert and update.</summary>
-public sealed class RowVersionStrategy : IIncrementalStrategy
+internal sealed class RowVersionStrategy : IIncrementalStrategy
 {
     public IncrementalStrategy Kind => IncrementalStrategy.RowVersion;
 

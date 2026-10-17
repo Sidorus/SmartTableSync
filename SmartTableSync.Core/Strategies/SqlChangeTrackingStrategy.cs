@@ -2,7 +2,7 @@ namespace SmartTableSync.Strategies;
 
 /// <summary>Reads changes from SQL Server Change Tracking. Chosen whenever a DBA has enabled
 /// Change Tracking on the table — SmartTableSync never enables it itself.</summary>
-public sealed class SqlChangeTrackingStrategy : IIncrementalStrategy
+internal sealed class SqlChangeTrackingStrategy : IIncrementalStrategy
 {
     public IncrementalStrategy Kind => IncrementalStrategy.SqlChangeTracking;
 

@@ -4,14 +4,14 @@ namespace SmartTableSync.Syncers.Runners;
 /// To is the position recorded once the whole window is applied (captured before reading, so
 /// nothing that commits while the window is being read is skipped). FullRescanRequired is set
 /// when the window can't be read incrementally at all (SqlChangeTracking only).</summary>
-public sealed record ChangeWindow<TPosition>(TPosition From, TPosition To, FullRescanReason? FullRescanRequired = null);
+internal sealed record ChangeWindow<TPosition>(TPosition From, TPosition To, FullRescanReason? FullRescanRequired = null);
 
 /// <summary>Why an incremental strategy had to fall back to a full re-scan. Category is a fixed
 /// value safe to use as a metric tag; Description is for logs.</summary>
-public sealed record FullRescanReason(string Category, string Description);
+internal sealed record FullRescanReason(string Category, string Description);
 
 /// <summary>Position type for strategies that keep no position of their own.</summary>
-public readonly record struct NoPosition;
+internal readonly record struct NoPosition;
 
 /// <summary>
 /// Template Method for every incremental strategy. The fixed algorithm is:
@@ -26,7 +26,7 @@ public readonly record struct NoPosition;
 /// A subclass only describes what is different about its strategy; paging, applying and the
 /// position rule exist once, here.
 /// </summary>
-public abstract class ChangeWindowSyncRunner<TPosition> : ISyncRunner
+internal abstract class ChangeWindowSyncRunner<TPosition> : ISyncRunner
 {
     private readonly IBatchMergeStrategy _mergeStrategy;
     private readonly ChildRowDeleter _rowDeleter;

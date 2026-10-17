@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// "LastUpdate") is at or after the last successful sync, minus a one-minute overlap. The
 /// position is CustomSyncState.LastSyncDate, which SyncOrchestrator advances after the run, so
 /// there is nothing to commit here.</summary>
-public sealed class TimestampSyncRunner : ChangeWindowSyncRunner<DateTime>
+internal sealed class TimestampSyncRunner : ChangeWindowSyncRunner<DateTime>
 {
     public TimestampSyncRunner(
         TableProfile profile, SyncPlan plan, TableSyncCommandFactory commands, IBatchMergeStrategy mergeStrategy, ILogger logger)

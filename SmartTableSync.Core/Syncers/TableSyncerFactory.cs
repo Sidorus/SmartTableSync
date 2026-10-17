@@ -2,7 +2,7 @@ namespace SmartTableSync.Syncers;
 
 /// <summary>Composition root for one table's syncer: wires the plan's merge strategy and
 /// incremental strategy (from the IncrementalStrategies registry) into a ConfigurableTableSyncer.</summary>
-public sealed class TableSyncerFactory : ITableSyncerFactory
+internal sealed class TableSyncerFactory : ITableSyncerFactory
 {
     private readonly IBatchLogger _batchLogger;
     private readonly ISyncStateRepository _syncState;

@@ -6,7 +6,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// connection, table name) and returns it in the format the strategy stores.</param>
 /// <param name="IsOwnPosition">Whether a stored position was written by this strategy; anything
 /// else (none, or another strategy's format after a switch) is replaced.</param>
-public sealed record IncrementalBaseline(
+internal sealed record IncrementalBaseline(
     Func<SqlConnection, string, CancellationToken, Task<string>> CaptureAsync,
     Func<string?, bool> IsOwnPosition);
 
@@ -16,7 +16,7 @@ public sealed record IncrementalBaseline(
 /// Captured before, not after: changes made while the copy runs must fall inside the first
 /// incremental window. A resumed initial sync keeps the baseline it recorded the first time, or
 /// changes made before the interruption would be skipped.</summary>
-public sealed class BaselineCapturingSyncRunner : ISyncRunner
+internal sealed class BaselineCapturingSyncRunner : ISyncRunner
 {
     private readonly ISyncRunner _initialSyncRunner;
     private readonly IncrementalBaseline _baseline;

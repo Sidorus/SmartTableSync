@@ -10,7 +10,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// shrink at runtime but never grows back — which is why it's an instance class rather than
 /// a stateless static helper like the rest of Syncers/.
 /// </summary>
-public sealed class InitialSyncRunner : ISyncRunner
+internal sealed class InitialSyncRunner : ISyncRunner
 {
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;

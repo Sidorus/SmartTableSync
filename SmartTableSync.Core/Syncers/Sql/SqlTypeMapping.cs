@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.Sql;
 /// parses key-component strings back into the right CLR type. Pure, no I/O — this is what
 /// lets keyset pagination and parameter binding work generically across any table's
 /// primary key shape, instead of one hand-written parser per table.</summary>
-public static class SqlTypeMapping
+internal static class SqlTypeMapping
 {
     public static SqlDbType ToSqlDbType(string sqlTypeName) => sqlTypeName.ToLowerInvariant() switch
     {

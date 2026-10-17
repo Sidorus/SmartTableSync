@@ -7,7 +7,7 @@ namespace SmartTableSync.Infrastructure;
 /// counterpart to the test-only script runner in MsSqlTestFixture - used by
 /// ChildDdlProvisioner to execute what SmartTableSync.Scaffold otherwise only writes to a
 /// file for a human to apply by hand.</summary>
-public static class SqlScriptExecutor
+internal static class SqlScriptExecutor
 {
     private static readonly Regex _goSeparator = new(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
 

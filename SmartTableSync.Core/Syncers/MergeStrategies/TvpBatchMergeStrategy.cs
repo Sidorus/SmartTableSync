@@ -3,7 +3,7 @@ namespace SmartTableSync.Syncers.MergeStrategies;
 /// <summary>Merges a whole batch in one stored-procedure call via a table-valued parameter —
 /// efficient, but one bad row fails the whole batch, so this is only chosen when the table
 /// has no FK-timing risk and rows are small enough that per-row isolation isn't needed.</summary>
-public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
+internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 {
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;

@@ -5,7 +5,7 @@ namespace SmartTableSync.Strategies;
 /// when the table has no usable one.</param>
 /// <param name="RowVersionColumn">The table's rowversion column, or null.</param>
 /// <param name="AllowFullRescan">The operator accepted a full re-scan every run for this table.</param>
-public sealed record StrategyCandidate(
+internal sealed record StrategyCandidate(
     TableProfile Profile,
     PlanHeuristicOptions Options,
     string? TimestampColumn,
@@ -13,7 +13,7 @@ public sealed record StrategyCandidate(
     bool AllowFullRescan);
 
 /// <summary>Everything a strategy needs to build the incremental runner for one table.</summary>
-public sealed record RunnerServices(
+internal sealed record RunnerServices(
     TableProfile Profile,
     SyncPlan Plan,
     TableSyncCommandFactory Commands,
@@ -28,7 +28,7 @@ public sealed record RunnerServices(
 /// records before the initial copy. IncrementalStrategies.All lists them in auto-selection order.
 /// Adding a strategy means adding one implementation and one entry in that list.
 /// </summary>
-public interface IIncrementalStrategy
+internal interface IIncrementalStrategy
 {
     IncrementalStrategy Kind { get; }
 

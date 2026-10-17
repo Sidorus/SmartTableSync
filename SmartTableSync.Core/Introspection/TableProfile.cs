@@ -11,7 +11,7 @@ namespace SmartTableSync.Introspection;
 ///     RowCount, AvgRowSizeBytes, MaxLobColumnSizeBytes (adds row/size sampling —
 ///     only run when (re)provisioning is actually needed).
 /// </summary>
-public sealed record TableProfile(
+internal sealed record TableProfile(
     string TableName,
     IReadOnlyList<ColumnProfile> Columns,
     IReadOnlyList<string> PrimaryKeyColumns,

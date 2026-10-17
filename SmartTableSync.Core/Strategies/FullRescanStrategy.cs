@@ -4,7 +4,7 @@ namespace SmartTableSync.Strategies;
 /// PlanHeuristicOptions.FullRescanRowCountThreshold rows); a larger table needs the operator's
 /// explicit consent through SmartTableSync:AllowFullRescanFor, so an expensive re-scan every
 /// few minutes never starts silently.</summary>
-public sealed class FullRescanStrategy : IIncrementalStrategy
+internal sealed class FullRescanStrategy : IIncrementalStrategy
 {
     public IncrementalStrategy Kind => IncrementalStrategy.FullRescan;
 

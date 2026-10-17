@@ -7,7 +7,7 @@ namespace SmartTableSync.Configuration;
 /// isn't datetime-typed is a real operator mistake — it's rejected immediately rather than
 /// silently accepted and left to fail on every incremental cycle forever
 /// (TableSyncCommandFactory.BuildIncrementalCommand binds the comparison as SqlDbType.DateTime).</summary>
-public static class TimestampColumnResolver
+internal static class TimestampColumnResolver
 {
     public static string? Resolve(TableProfile profile, IReadOnlyDictionary<string, string> changeTrackingColumns)
     {

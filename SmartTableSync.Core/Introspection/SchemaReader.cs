@@ -6,7 +6,7 @@ namespace SmartTableSync.Introspection;
 /// per LOB column, and sys.dm_db_partition_stats for row count/avg size — both read-only,
 /// no locks beyond what SQL Server itself takes for a SELECT).
 /// </summary>
-public sealed class SchemaReader : ISchemaReader
+internal sealed class SchemaReader : ISchemaReader
 {
     public async Task<TableProfile> GetFingerprintInputsAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {

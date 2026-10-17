@@ -1,6 +1,6 @@
 namespace SmartTableSync.Planning;
 
-public enum MergeStrategy
+internal enum MergeStrategy
 {
     /// <summary>Batch MERGE via a table-valued parameter — one SP call per batch.
     /// Chosen when a table has no incoming FK timing risk and rows are small enough

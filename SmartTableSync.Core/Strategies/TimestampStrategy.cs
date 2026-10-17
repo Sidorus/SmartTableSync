@@ -3,7 +3,7 @@ namespace SmartTableSync.Strategies;
 /// <summary>Filters on a datetime column the application updates on every write (configured
 /// per table via SmartTableSync:TimestampColumns, default "LastUpdate"). Its position is the
 /// orchestrator's LastSyncDate, so it records no baseline of its own.</summary>
-public sealed class TimestampStrategy : IIncrementalStrategy
+internal sealed class TimestampStrategy : IIncrementalStrategy
 {
     public IncrementalStrategy Kind => IncrementalStrategy.Timestamp;
 

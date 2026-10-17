@@ -1,6 +1,6 @@
 namespace SmartTableSync.Orchestration;
 
-public sealed class SyncOrchestrator : ISyncOrchestrator
+internal sealed class SyncOrchestrator : ISyncOrchestrator
 {
     // Instance fields, not static — SyncOrchestrator is already registered as a DI singleton
     // (one instance per host), so static state here was redundant and actively harmful: two

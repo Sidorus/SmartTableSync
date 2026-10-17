@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers;
 /// Deleted counts removed rows, Errored counts rows that failed. HasRetryableErrors means at
 /// least one failure is expected to succeed on a later run (for example an FK timing race), so
 /// the caller must not move its position past it.</summary>
-public readonly record struct SyncOutcome(int Merged, int Deleted, int Errored, bool HasRetryableErrors)
+internal readonly record struct SyncOutcome(int Merged, int Deleted, int Errored, bool HasRetryableErrors)
 {
     public static SyncOutcome None => default;
 

@@ -6,7 +6,7 @@ namespace SmartTableSync.Syncers.Sql;
 /// The strategies differ only in the filter (and, for Change Tracking, the source), so they
 /// share BuildPageCommand. The page size is a parameter rather than taken from the plan because
 /// InitialSyncRunner can shrink it at runtime after a timeout.</summary>
-public sealed class TableSyncCommandFactory
+internal sealed class TableSyncCommandFactory
 {
     /// <summary>Extra bit column a page may carry: 1 when the row's key no longer exists in the
     /// parent table (a delete), 0 otherwise. Only the Change Tracking page sets it;

@@ -3,7 +3,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// <summary>FullRescan strategy, for a table with no way to tell which rows changed: every run
 /// reads and MERGEs the whole table, page by page. It doesn't need to detect changes because
 /// every write is an idempotent MERGE. Also used by ChangeTrackingSyncRunner as its fallback.</summary>
-public sealed class FullRescanSyncRunner : ChangeWindowSyncRunner<NoPosition>
+internal sealed class FullRescanSyncRunner : ChangeWindowSyncRunner<NoPosition>
 {
     public FullRescanSyncRunner(
         TableProfile profile, SyncPlan plan, TableSyncCommandFactory commands, IBatchMergeStrategy mergeStrategy, ILogger logger)

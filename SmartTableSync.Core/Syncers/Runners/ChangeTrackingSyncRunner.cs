@@ -11,7 +11,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// it runs one full re-scan plus a delete reconciliation, then resumes from the version
 /// captured before that re-scan.
 /// </summary>
-public sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
+internal sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
 {
     private readonly ISyncRunner _fullRescanRunner;
     private readonly DeleteReconciler _deleteReconciler;

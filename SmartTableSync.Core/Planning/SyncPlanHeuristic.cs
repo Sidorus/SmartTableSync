@@ -1,6 +1,6 @@
 namespace SmartTableSync.Planning;
 
-public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
+internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
 {
     public SyncPlan DerivePlan(
         TableProfile profile,

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>SmartTableSync</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>A self-configuring sync engine for SQL tables Azure SQL Data Sync can't handle — nvarchar(max)/varbinary(max) indexed keys, rows over Data Sync's 24 MB batch limit. Give it a table name; it introspects the schema, derives a sync plan, and generates reviewable SQL.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -22,6 +22,16 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- The public API is only what a host calls, configures or replaces (AddSmartTableSync,
+       SyncSettings, ISyncOrchestrator, ISyncRunLock, IDbConnectionFactory, ISyncMetricsReporter).
+       Everything else is internal so it can change without breaking package users; the Scaffold
+       CLI (same product) and the test projects use it directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartTableSync.Scaffold" />
+    <InternalsVisibleTo Include="SmartTableSync.Tests" />
+    <InternalsVisibleTo Include="SmartTableSync.IntegrationTests" />
   </ItemGroup>
 
 </Project>

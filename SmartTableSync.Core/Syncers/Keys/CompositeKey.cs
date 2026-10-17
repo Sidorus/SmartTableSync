@@ -9,7 +9,7 @@ namespace SmartTableSync.Syncers.Keys;
 /// matching IDENTITY columns starting at 1; empty string for string columns), which is the
 /// caller's concern since it already has each column's type from TableProfile.
 /// </summary>
-public static class CompositeKey
+internal static class CompositeKey
 {
     private const char Delimiter = '|';
 

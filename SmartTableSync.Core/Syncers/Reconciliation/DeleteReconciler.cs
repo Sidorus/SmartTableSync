@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.Reconciliation;
 /// sets, diffs them, deletes the orphans. Called by ConfigurableTableSyncer only outside
 /// initial sync — a partially-populated child during initial sync would otherwise produce
 /// false deletes.</summary>
-public sealed class DeleteReconciler
+internal sealed class DeleteReconciler
 {
     private readonly TableProfile _profile;
     private readonly TableSyncCommandFactory _commandFactory;

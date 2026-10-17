@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.Runners;
 /// position. SQL Server maintains that column on every write, so no change can be missed by
 /// application code forgetting to update it. The position lives in
 /// CustomSyncState.IncrementalPosition as "0x" + hex.</summary>
-public sealed class RowVersionSyncRunner : ChangeWindowSyncRunner<byte[]>
+internal sealed class RowVersionSyncRunner : ChangeWindowSyncRunner<byte[]>
 {
     private const string HexPrefix = "0x";
 

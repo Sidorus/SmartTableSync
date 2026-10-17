@@ -18,7 +18,7 @@ namespace SmartTableSync.IntegrationTests.Support;
 /// each builds one parameterized SqlCommand for a specific table shape, so the test classes
 /// themselves only contain Arrange/Act/Assert, not repeated column-by-column SQL.
 /// </summary>
-public static class SyncerTestHelpers
+internal static class SyncerTestHelpers
 {
     /// <summary>Builds a ConfigurableTableSyncer for the given table via the real production
     /// construction path (SchemaReader -> SyncTableProvisioner -> TableSyncerFactory), so

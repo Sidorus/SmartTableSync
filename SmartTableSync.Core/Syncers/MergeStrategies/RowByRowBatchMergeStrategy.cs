@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.MergeStrategies;
 /// chosen when a single bad row shouldn't fail the rest of the batch: incoming foreign keys
 /// that can race against Data Sync's own delivery of the referenced table, or rows large
 /// enough that per-row failure isolation matters more than round-trip efficiency.</summary>
-public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
+internal sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 {
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;

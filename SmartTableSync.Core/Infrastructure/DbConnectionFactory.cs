@@ -5,7 +5,7 @@ namespace SmartTableSync.Infrastructure;
 /// while connecting — failover, throttling, brief unavailability — are retried with exponential
 /// backoff instead of failing the table for a whole cycle. Commands are deliberately not
 /// retried here; see SyncSettings.ConnectionOpenAttempts.</summary>
-public sealed class DbConnectionFactory : IDbConnectionFactory
+internal sealed class DbConnectionFactory : IDbConnectionFactory
 {
     private readonly string _parentConnStr;
     private readonly string _childConnStr;

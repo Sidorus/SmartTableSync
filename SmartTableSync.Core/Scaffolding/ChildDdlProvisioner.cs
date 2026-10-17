@@ -1,6 +1,6 @@
 namespace SmartTableSync.Scaffolding;
 
-public sealed class ChildDdlProvisioner : IChildDdlProvisioner
+internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
 {
     private readonly ISchemaReader _schemaReader;
     private readonly ISqlArtifactGenerator _generator;

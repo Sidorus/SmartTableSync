@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.MergeStrategies;
 /// Tvp sends the whole batch in one stored-procedure call; RowByRow calls the procedure once
 /// per row so one bad row can't fail the rest. Chosen per table by BatchMergeStrategyFactory
 /// from SyncPlan.MergeStrategy.</summary>
-public interface IBatchMergeStrategy
+internal interface IBatchMergeStrategy
 {
     /// <summary>Throws only for a failure of the whole batch; per-row failures are counted in
     /// the returned outcome.</summary>

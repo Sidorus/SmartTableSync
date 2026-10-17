@@ -1,6 +1,6 @@
 namespace SmartTableSync.Logging;
 
-public interface IBatchLogger
+internal interface IBatchLogger
 {
     Task<string?> GetResumeKeyAsync(
         SqlConnection conn, string tableName, CancellationToken ct = default);

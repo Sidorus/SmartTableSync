@@ -3,7 +3,7 @@ namespace SmartTableSync.Configuration;
 /// <summary>The persisted row for one managed table in dbo.SyncTableConfig — introspected
 /// shape + heuristically-derived plan + optional hand-set overrides, surviving container
 /// redeploys because it lives in the child DB rather than a local file.</summary>
-public sealed record SyncTableConfig(
+internal sealed record SyncTableConfig(
     string TableName,
     IReadOnlyList<string> PrimaryKeyColumns,
     string? IdentityColumn,

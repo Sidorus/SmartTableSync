@@ -5,7 +5,7 @@ namespace SmartTableSync.Orchestration;
 /// the session of a dedicated connection held for the whole run, so SQL Server releases it by
 /// itself if the host crashes or loses the connection — a stale lock can't block future runs.
 /// Needs no extra permission: sp_getapplock is available to every database user.</summary>
-public sealed class ChildDatabaseRunLock : ISyncRunLock
+internal sealed class ChildDatabaseRunLock : ISyncRunLock
 {
     public const string LockResource = "SmartTableSync.Run";
 

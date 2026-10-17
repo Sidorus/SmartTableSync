@@ -5,7 +5,7 @@ namespace SmartTableSync.Planning;
 /// <param name="IncrementalColumn">The column driving incremental detection — a datetime
 /// column name when IncrementalStrategy is Timestamp, a rowversion column name when
 /// RowVersion, or null when FullRescan (nothing to filter by).</param>
-public sealed record SyncPlan(
+internal sealed record SyncPlan(
     string TableName,
     MergeStrategy MergeStrategy,
     int BatchSize,

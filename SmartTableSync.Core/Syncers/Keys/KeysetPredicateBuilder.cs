@@ -13,7 +13,7 @@ namespace SmartTableSync.Syncers.Keys;
 /// This is the standard lexicographic "seek" predicate: a row qualifies if it comes after
 /// the last-seen key in column order, matching how "ORDER BY c1, c2, ..." would sort rows.
 /// </summary>
-public static class KeysetPredicateBuilder
+internal static class KeysetPredicateBuilder
 {
     /// <param name="tableAlias">Optional alias (e.g. "CT") to qualify every key column with,
     /// for queries that join more than one table.</param>
