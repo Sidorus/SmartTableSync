@@ -151,9 +151,8 @@ Significant decisions — what was chosen, what was rejected, and why — are re
 
 ## Status
 
-Version **0.3.0**. Verified against a real, disposable SQL Server (Testcontainers) — not yet
-against real Azure SQL Database, Managed Identity, or a deployed Function App. Not yet published
-to NuGet.
+Version **0.3.0**. The sync engine runs in production on Azure SQL Database with a deployed
+Function App. Not yet published to NuGet.
 
 0.3.0 is not drop-in compatible with 0.2.0 code that used engine types directly: the public API
 is now only what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and
