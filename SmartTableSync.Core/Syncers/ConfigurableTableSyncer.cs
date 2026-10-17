@@ -1,19 +1,10 @@
 namespace SmartTableSync.Syncers;
 
 /// <summary>
-/// A single, config-driven ITableSyncer implementation that replaces one hand-written
-/// subclass per table. Behavior that used to come from abstract-method overrides
-/// (ProductAttributeValueSyncer, ProductCatalogItemSyncer, DocumentAssetSyncer, all
-/// extending TableSyncerBase) is derived here from a TableProfile (schema shape) and a
-/// SyncPlan (merge strategy/batch size/etc.), both produced upstream by introspection and
-/// heuristic derivation rather than hand-declared.
-///
-/// Pure orchestration: holds the table's ISyncRunner strategies as a lazily-populated
-/// dictionary keyed by SyncPhase (built by TableSyncerFactory) and looks up the right one
-/// by lastSyncDate — each entry is only constructed the first time the phase it represents
-/// is actually needed. Builds nothing itself; TableSyncerFactory is the composition root
-/// that wires the concrete strategies (batch-merge, initial, incremental) together and
-/// hands this class the finished dictionary.
+/// The one ITableSyncer implementation, for every table: all per-table behavior comes from
+/// the table's TableProfile and SyncPlan, through the runners TableSyncerFactory builds.
+/// Picks the initial-copy runner until the table's first full copy has completed (lastSyncDate
+/// is still the SyncConstants.InitialDate sentinel), the incremental runner after that.
 /// </summary>
 internal sealed class ConfigurableTableSyncer : ITableSyncer
 {

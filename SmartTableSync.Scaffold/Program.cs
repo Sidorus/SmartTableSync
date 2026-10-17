@@ -8,8 +8,9 @@ using SmartTableSync.Scaffolding;
 
 // Manual, on-demand tool — never run by the timer-triggered Function. Reads schema
 // (read-only) and writes reviewable .sql files; never executes anything against a
-// database itself. See Plan.md Phase 9/10 for why this uses its own connection strings
-// instead of the Function's runtime ones.
+// database itself. It uses its own connection strings (the parent-introspection and
+// child-provisioning identities in sql/07_permissions.sql), never the Function's runtime
+// identity, which has no schema rights.
 
 if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 {

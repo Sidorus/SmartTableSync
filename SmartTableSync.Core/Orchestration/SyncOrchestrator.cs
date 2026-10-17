@@ -1,14 +1,14 @@
 namespace SmartTableSync.Orchestration;
 
+/// <summary>One sync run: takes the run lock, then for each configured table provisions it
+/// (checks the parent schema, derives or reuses its plan), runs its syncer, reconciles deletes
+/// when due, records LastSyncDate and reports metrics. A failure in one table is logged and
+/// retried next run without stopping the others.</summary>
 internal sealed class SyncOrchestrator : ISyncOrchestrator
 {
-    // Instance fields, not static — SyncOrchestrator is already registered as a DI singleton
-    // (one instance per host), so static state here was redundant and actively harmful: two
-    // orchestrator instances in the same process (e.g. two test fixtures, or a future
-    // multi-tenant/multi-child-database scenario) would otherwise share one lock/timestamp
-    // and collide, exactly as happened once during this project's own test development.
-    // This one only skips overlapping runs inside this process cheaply; ISyncRunLock is what
-    // guarantees a single run across processes and machines.
+    // Per instance, not static: two orchestrators in one process (tests, or several child
+    // databases) must not share run state. This lock only skips overlapping runs inside this
+    // process cheaply; ISyncRunLock guarantees a single run across processes and machines.
     private readonly SemaphoreSlim _inProcessRunLock = new(1, 1);
 
     private readonly IReadOnlyList<string> _tableNames;
@@ -24,9 +24,8 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
     private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
-    // Also instance, not static — see rationale above _inProcessRunLock. Per table, because tables on
-    // different incremental strategies reconcile on different intervals. A table missing from
-    // the dictionary has never reconciled in this process, so it's due on its first run.
+    // Per table, because tables on different incremental strategies reconcile on different
+    // intervals. A table missing here hasn't reconciled in this process yet, so it's due.
     private readonly Dictionary<string, DateTime> _lastReconcileUtc = new(StringComparer.OrdinalIgnoreCase);
 
     public SyncOrchestrator(
@@ -40,9 +39,8 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
         IOptions<SyncSettings> settings,
         ILogger<SyncOrchestrator> logger)
     {
-        // Table names are now the only configuration surface for which tables get synced —
-        // there's no fixed set of hand-written syncers left to fall back to, so an empty list
-        // is a misconfiguration, not a valid "sync everything registered" default.
+        // AddSmartTableSync already validates this at startup; kept for hosts that construct
+        // the orchestrator without it.
         _tableNames = settings.Value.Tables.Count > 0
             ? settings.Value.Tables
             : throw new InvalidOperationException(
@@ -113,11 +111,8 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             await parent.OpenAsync(ct);
             await child.OpenAsync(ct);
 
-            // Cheap on every run unless the parent schema actually changed - see
-            // SyncTableProvisioner. Building the syncer here (not at DI composition time)
-            // is what lets one generic ConfigurableTableSyncer replace a fixed set of
-            // hand-written classes: the table's shape and plan are only known once these
-            // connections are open.
+            // Cheap unless the parent schema changed (see SyncTableProvisioner). The syncer is
+            // built here, per run, because the table's shape and plan are only known now.
             var (profile, plan, wasFreshlyProvisioned) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
             if (_mode == SyncMode.Auto && wasFreshlyProvisioned)
@@ -145,7 +140,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             // Don't advance the timestamp in two cases:
             // 1. Initial sync had errors — keeps InitialDate so next run re-enters initial sync
             //    mode and resumes from the saved resume key rather than switching to incremental.
-            // 2. Incremental sync had retryable errors (e.g. FK timing race on AttributeValue) —
+            // 2. Incremental sync had retryable errors (e.g. an FK timing race) —
             //    keeps LastSyncDate so the failed rows fall inside the next run's query window
             //    and are retried. MERGE is idempotent so re-processing successful rows is safe.
             var initialSyncFailed = result.IsInitialSync && result.RowsErrored > 0;

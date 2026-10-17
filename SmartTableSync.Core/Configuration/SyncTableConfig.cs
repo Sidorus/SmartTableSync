@@ -21,21 +21,14 @@ internal sealed record SyncTableConfig(
     string? IncrementalColumn = null,
     IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp)
 {
-    /// <summary>Maps to a SyncPlan, applying any non-null override over the corresponding
-    /// heuristically-derived value. BulkCopyOptions isn't stored separately — it's fully
-    /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.
-    /// IncrementalColumn/IncrementalStrategy have no override — the one configuration
-    /// surface for them is SyncSettings (app config), resolved once at provisioning time.
+    /// <summary>Maps to a SyncPlan, applying every non-null override over the derived value.
+    /// BulkCopyOptions is recomputed from IdentityColumn rather than stored. IncrementalColumn
+    /// and IncrementalStrategy have no override column; they come from SyncSettings.
     ///
-    /// TvpTypeName must be derived from the RESOLVED merge strategy, not passed through
-    /// unconditionally — the stored TvpTypeName is only ever non-null when the heuristic
-    /// itself picked Tvp (SyncPlanHeuristic.DerivePlan). Hand-setting MergeStrategyOverride to
-    /// Tvp on a table the heuristic picked RowByRow for (or drift flipping the heuristic's own
-    /// choice while a stale override survives) would otherwise persist a null TvpTypeName
-    /// forever — TvpBatchMergeStrategy then targets a TVP type named "dbo." (SqlException,
-    /// every batch), and in Auto mode ChildDdlProvisioner auto-executes an invalid
-    /// "CREATE TYPE [dbo].[] AS TABLE (...)". Falling back to the same naming convention
-    /// SyncPlanHeuristic uses ("{TableName}TableType") makes the override self-healing instead.</summary>
+    /// TvpTypeName follows the RESOLVED merge strategy: the stored name is null unless the
+    /// heuristic itself chose Tvp, so a MergeStrategyOverride of Tvp falls back to the same
+    /// "{TableName}TableType" convention. Without that, the TVP type name would be empty and
+    /// every batch (and, in Auto mode, the generated CREATE TYPE) would fail.</summary>
     public SyncPlan ToSyncPlan()
     {
         var resolvedMergeStrategy = MergeStrategyOverride ?? MergeStrategy;

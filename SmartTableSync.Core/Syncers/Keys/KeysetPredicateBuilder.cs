@@ -2,8 +2,7 @@ namespace SmartTableSync.Syncers.Keys;
 
 /// <summary>
 /// Builds a keyset (seek) pagination predicate for any number of ordered primary key
-/// columns, generalizing what was previously a hand-written 2-column OR clause specific
-/// to DocumentAsset's composite key. Pure — no I/O, no SqlConnection.
+/// columns. Pure — no I/O, no SqlConnection.
 ///
 /// For columns [c1, c2, ..., cn] with parameters [@p1, @p2, ..., @pn]:
 ///   c1 > @p1
@@ -53,10 +52,9 @@ internal static class KeysetPredicateBuilder
         string.Join(", ", primaryKeyColumns.Select(c => Column(c, tableAlias)));
 
     /// <summary>Builds the "key as a single string" SELECT expression used to compare
-    /// parent/child key sets for delete reconciliation: no CAST for a lone string-typed key
-    /// column (matches ProductCatalogItem's original "SELECT [Sku]"), CAST to NVARCHAR for
-    /// non-string columns, concatenated with '|' for composite keys (matches DocumentAsset's
-    /// original "CAST([DocumentId] AS NVARCHAR(20)) + '|' + [LanguageCode]").</summary>
+    /// parent/child key sets for delete reconciliation: string columns as they are, other
+    /// columns CAST to NVARCHAR, joined with '|' for composite keys — the same format as
+    /// CompositeKey.</summary>
     public static string BuildKeySelectExpression(IReadOnlyList<string> primaryKeyColumns, Func<string, bool> isStringColumn)
     {
         var parts = primaryKeyColumns.Select(c => isStringColumn(c) ? $"[{c}]" : $"CAST([{c}] AS NVARCHAR(20))");

@@ -1,33 +1,25 @@
 namespace SmartTableSync.Planning;
 
+/// <summary>How a table finds what changed since the last run. Chosen per table automatically
+/// (see IncrementalStrategies.All for the order) or forced with
+/// SmartTableSync:IncrementalStrategyOverrides:&lt;Table&gt;.</summary>
 public enum IncrementalStrategy
 {
-    /// <summary>Windowed query against a datetime/datetime2 change-tracking column,
-    /// maintained by the parent application itself (or its default column, "LastUpdate").
-    /// Chosen when that column exists on the table.</summary>
+    /// <summary>Rows whose datetime column (SmartTableSync:TimestampColumns, default
+    /// "LastUpdate") changed since the last run. Relies on the application updating that
+    /// column on every write.</summary>
     Timestamp,
 
-    /// <summary>No usable change-tracking column — every incremental cycle re-reads and
-    /// re-MERGEs the whole table instead of a windowed delta, relying on MERGE already
-    /// being idempotent everywhere in this codebase. Chosen only below
-    /// PlanHeuristicOptions.FullRescanRowCountThreshold, or when explicitly allowed via
-    /// SyncSettings.AllowFullRescanFor.</summary>
+    /// <summary>Re-reads and re-merges the whole table every run. For small tables, or tables
+    /// listed in SmartTableSync:AllowFullRescanFor.</summary>
     FullRescan,
 
-    /// <summary>Windowed query against a rowversion/timestamp column, engine-maintained on
-    /// every INSERT/UPDATE with no trigger or app-code discipline required — strictly more
-    /// reliable than a datetime column, so detected and preferred over one whenever present.
-    /// Position tracking (CustomSyncState.IncrementalPosition) is owned entirely by
-    /// RowVersionSyncRunner, separate from LastSyncDate.</summary>
+    /// <summary>Rows whose rowversion column is at or after the stored position. SQL Server
+    /// updates the column on every write, so no change can be missed.</summary>
     RowVersion,
 
     /// <summary>SQL Server Change Tracking, enabled on the table by a DBA (SmartTableSync never
-    /// enables it). Reads CHANGETABLE(CHANGES ...) since the last version — only changed rows,
-    /// deletes included, with commit-time versions (no in-flight-transaction workaround needed).
-    /// Auto-detected and preferred over RowVersion whenever CT is enabled. Named
-    /// "SqlChangeTracking" rather than "ChangeTracking" because SyncSettings.TimestampColumns /
-    /// SyncPlan.IncrementalColumn already use "change tracking" for Timestamp's datetime column.
-    /// Position tracking (CustomSyncState.IncrementalPosition) is owned by
-    /// ChangeTrackingSyncRunner.</summary>
+    /// enables it): only changed keys are read and deletes are reported directly. Named
+    /// "SqlChangeTracking" to keep it distinct from the Timestamp strategy's column.</summary>
     SqlChangeTracking,
 }

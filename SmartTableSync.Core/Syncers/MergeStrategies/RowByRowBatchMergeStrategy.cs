@@ -1,9 +1,9 @@
 namespace SmartTableSync.Syncers.MergeStrategies;
 
-/// <summary>Merges a batch one row at a time, each via its own stored-procedure call —
-/// chosen when a single bad row shouldn't fail the rest of the batch: incoming foreign keys
-/// that can race against Data Sync's own delivery of the referenced table, or rows large
-/// enough that per-row failure isolation matters more than round-trip efficiency.</summary>
+/// <summary>Merges a batch one row at a time, each via its own stored-procedure call, so one
+/// bad row doesn't fail the rest. Failures whose SQL error number is in the plan's
+/// RetryableSqlErrorNumbers (547, an FK violation, for tables that reference another table)
+/// are reported as retryable, so the row is read again next run.</summary>
 internal sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 {
     private readonly TableProfile _profile;

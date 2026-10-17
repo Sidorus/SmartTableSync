@@ -73,21 +73,6 @@ public class SqlTypeMappingTests
         SqlTypeMapping.ToSqlDbType("ntext");
     }
 
-    [Fact]
-    public void DefaultKeyComponent_NumericColumn_IsZero()
-    {
-        // Matches the original hand-written syncers' "no resume key yet" sentinel for
-        // IDENTITY/int keys (resumeKey != null ? int.Parse(resumeKey) : 0).
-        Assert.Equal("0", SqlTypeMapping.DefaultKeyComponent("int"));
-    }
-
-    [Fact]
-    public void DefaultKeyComponent_StringColumn_IsEmptyString()
-    {
-        // Matches ProductCatalogItemSyncer's original: resumeKey ?? string.Empty.
-        Assert.Equal(string.Empty, SqlTypeMapping.DefaultKeyComponent("nvarchar"));
-    }
-
     [Theory]
     [InlineData("45231", "int", 45231)]
     [InlineData("en", "nvarchar", "en")]

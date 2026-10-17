@@ -1,13 +1,9 @@
 namespace SmartTableSync.Syncers.Keys;
 
 /// <summary>
-/// Generalizes DocumentAsset's hand-written "{DocumentId}|{Language}" resume-key format to
-/// any number of ordered primary key columns, joined with '|'. Pure — no I/O.
-///
-/// Deliberately does not handle the "no resume key yet" (null) case — what the correct
-/// starting value is per column depends on that column's type (0 for numeric columns,
-/// matching IDENTITY columns starting at 1; empty string for string columns), which is the
-/// caller's concern since it already has each column's type from TableProfile.
+/// A primary key as one string — the key columns' values in key order, joined with '|'
+/// (e.g. "206|en"). Used as the resume position between pages and as a row's identity in
+/// delete reconciliation. Pure — no I/O. "No position yet" is null, handled by the callers.
 /// </summary>
 internal static class CompositeKey
 {
