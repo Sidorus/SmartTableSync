@@ -2,9 +2,8 @@ namespace SmartTableSync.Syncers.Sql;
 
 /// <summary>Maps sys.types column type names (as read by SchemaReader) to SqlDbType and
 /// parses key-component strings back into the right CLR type. Pure, no I/O — this is what
-/// lets keyset pagination and parameter binding work generically across any table's
-/// primary key shape, instead of one hand-written parser per table.</summary>
-public static class SqlTypeMapping
+/// lets keyset pagination and parameter binding work for any table's primary key shape.</summary>
+internal static class SqlTypeMapping
 {
     public static SqlDbType ToSqlDbType(string sqlTypeName) => sqlTypeName.ToLowerInvariant() switch
     {
@@ -37,19 +36,12 @@ public static class SqlTypeMapping
         _ => throw new NotSupportedException($"Unmapped SQL type: {sqlTypeName}"),
     };
 
-    /// <summary>The "before any real value" sentinel for a keyset pagination column when
-    /// there's no resume key yet — 0 for numeric columns (matches IDENTITY columns, which
-    /// start at 1), empty string for string columns.</summary>
-    public static string DefaultKeyComponent(string sqlTypeName) =>
-        IsStringType(sqlTypeName) ? string.Empty : "0";
-
     public static bool IsStringType(string sqlTypeName) =>
         sqlTypeName.ToLowerInvariant() is "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext";
 
-    /// <summary>The types TableSyncCommandFactory.BuildIncrementalCommand's
-    /// "WHERE [Col] &gt;= DATEADD(minute, -1, @LastSync)" comparison actually works against
-    /// (@LastSync is bound as SqlDbType.DateTime). Excludes datetimeoffset/time, which don't
-    /// compare correctly against a plain DateTime parameter the same way.</summary>
+    /// <summary>The types the Timestamp strategy's "[Col] &gt;= DATEADD(minute, -1, @LastSync)"
+    /// filter works against (@LastSync is bound as SqlDbType.DateTime). Excludes
+    /// datetimeoffset/time, which don't compare correctly against a plain DateTime parameter.</summary>
     public static bool IsDateTimeFamily(string sqlTypeName) =>
         sqlTypeName.ToLowerInvariant() is "datetime" or "datetime2" or "smalldatetime" or "date";
 
@@ -79,6 +71,7 @@ public static class SqlTypeMapping
         "bigint" => long.Parse(value),
         "smallint" => short.Parse(value),
         "tinyint" => byte.Parse(value),
+        "decimal" or "numeric" => decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
         "nvarchar" or "varchar" or "nchar" or "char" or "text" or "ntext" => value,
         "uniqueidentifier" => Guid.Parse(value),
         "datetime" or "datetime2" or "smalldatetime" or "date" => DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture),

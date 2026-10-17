@@ -1,131 +1,131 @@
 namespace SmartTableSync.Syncers.Sql;
 
-/// <summary>Builds the parent/child SqlCommands the sync and delete-reconciliation paths
-/// need, from a TableProfile + SyncPlan. Stateless beyond the profile/plan it was built
-/// with — batch size is a per-call parameter rather than a constructor-captured field,
-/// since InitialSyncRunner mutates it at runtime via timeout backoff and this factory has
-/// no reason to know about that.</summary>
-public sealed class TableSyncCommandFactory
+/// <summary>Builds the parent/child SqlCommands the sync and delete-reconciliation paths need,
+/// from a TableProfile + SyncPlan. Every read of parent rows is one page of a keyset-paginated
+/// query: "SELECT TOP (@Size) ... WHERE [filter] AND [key after the last page] ORDER BY [key]".
+/// The strategies differ only in the filter (and, for Change Tracking, the source), so they
+/// share BuildPageCommand. The page size is a parameter rather than taken from the plan because
+/// InitialSyncRunner can shrink it at runtime after a timeout.</summary>
+internal sealed class TableSyncCommandFactory
 {
+    /// <summary>Extra bit column a page may carry: 1 when the row's key no longer exists in the
+    /// parent table (a delete), 0 otherwise. Only the Change Tracking page sets it;
+    /// ChangeWindowSyncRunner deletes flagged rows and removes the column before merging.</summary>
+    public const string RowDeletedColumn = "__SmartTableSync_RowDeleted";
+
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;
+    private readonly string _table;
 
     public TableSyncCommandFactory(TableProfile profile, SyncPlan plan)
     {
         _profile = profile;
         _plan = plan;
+        _table = $"[dbo].{SqlIdentifier.Quote(profile.TableName)}";
     }
 
-    public SqlCommand BuildInitialBatchCommand(SqlConnection parent, string? resumeKey, int batchSize)
+    /// <summary>Every row, page by page — the initial copy and the FullRescan strategy.</summary>
+    public SqlCommand BuildFullTablePageCommand(SqlConnection parent, string? afterKey, int pageSize) =>
+        BuildPageCommand(parent, null, "*", _table, filter: null, keyAlias: null, afterKey, pageSize);
+
+    /// <summary>Timestamp strategy. The one-minute overlap absorbs clock skew and transactions
+    /// that committed slightly after they stamped the column; re-reading a row is harmless
+    /// because every write is an idempotent MERGE.</summary>
+    public SqlCommand BuildTimestampPageCommand(SqlConnection parent, DateTime lastSync, string? afterKey, int pageSize)
     {
-        var paramNames = _profile.PrimaryKeyColumns.Select((_, i) => $"@Key{i}").ToList();
-        var predicate = KeysetPredicateBuilder.Build(_profile.PrimaryKeyColumns, paramNames);
-        var orderBy = KeysetPredicateBuilder.BuildOrderBy(_profile.PrimaryKeyColumns);
+        var cmd = BuildPageCommand(parent, null, "*", _table,
+            $"{SqlIdentifier.Quote(_plan.IncrementalColumn!)} >= DATEADD(minute, -1, @LastSync)", keyAlias: null, afterKey, pageSize);
+        cmd.Parameters.Add("@LastSync", SqlDbType.DateTime).Value = lastSync;
+        return cmd;
+    }
 
-        var sql = $"""
-            SELECT TOP (@Size) * FROM [dbo].[{_profile.TableName}]
-            WHERE  {predicate}
-            ORDER  BY {orderBy}
-            """;
+    /// <summary>RowVersion strategy. Inclusive (&gt;=) on purpose: the position is captured with
+    /// MIN_ACTIVE_ROWVERSION(), which is the value the next write receives when nothing is in
+    /// flight, so the first write after the capture can land exactly on it.</summary>
+    public SqlCommand BuildRowVersionPageCommand(SqlConnection parent, byte[] fromRowVersion, string? afterKey, int pageSize)
+    {
+        var cmd = BuildPageCommand(parent, null, "*", _table,
+            $"{SqlIdentifier.Quote(_plan.IncrementalColumn!)} >= @FromRowVersion", keyAlias: null, afterKey, pageSize);
+        cmd.Parameters.Add("@FromRowVersion", SqlDbType.Timestamp).Value = fromRowVersion;
+        return cmd;
+    }
 
-        var cmd = new SqlCommand(sql, parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-        cmd.Parameters.Add("@Size", SqlDbType.Int).Value = batchSize;
+    /// <summary>SqlChangeTracking strategy: keys changed since fromVersion (CHANGETABLE already
+    /// returns one row per key, however often it changed), LEFT JOINed to the table for current
+    /// values. Columns come back with the same names and order as SELECT *, so the page feeds
+    /// the merge strategies unchanged. Key values come from CHANGETABLE because the table side is
+    /// NULL for a deleted row; that NULL is what sets RowDeletedColumn. Runs on the caller's
+    /// transaction so it sees the same snapshot as the version check before it.</summary>
+    public SqlCommand BuildChangeTrackingPageCommand(
+        SqlConnection parent, SqlTransaction transaction, long fromVersion, string? afterKey, int pageSize)
+    {
+        var keyColumns = _profile.PrimaryKeyColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var columns = _profile.Columns.Select(c => $"{(keyColumns.Contains(c.Name) ? "CT" : "T")}.{SqlIdentifier.Quote(c.Name)}");
+        var firstKey = SqlIdentifier.Quote(_profile.PrimaryKeyColumns[0]);
+        var selectList = string.Join(", ", columns) +
+            $", CAST(CASE WHEN T.{firstKey} IS NULL THEN 1 ELSE 0 END AS BIT) AS {SqlIdentifier.Quote(RowDeletedColumn)}";
 
-        var keyParts = resumeKey is null
-            ? _profile.PrimaryKeyColumns.Select(c => SqlTypeMapping.DefaultKeyComponent(ColumnType(c))).ToArray()
-            : CompositeKey.Parse(resumeKey, _profile.PrimaryKeyColumns);
+        var joinOnKeys = string.Join(" AND ", _profile.PrimaryKeyColumns.Select(c =>
+            $"T.{SqlIdentifier.Quote(c)} = CT.{SqlIdentifier.Quote(c)}"));
+        var source = $"CHANGETABLE(CHANGES {_table}, @FromVersion) AS CT LEFT JOIN {_table} AS T ON {joinOnKeys}";
 
-        for (var i = 0; i < _profile.PrimaryKeyColumns.Count; i++)
+        var cmd = BuildPageCommand(parent, transaction, selectList, source, filter: null, keyAlias: "CT", afterKey, pageSize);
+        cmd.Parameters.Add("@FromVersion", SqlDbType.BigInt).Value = fromVersion;
+        return cmd;
+    }
+
+    public SqlCommand BuildParentKeyCommand(SqlConnection parent) =>
+        new($"SELECT {BuildKeySelectExpression()} FROM {_table}", parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
+
+    public SqlCommand BuildChildKeyCommand(SqlConnection child) =>
+        new($"SELECT {BuildKeySelectExpression()} FROM {_table}", child) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
+
+    /// <summary>afterKey null means the first page: no key condition at all. (A "before every
+    /// value" placeholder such as 0 or '' would skip rows whose key is 0, negative or empty, and
+    /// doesn't exist at all for date or GUID keys.)</summary>
+    private SqlCommand BuildPageCommand(
+        SqlConnection parent, SqlTransaction? transaction, string selectList, string source,
+        string? filter, string? keyAlias, string? afterKey, int pageSize)
+    {
+        var conditions = new List<string>(2);
+        if (filter is not null)
         {
-            var colType = ColumnType(_profile.PrimaryKeyColumns[i]);
-            cmd.Parameters.Add(paramNames[i], SqlTypeMapping.ToSqlDbType(colType)).Value =
-                SqlTypeMapping.ParseKeyComponent(keyParts[i], colType);
+            conditions.Add(filter);
+        }
+
+        var keyParameters = _profile.PrimaryKeyColumns.Select((_, i) => $"@Key{i}").ToList();
+        if (afterKey is not null)
+        {
+            conditions.Add($"({KeysetPredicateBuilder.Build(_profile.PrimaryKeyColumns, keyParameters, keyAlias)})");
+        }
+
+        var where = conditions.Count > 0 ? $"WHERE  {string.Join("\n  AND  ", conditions)}" : string.Empty;
+
+        var cmd = new SqlCommand($"""
+            SELECT TOP (@Size) {selectList}
+            FROM   {source}
+            {where}
+            ORDER  BY {KeysetPredicateBuilder.BuildOrderBy(_profile.PrimaryKeyColumns, keyAlias)}
+            """, parent, transaction) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
+
+        cmd.Parameters.Add("@Size", SqlDbType.Int).Value = pageSize;
+
+        if (afterKey is not null)
+        {
+            var keyParts = CompositeKey.Parse(afterKey, _profile.PrimaryKeyColumns);
+            for (var i = 0; i < _profile.PrimaryKeyColumns.Count; i++)
+            {
+                var columnType = ColumnType(_profile.PrimaryKeyColumns[i]);
+                cmd.Parameters.Add(keyParameters[i], SqlTypeMapping.ToSqlDbType(columnType)).Value =
+                    SqlTypeMapping.ParseKeyComponent(keyParts[i], columnType);
+            }
         }
 
         return cmd;
     }
 
-    public SqlCommand BuildIncrementalCommand(SqlConnection parent, DateTime lastSync)
-    {
-        var cmd = new SqlCommand($"""
-            SELECT * FROM [dbo].[{_profile.TableName}]
-            WHERE  [{_plan.ChangeTrackingColumn}] >= DATEADD(minute, -1, @LastSync)
-            """, parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-
-        cmd.Parameters.Add("@LastSync", SqlDbType.DateTime).Value = lastSync;
-        return cmd;
-    }
-
-    /// <summary>Rowversion strategy's incremental query — an exact cutoff, unlike
-    /// BuildIncrementalCommand's 1-minute datetime overlap, since rowversion values are
-    /// unambiguous and monotonically increasing. RowVersionSyncRunner is responsible for
-    /// capturing lastRowVersion correctly (MIN_ACTIVE_ROWVERSION(), never @@DBTS).
-    ///
-    /// Deliberately &gt;= (inclusive), not &gt; : MIN_ACTIVE_ROWVERSION() returns the value the
-    /// *next* write will receive when nothing is currently in flight, so the very first write
-    /// committed after a position was captured can land on exactly that value — a strict
-    /// &gt; would silently skip it. Never re-matches a row from the previous cycle either: that
-    /// row's version was already committed (thus strictly less than) the position captured
-    /// before that cycle's read, by the same reasoning.</summary>
-    public SqlCommand BuildRowVersionIncrementalCommand(SqlConnection parent, byte[] lastRowVersion)
-    {
-        var cmd = new SqlCommand($"""
-            SELECT * FROM [dbo].[{_profile.TableName}]
-            WHERE  [{_plan.ChangeTrackingColumn}] >= @LastRowVersion
-            """, parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-
-        cmd.Parameters.Add("@LastRowVersion", SqlDbType.Timestamp).Value = lastRowVersion;
-        return cmd;
-    }
-
-    /// <summary>Name of the extra bit column BuildChangeTrackingCommand appends: 1 when the
-    /// changed key no longer exists in the parent table (a delete), 0 otherwise.
-    /// ChangeTrackingSyncRunner removes it before handing the rows to the merge strategy.</summary>
-    public const string ChangeTrackingRowMissingColumn = "__SmartTableSync_RowMissing";
-
-    /// <summary>SQL Server Change Tracking strategy's incremental query: every key changed since
-    /// lastVersion (one row per key — CHANGETABLE already collapses repeated changes), LEFT
-    /// JOINed back to the table for current values. Columns come back in the table's own
-    /// column order with the same names as SELECT *, so the result feeds the existing merge
-    /// strategies unchanged; key columns are taken from CHANGETABLE because the table side is
-    /// NULL for a deleted row. A row is a delete exactly when the join finds nothing — that
-    /// covers SYS_CHANGE_OPERATION = 'D' and, outside snapshot isolation, a row deleted after
-    /// the change was recorded. Must run on the caller's transaction (snapshot isolation) so
-    /// it sees the same point in time as the version bounds read before it.</summary>
-    public SqlCommand BuildChangeTrackingCommand(SqlConnection parent, SqlTransaction transaction, long lastVersion)
-    {
-        var keyColumns = _profile.PrimaryKeyColumns.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var selectList = _profile.Columns.Select(c => keyColumns.Contains(c.Name)
-            ? $"CT.{SqlIdentifier.Quote(c.Name)}"
-            : $"T.{SqlIdentifier.Quote(c.Name)}");
-        var joinPredicate = string.Join(" AND ", _profile.PrimaryKeyColumns.Select(c =>
-            $"T.{SqlIdentifier.Quote(c)} = CT.{SqlIdentifier.Quote(c)}"));
-        var firstKey = SqlIdentifier.Quote(_profile.PrimaryKeyColumns[0]);
-        var table = $"[dbo].{SqlIdentifier.Quote(_profile.TableName)}";
-
-        var cmd = new SqlCommand($"""
-            SELECT {string.Join(", ", selectList)},
-                   CAST(CASE WHEN T.{firstKey} IS NULL THEN 1 ELSE 0 END AS BIT) AS {SqlIdentifier.Quote(ChangeTrackingRowMissingColumn)}
-            FROM   CHANGETABLE(CHANGES {table}, @LastVersion) AS CT
-            LEFT JOIN {table} AS T ON {joinPredicate}
-            """, parent, transaction) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-
-        cmd.Parameters.Add("@LastVersion", SqlDbType.BigInt).Value = lastVersion;
-        return cmd;
-    }
-
-    public SqlCommand BuildParentKeyCommand(SqlConnection parent) =>
-        new($"SELECT {BuildKeySelectExpression()} FROM [dbo].[{_profile.TableName}]", parent)
-        { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-
-    public SqlCommand BuildChildKeyCommand(SqlConnection child) =>
-        new($"SELECT {BuildKeySelectExpression()} FROM [dbo].[{_profile.TableName}]", child)
-        { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
-
     private string BuildKeySelectExpression() =>
-        KeysetPredicateBuilder.BuildKeySelectExpression(
-            _profile.PrimaryKeyColumns,
-            c => SqlTypeMapping.IsStringType(ColumnType(c)));
+        KeysetPredicateBuilder.BuildKeySelectExpression(_profile.PrimaryKeyColumns, ColumnType);
 
     private string ColumnType(string columnName) =>
         _profile.Columns.First(c => c.Name == columnName).SqlTypeName;

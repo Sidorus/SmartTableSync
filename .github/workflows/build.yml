@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# The workflow only reads the repository; give its token no write access.
+permissions:
+  contents: read
+
 jobs:
   build-test-pack:
     runs-on: ubuntu-latest

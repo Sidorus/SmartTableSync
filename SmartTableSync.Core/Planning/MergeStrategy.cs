@@ -1,15 +1,14 @@
 namespace SmartTableSync.Planning;
 
-public enum MergeStrategy
+/// <summary>How a batch of rows is merged into the child table.</summary>
+internal enum MergeStrategy
 {
-    /// <summary>Batch MERGE via a table-valued parameter — one SP call per batch.
-    /// Chosen when a table has no incoming FK timing risk and rows are small enough
-    /// that per-row isolation isn't needed.</summary>
+    /// <summary>One stored-procedure call per batch, through a table-valued parameter. Chosen
+    /// when the table references no other table and its rows are small.</summary>
     Tvp,
 
-    /// <summary>One SP call per row. Chosen either because incoming foreign keys can
-    /// race against Data Sync's own delivery of the referenced table (a bad row
-    /// shouldn't fail the whole batch), or because rows are large enough that
-    /// per-row failure isolation matters more than round-trip efficiency.</summary>
+    /// <summary>One stored-procedure call per row, so one failing row doesn't fail the batch.
+    /// Chosen when the table references another table (a row can arrive before the row it
+    /// references and fail the FK check until it does) or when rows are large.</summary>
     RowByRow,
 }

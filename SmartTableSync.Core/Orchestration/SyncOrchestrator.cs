@@ -1,30 +1,31 @@
 namespace SmartTableSync.Orchestration;
 
-public sealed class SyncOrchestrator : ISyncOrchestrator
+/// <summary>One sync run: takes the run lock, then for each configured table provisions it
+/// (checks the parent schema, derives or reuses its plan), runs its syncer, reconciles deletes
+/// when due, records LastSyncDate and reports metrics. A failure in one table is logged and
+/// retried next run without stopping the others.</summary>
+internal sealed class SyncOrchestrator : ISyncOrchestrator
 {
-    private static readonly TimeSpan _reconcileInterval = TimeSpan.FromHours(1);
-
-    // Instance fields, not static — SyncOrchestrator is already registered as a DI singleton
-    // (one instance per host), so static state here was redundant and actively harmful: two
-    // orchestrator instances in the same process (e.g. two test fixtures, or a future
-    // multi-tenant/multi-child-database scenario) would otherwise share one lock/timestamp
-    // and collide, exactly as happened once during this project's own test development.
-    private readonly SemaphoreSlim _runLock = new(1, 1);
+    // Per instance, not static: two orchestrators in one process (tests, or several child
+    // databases) must not share run state. This lock only skips overlapping runs inside this
+    // process cheaply; ISyncRunLock guarantees a single run across processes and machines.
+    private readonly SemaphoreSlim _inProcessRunLock = new(1, 1);
 
     private readonly IReadOnlyList<string> _tableNames;
     private readonly SyncMode _mode;
+    private readonly TimeSpan _reconcileInterval;
     private readonly TimeSpan _changeTrackingReconcileInterval;
     private readonly ISyncTableProvisioner _provisioner;
     private readonly ITableSyncerFactory _syncerFactory;
     private readonly IChildDdlProvisioner _childDdlProvisioner;
     private readonly IDbConnectionFactory _connFactory;
+    private readonly ISyncRunLock _runLock;
     private readonly ISyncStateRepository _syncState;
     private readonly ISyncMetricsReporter _metrics;
     private readonly ILogger<SyncOrchestrator> _logger;
 
-    // Also instance, not static — see rationale above _runLock. Per table, because tables on
-    // different incremental strategies reconcile on different intervals. A table missing from
-    // the dictionary has never reconciled in this process, so it's due on its first run.
+    // Per table, because tables on different incremental strategies reconcile on different
+    // intervals. A table missing here hasn't reconciled in this process yet, so it's due.
     private readonly Dictionary<string, DateTime> _lastReconcileUtc = new(StringComparer.OrdinalIgnoreCase);
 
     public SyncOrchestrator(
@@ -32,25 +33,27 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         ITableSyncerFactory syncerFactory,
         IChildDdlProvisioner childDdlProvisioner,
         IDbConnectionFactory connFactory,
+        ISyncRunLock runLock,
         ISyncStateRepository syncState,
         ISyncMetricsReporter metrics,
         IOptions<SyncSettings> settings,
         ILogger<SyncOrchestrator> logger)
     {
-        // Table names are now the only configuration surface for which tables get synced —
-        // there's no fixed set of hand-written syncers left to fall back to, so an empty list
-        // is a misconfiguration, not a valid "sync everything registered" default.
+        // AddSmartTableSync already validates this at startup; kept for hosts that construct
+        // the orchestrator without it.
         _tableNames = settings.Value.Tables.Count > 0
             ? settings.Value.Tables
             : throw new InvalidOperationException(
                 "SmartTableSync:TableList must list at least one table name.");
 
         _mode = settings.Value.Mode;
+        _reconcileInterval = settings.Value.ReconcileInterval;
         _changeTrackingReconcileInterval = settings.Value.ChangeTrackingReconcileInterval;
         _provisioner = provisioner;
         _syncerFactory = syncerFactory;
         _childDdlProvisioner = childDdlProvisioner;
         _connFactory = connFactory;
+        _runLock = runLock;
         _syncState = syncState;
         _metrics = metrics;
         _logger = logger;
@@ -58,7 +61,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
     public async Task RunAsync(CancellationToken ct = default)
     {
-        if (!await _runLock.WaitAsync(0))
+        if (!await _inProcessRunLock.WaitAsync(0, ct))
         {
             _logger.LogWarning("SmartTableSync: previous run still in progress — skipping this invocation");
             return;
@@ -66,6 +69,13 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
         try
         {
+            await using var databaseLock = await _runLock.TryAcquireAsync(ct);
+            if (databaseLock is null)
+            {
+                _logger.LogWarning("SmartTableSync: another instance is already syncing this child database — skipping this invocation");
+                return;
+            }
+
             _logger.LogInformation("SmartTableSync run started at {Time}", DateTimeOffset.UtcNow);
 
             if (_mode == SyncMode.Auto)
@@ -85,7 +95,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
         finally
         {
-            _runLock.Release();
+            _inProcessRunLock.Release();
         }
     }
 
@@ -101,11 +111,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             await parent.OpenAsync(ct);
             await child.OpenAsync(ct);
 
-            // Cheap on every run unless the parent schema actually changed - see
-            // SyncTableProvisioner. Building the syncer here (not at DI composition time)
-            // is what lets one generic ConfigurableTableSyncer replace a fixed set of
-            // hand-written classes: the table's shape and plan are only known once these
-            // connections are open.
+            // Cheap unless the parent schema changed (see SyncTableProvisioner). The syncer is
+            // built here, per run, because the table's shape and plan are only known now.
             var (profile, plan, wasFreshlyProvisioned) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
             if (_mode == SyncMode.Auto && wasFreshlyProvisioned)
@@ -124,14 +131,16 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             var lastSync = await _syncState.GetLastSyncDateAsync(child, syncer.TableName, ct);
             var result = await syncer.SyncAsync(parent, child, lastSync, ct);
-            var deleted = shouldReconcile
+            // Deletes applied during the pass itself (SqlChangeTracking) plus any found by the
+            // periodic key-set reconciliation.
+            var deleted = result.RowsDeleted + (shouldReconcile
                 ? await syncer.ReconcileDeletesAsync(parent, child, lastSync, ct)
-                : 0;
+                : 0);
 
             // Don't advance the timestamp in two cases:
             // 1. Initial sync had errors — keeps InitialDate so next run re-enters initial sync
             //    mode and resumes from the saved resume key rather than switching to incremental.
-            // 2. Incremental sync had retryable errors (e.g. FK timing race on AttributeValue) —
+            // 2. Incremental sync had retryable errors (e.g. an FK timing race) —
             //    keeps LastSyncDate so the failed rows fall inside the next run's query window
             //    and are retried. MERGE is idempotent so re-processing successful rows is safe.
             var initialSyncFailed = result.IsInitialSync && result.RowsErrored > 0;
@@ -171,7 +180,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
     // SqlChangeTracking tables get deletes from CT itself every cycle, so their full key-set
     // comparison is only a rare safety net (SyncSettings.ChangeTrackingReconcileInterval,
-    // zero = never). Every other strategy has no other source of deletes and stays hourly.
+    // zero = never). Every other strategy has no other source of deletes and uses
+    // SyncSettings.ReconcileInterval (default hourly).
     private bool IsReconcileDue(string tableName, IncrementalStrategy strategy)
     {
         var interval = strategy == IncrementalStrategy.SqlChangeTracking

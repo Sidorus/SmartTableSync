@@ -18,14 +18,14 @@ namespace SmartTableSync.IntegrationTests.Support;
 /// each builds one parameterized SqlCommand for a specific table shape, so the test classes
 /// themselves only contain Arrange/Act/Assert, not repeated column-by-column SQL.
 /// </summary>
-public static class SyncerTestHelpers
+internal static class SyncerTestHelpers
 {
     /// <summary>Builds a ConfigurableTableSyncer for the given table via the real production
     /// construction path (SchemaReader -> SyncTableProvisioner -> TableSyncerFactory), so
     /// tests exercise the exact same code SyncOrchestrator will use, not a shortcut. Returns
     /// the derived SyncPlan alongside the syncer so tests can assert the chosen MergeStrategy
     /// matches what the hand-written engine encoded per table. settings defaults to plain
-    /// SyncSettings (no ChangeTrackingColumns/AllowFullRescanFor entries) — every table not
+    /// SyncSettings (no TimestampColumns/AllowFullRescanFor entries) — every table not
     /// listed resolves to the default "LastUpdate" column, today's behavior.</summary>
     public static async Task<(ITableSyncer Syncer, SyncPlan Plan)> BuildConfigurableSyncerAsync(
         SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct = default, SyncSettings? settings = null)
@@ -37,9 +37,14 @@ public static class SyncerTestHelpers
 
         var (profile, plan, _) = await provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
 
-        var factory = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance);
+        var factory = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance);
         return (factory.Create(profile, plan), plan);
     }
+
+    /// <summary>The production DbConnectionFactory over the fixture's connection strings, with
+    /// default SyncSettings (5 connection-open attempts).</summary>
+    public static DbConnectionFactory CreateConnectionFactory(Microsoft.Extensions.Configuration.IConfiguration configuration) =>
+        new(configuration, Microsoft.Extensions.Options.Options.Create(new SyncSettings()), NullLogger<DbConnectionFactory>.Instance);
 
     public static async Task InsertNewProductAttributeValueRowAsync(
         SqlConnection parent, int attributeId, string slug, DateTime lastUpdate)

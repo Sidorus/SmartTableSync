@@ -101,7 +101,7 @@ public class InfrastructureProvisioningTests : IClassFixture<MsSqlTestFixture>
 
         var stateRepository = new SyncStateRepository();
         var lastSyncDate = await stateRepository.GetLastSyncDateAsync(child, "ProductCatalogItem", CancellationToken.None);
-        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), NullLoggerFactory.Instance).Create(profile, plan);
+        var syncer = new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance).Create(profile, plan);
 
         var result = await syncer.SyncAsync(parent, child, lastSyncDate, CancellationToken.None);
 

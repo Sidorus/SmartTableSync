@@ -25,12 +25,12 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind(new Dictionary<string, string?>
         {
-            ["SmartTableSync:ChangeTrackingColumns:SomeOtherTable"] = "ModifiedAt",
-            ["SmartTableSync:ChangeTrackingColumns:AnotherTable"] = "UpdatedAt",
+            ["SmartTableSync:TimestampColumns:SomeOtherTable"] = "ModifiedAt",
+            ["SmartTableSync:TimestampColumns:AnotherTable"] = "UpdatedAt",
         });
 
-        Assert.Equal("ModifiedAt", settings.ChangeTrackingColumns["SomeOtherTable"]);
-        Assert.Equal("UpdatedAt", settings.ChangeTrackingColumns["AnotherTable"]);
+        Assert.Equal("ModifiedAt", settings.TimestampColumns["SomeOtherTable"]);
+        Assert.Equal("UpdatedAt", settings.TimestampColumns["AnotherTable"]);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind([]);
 
-        Assert.Empty(settings.ChangeTrackingColumns);
+        Assert.Empty(settings.TimestampColumns);
     }
 
     [Fact]
@@ -46,10 +46,10 @@ public class SyncSettingsServiceCollectionExtensionsTests
     {
         var settings = Bind(new Dictionary<string, string?>
         {
-            ["SmartTableSync:ChangeTrackingColumns:SomeTable"] = "ModifiedAt",
+            ["SmartTableSync:TimestampColumns:SomeTable"] = "ModifiedAt",
         });
 
-        Assert.True(settings.ChangeTrackingColumns.TryGetValue("sometable", out var column));
+        Assert.True(settings.TimestampColumns.TryGetValue("sometable", out var column));
         Assert.Equal("ModifiedAt", column);
     }
 
@@ -154,6 +154,64 @@ public class SyncSettingsServiceCollectionExtensionsTests
         });
 
         Assert.Equal(TimeSpan.FromHours(24), settings.ChangeTrackingReconcileInterval);
+    }
+
+    [Fact]
+    public void TimestampColumns_StillReadsTheOriginalChangeTrackingColumnsKey_NewKeyWins()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:ChangeTrackingColumns:LegacyTable"] = "ModifiedAt",
+            ["SmartTableSync:ChangeTrackingColumns:BothTable"] = "OldColumn",
+            ["SmartTableSync:TimestampColumns:BothTable"] = "NewColumn",
+        });
+
+        Assert.Equal("ModifiedAt", settings.TimestampColumns["LegacyTable"]);
+        Assert.Equal("NewColumn", settings.TimestampColumns["BothTable"]);
+    }
+
+    [Fact]
+    public void ReconcileIntervalHours_BindsWholeHours()
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ReconcileIntervalHours"] = "3" });
+
+        Assert.Equal(TimeSpan.FromHours(3), settings.ReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("hourly")]
+    public void ReconcileIntervalHours_MissingZeroOrInvalid_DefaultsToOneHour(string? value)
+    {
+        // Zero is not allowed here: for non-CT strategies reconciliation is the only source of deletes.
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ReconcileIntervalHours"] = value });
+
+        Assert.Equal(TimeSpan.FromHours(1), settings.ReconcileInterval);
+    }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("10", 10)]
+    [InlineData("60", 60)]
+    public void ConnectionOpenAttempts_BindsValuesSqlClientAccepts(string value, int expected)
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ConnectionOpenAttempts"] = value });
+
+        Assert.Equal(expected, settings.ConnectionOpenAttempts);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("61")]
+    [InlineData("many")]
+    public void ConnectionOpenAttempts_MissingOrOutOfRange_DefaultsToFive(string? value)
+    {
+        var settings = Bind(new Dictionary<string, string?> { ["SmartTableSync:ConnectionOpenAttempts"] = value });
+
+        Assert.Equal(5, settings.ConnectionOpenAttempts);
     }
 
     [Fact]

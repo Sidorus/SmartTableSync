@@ -24,7 +24,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["AttributeValueId"],
         IdentityColumn: "AttributeValueId",
         IndexedLobColumns: ["Description"],
-        HasIncomingForeignKeys: true,
+        ReferencesOtherTables: true,
         RowCount: 100,
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -94,7 +94,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["Sku"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 1000,
         AvgRowSizeBytes: 2000,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -150,14 +150,14 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["PricePointId"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 200,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
 
     private static SyncPlan RowVersionTvpPlan() => new(
         "PricePoint", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "PricePointTableType",
-        ChangeTrackingColumn: "RowVer", IncrementalStrategy: IncrementalStrategy.RowVersion);
+        IncrementalColumn: "RowVer", IncrementalStrategy: IncrementalStrategy.RowVersion);
 
     [Fact]
     public void GenerateTvpUdtScript_WithRowVersionColumn_ExcludesItFromTvpType()
@@ -212,7 +212,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["OrderStatusId"],
         IdentityColumn: "OrderStatusId",
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 100,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -249,6 +249,74 @@ public class SqlArtifactGeneratorTests
         Assert.Contains("CREATE NONCLUSTERED INDEX [IX_PricePoint_RowVer] ON [dbo].[PricePoint] ([RowVer]);", script);
     }
 
+    // --- Names from the parent schema are untrusted: nothing in a name may change the script ---
+
+    private static TableProfile HostileNamesProfile() => new(
+        TableName: "Orders]; DROP TABLE [dbo].[SyncTableConfig]; --",
+        Columns:
+        [
+            new ColumnProfile("Id", "int", 4, false),
+            new ColumnProfile("Note] NVARCHAR(10)); DROP TABLE [dbo].[CustomSyncState]; --", "nvarchar", 200, true),
+        ],
+        PrimaryKeyColumns: ["Id"],
+        IdentityColumn: null,
+        IndexedLobColumns: [],
+        ReferencesOtherTables: false,
+        RowCount: 10,
+        AvgRowSizeBytes: 100,
+        MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+    [Fact]
+    public void GeneratedDdl_EscapesTableAndColumnNames_SoTheyStayInsideTheirBrackets()
+    {
+        var profile = HostileNamesProfile();
+        var plan = new SyncPlan(profile.TableName, MergeStrategy.Tvp, 100, SqlBulkCopyOptions.Default, 120, [], "OrdersTableType");
+
+        var scripts = string.Join("\n",
+            _generator.GenerateCreateTableScript(profile),
+            _generator.GenerateTvpUdtScript(profile, "OrdersTableType"),
+            _generator.GenerateMergeProcedureScript(profile, plan));
+
+        // Every ']' inside a name is doubled, so the name can't close its bracket and start a statement.
+        Assert.Contains("[Orders]]; DROP TABLE [dbo]].[SyncTableConfig]]; --]", scripts);
+        Assert.Contains("[Note]] NVARCHAR(10)); DROP TABLE [dbo]].[CustomSyncState]]; --]", scripts);
+        Assert.DoesNotContain("[Orders]; DROP TABLE", scripts);
+        Assert.DoesNotContain("[Note] NVARCHAR(10)); DROP TABLE", scripts);
+    }
+
+    [Fact]
+    public void GeneratedDdl_DoublesQuotesInsideStringLiterals()
+    {
+        var profile = HostileNamesProfile() with { TableName = "O'Brien'); DROP TABLE x; --" };
+
+        var script = _generator.GenerateChangeTrackingSetupScript(profile);
+
+        Assert.Contains("OBJECT_ID(N'[dbo].[O''Brien''); DROP TABLE x; --]')", script);
+    }
+
+    [Fact]
+    public void GeneratedDdl_NameWithLineBreak_IsRejected()
+    {
+        // Scripts are split into batches on "GO" lines as plain text, before SQL Server parses
+        // them, so a line break in a name could start a new batch even inside brackets.
+        var profile = HostileNamesProfile() with { TableName = "Orders\nGO\nDROP TABLE x" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _generator.GenerateChangeTrackingSetupScript(profile));
+
+        Assert.Contains("control character", ex.Message);
+    }
+
+    [Fact]
+    public void RowByRowProcedure_ColumnNameThatCantBeAParameter_IsRejected()
+    {
+        var profile = HostileNamesProfile() with { TableName = "Orders" };
+        var plan = new SyncPlan("Orders", MergeStrategy.RowByRow, 100, SqlBulkCopyOptions.Default, 120, [], TvpTypeName: null);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _generator.GenerateMergeProcedureScript(profile, plan));
+
+        Assert.Contains("can't be used as a stored-procedure parameter name", ex.Message);
+    }
+
     // --- GenerateChangeTrackingSetupScript: parent-side, hand-applied-only DDL ---
 
     [Fact]
@@ -267,7 +335,7 @@ public class SqlArtifactGeneratorTests
         var script = _generator.GenerateChangeTrackingSetupScript(NoRowVersionProfile());
 
         Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_databases WHERE database_id = DB_ID())", script);
-        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID('dbo.OrderStatus'))", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(N'[dbo].[OrderStatus]'))", script);
     }
 
     [Fact]
@@ -292,8 +360,8 @@ public class SqlArtifactGeneratorTests
     {
         var script = _generator.GenerateRowVersionSetupScript(NoRowVersionProfile());
 
-        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OrderStatus') AND name = 'RowVer')", script);
-        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.OrderStatus') AND name = 'IX_OrderStatus_RowVer')", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[OrderStatus]') AND name = N'RowVer')", script);
+        Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[OrderStatus]') AND name = N'IX_OrderStatus_RowVer')", script);
     }
 
     // --- Identity + Tvp shape: no incoming FKs, small rows -> Tvp, but with an identity PK
@@ -309,7 +377,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["LookupCodeId"],
         IdentityColumn: "LookupCodeId",
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 100,
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -353,7 +421,7 @@ public class SqlArtifactGeneratorTests
         PrimaryKeyColumns: ["DocumentId", "LanguageCode"],
         IdentityColumn: null,
         IndexedLobColumns: [],
-        HasIncomingForeignKeys: false,
+        ReferencesOtherTables: false,
         RowCount: 500,
         AvgRowSizeBytes: 1000,
         MaxLobColumnSizeBytes: new Dictionary<string, long> { ["FileContent"] = 52_000_000 });

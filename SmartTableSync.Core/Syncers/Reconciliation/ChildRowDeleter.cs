@@ -3,7 +3,7 @@ namespace SmartTableSync.Syncers.Reconciliation;
 /// <summary>Deletes one child row by its CompositeKey-formatted key. Shared by DeleteReconciler
 /// (orphans found by the hourly key-set diff) and ChangeTrackingSyncRunner (deletes reported
 /// directly by SQL Server Change Tracking), so both build the same parameterized DELETE.</summary>
-public sealed class ChildRowDeleter
+internal sealed class ChildRowDeleter
 {
     private readonly TableProfile _profile;
 

@@ -18,8 +18,19 @@ public static class SmartTableSyncServiceCollectionExtensions
     {
         services.AddSmartTableSyncSettings();
 
+        // Fail at host startup, not on the first timer run minutes later, when the engine has
+        // nothing to sync. Lives here rather than in AddSmartTableSyncSettings so tools that
+        // only bind settings (tests, Scaffold) don't need a table list.
+        services.AddOptions<SyncSettings>()
+            .Validate(settings => settings.Tables.Count > 0, "SmartTableSync:TableList must list at least one table name.")
+            .Validate(
+                settings => settings.Tables.Distinct(StringComparer.OrdinalIgnoreCase).Count() == settings.Tables.Count,
+                "SmartTableSync:TableList lists the same table more than once.")
+            .ValidateOnStart();
+
         services.TryAddSingleton<ISyncMetricsReporter, SyncMetricsReporter>();
         services.TryAddSingleton<IDbConnectionFactory, DbConnectionFactory>();
+        services.TryAddSingleton<ISyncRunLock, ChildDatabaseRunLock>();
         services.TryAddSingleton<ISyncStateRepository, SyncStateRepository>();
         services.TryAddSingleton<IBatchLogger, BatchLogger>();
         services.TryAddSingleton<ISchemaReader, SchemaReader>();

@@ -3,7 +3,7 @@ namespace SmartTableSync.Configuration;
 /// <summary>The persisted row for one managed table in dbo.SyncTableConfig — introspected
 /// shape + heuristically-derived plan + optional hand-set overrides, surviving container
 /// redeploys because it lives in the child DB rather than a local file.</summary>
-public sealed record SyncTableConfig(
+internal sealed record SyncTableConfig(
     string TableName,
     IReadOnlyList<string> PrimaryKeyColumns,
     string? IdentityColumn,
@@ -18,24 +18,17 @@ public sealed record SyncTableConfig(
     int? BatchSizeOverride,
     int? BulkCopyTimeoutSecondsOverride,
     IReadOnlyList<int>? RetryableSqlErrorsOverride,
-    string? ChangeTrackingColumn = null,
+    string? IncrementalColumn = null,
     IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp)
 {
-    /// <summary>Maps to a SyncPlan, applying any non-null override over the corresponding
-    /// heuristically-derived value. BulkCopyOptions isn't stored separately — it's fully
-    /// determined by IdentityColumn, so it's recomputed here rather than persisted twice.
-    /// ChangeTrackingColumn/IncrementalStrategy have no override — the one configuration
-    /// surface for them is SyncSettings (app config), resolved once at provisioning time.
+    /// <summary>Maps to a SyncPlan, applying every non-null override over the derived value.
+    /// BulkCopyOptions is recomputed from IdentityColumn rather than stored. IncrementalColumn
+    /// and IncrementalStrategy have no override column; they come from SyncSettings.
     ///
-    /// TvpTypeName must be derived from the RESOLVED merge strategy, not passed through
-    /// unconditionally — the stored TvpTypeName is only ever non-null when the heuristic
-    /// itself picked Tvp (SyncPlanHeuristic.DerivePlan). Hand-setting MergeStrategyOverride to
-    /// Tvp on a table the heuristic picked RowByRow for (or drift flipping the heuristic's own
-    /// choice while a stale override survives) would otherwise persist a null TvpTypeName
-    /// forever — TvpBatchMergeStrategy then targets a TVP type named "dbo." (SqlException,
-    /// every batch), and in Auto mode ChildDdlProvisioner auto-executes an invalid
-    /// "CREATE TYPE [dbo].[] AS TABLE (...)". Falling back to the same naming convention
-    /// SyncPlanHeuristic uses ("{TableName}TableType") makes the override self-healing instead.</summary>
+    /// TvpTypeName follows the RESOLVED merge strategy: the stored name is null unless the
+    /// heuristic itself chose Tvp, so a MergeStrategyOverride of Tvp falls back to the same
+    /// "{TableName}TableType" convention. Without that, the TVP type name would be empty and
+    /// every batch (and, in Auto mode, the generated CREATE TYPE) would fail.</summary>
     public SyncPlan ToSyncPlan()
     {
         var resolvedMergeStrategy = MergeStrategyOverride ?? MergeStrategy;
@@ -51,7 +44,7 @@ public sealed record SyncTableConfig(
             BulkCopyTimeoutSeconds: BulkCopyTimeoutSecondsOverride ?? BulkCopyTimeoutSeconds,
             RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
             TvpTypeName: resolvedTvpTypeName,
-            ChangeTrackingColumn: ChangeTrackingColumn,
+            IncrementalColumn: IncrementalColumn,
             IncrementalStrategy: IncrementalStrategy);
     }
 
@@ -78,7 +71,7 @@ public sealed record SyncTableConfig(
         BatchSizeOverride: batchSizeOverride,
         BulkCopyTimeoutSecondsOverride: bulkCopyTimeoutSecondsOverride,
         RetryableSqlErrorsOverride: retryableSqlErrorsOverride,
-        ChangeTrackingColumn: plan.ChangeTrackingColumn,
+        IncrementalColumn: plan.IncrementalColumn,
         IncrementalStrategy: plan.IncrementalStrategy);
 
     /// <summary>An operator overriding MergeStrategy to RowByRow for FK-timing reasons expects
@@ -88,8 +81,8 @@ public sealed record SyncTableConfig(
     /// unless the operator also knows to set RetryableSqlErrorsOverride separately. Pure, so
     /// it's unit-testable without the live SqlConnection EnsureProvisionedAsync needs.</summary>
     public static IReadOnlyList<int>? ResolveRetryableSqlErrorsOverride(
-        MergeStrategy? mergeStrategyOverride, IReadOnlyList<int>? existingRetryableSqlErrorsOverride, bool hasIncomingForeignKeys) =>
-        mergeStrategyOverride == MergeStrategy.RowByRow && existingRetryableSqlErrorsOverride is null && hasIncomingForeignKeys
+        MergeStrategy? mergeStrategyOverride, IReadOnlyList<int>? existingRetryableSqlErrorsOverride, bool referencesOtherTables) =>
+        mergeStrategyOverride == MergeStrategy.RowByRow && existingRetryableSqlErrorsOverride is null && referencesOtherTables
             ? [547]
             : existingRetryableSqlErrorsOverride;
 }

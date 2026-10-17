@@ -4,7 +4,7 @@ namespace SmartTableSync.Syncers.Sql;
 /// per-row overhead. Only used by InitialSyncRunner; incremental sync always goes through
 /// the batch's IBatchMergeStrategy instead, since the child already has rows to merge
 /// against by then.</summary>
-public static class BulkCopyWriter
+internal static class BulkCopyWriter
 {
     public static async Task WriteAsync(
         DataTable batch, SqlConnection child, string tableName,
@@ -12,7 +12,7 @@ public static class BulkCopyWriter
     {
         using var bulk = new SqlBulkCopy(child, options, externalTransaction: null)
         {
-            DestinationTableName = $"[dbo].[{tableName}]",
+            DestinationTableName = SqlIdentifier.DboTable(tableName),
             BulkCopyTimeout = timeoutSeconds
         };
 

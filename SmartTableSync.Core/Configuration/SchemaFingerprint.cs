@@ -16,7 +16,7 @@ namespace SmartTableSync.Configuration;
 /// preserved exactly as given, since reordering a composite key changes the keyset
 /// predicate and resume-key format and must be detected.
 /// </summary>
-public static class SchemaFingerprint
+internal static class SchemaFingerprint
 {
     public static string Compute(TableProfile profile)
     {

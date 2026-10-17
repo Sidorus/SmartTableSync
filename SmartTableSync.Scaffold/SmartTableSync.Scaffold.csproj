@@ -6,7 +6,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>smarttablesync-scaffold</ToolCommandName>
     <PackageId>SmartTableSync.Scaffold</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>Manual schema-scaffolding CLI for SmartTableSync — introspects a table (or generates the shared tracking infrastructure) and writes reviewable .sql files. Never executes anything against a database itself.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

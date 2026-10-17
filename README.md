@@ -1,86 +1,108 @@
 # SmartTableSync
 
-A .NET 10 Azure Function that fills a gap Azure SQL Data Sync can't cover: keeping specific tables synchronized between two Azure SQL databases when their schema or row size falls outside what Data Sync supports.
+A self-configuring .NET 10 engine that keeps tables synchronized between two Azure SQL databases
+(parent → child): give it table names, and it inspects each table's schema, picks how to detect
+changes and how to merge them, and keeps the child up to date every few minutes. It ships with an
+Azure Functions host, but the engine is a plain library usable from any .NET host.
 
 ## The problem
 
-Azure SQL Database doesn't support cross-database queries — you can't `JOIN` or even `SELECT` across two separate Azure SQL databases in one query, unlike on-prem SQL Server or Azure SQL Managed Instance. **Azure SQL Data Sync** is Microsoft's managed answer to that: it replicates tables between databases on a schedule, no custom code required.
+Azure SQL Database doesn't support cross-database queries — you can't `JOIN` or even `SELECT`
+across two separate Azure SQL databases in one query, unlike on-prem SQL Server or Azure SQL
+Managed Instance. **Azure SQL Data Sync** is Microsoft's managed answer, but:
 
-Data Sync works well for most tables, but it has two hard limits:
-
-- It can't use an `nvarchar(max)` or `varbinary(max)` column as part of an **indexed key** — unsupported type for that role.
+- It can't use an `nvarchar(max)` or `varbinary(max)` column as part of an **indexed key**.
 - Each synced row must stay under a **24 MB batch limit**.
+- It is being **retired on 30 September 2027**; Microsoft's migration guidance points to Azure
+  Data Factory or Azure Functions — the shape of this project.
 
-Any table that hits either limit simply can't be included in Data Sync's sync group. Real-world schemas frequently have a handful of tables like this — a search-key column that's `nvarchar(max)`, or a document/media table with large binary content. SmartTableSync exists to synchronize exactly those exception tables, using a custom transport layer and stored-procedure-based `MERGE` instead of Data Sync's built-in replication.
+SmartTableSync started as the transport for the tables Data Sync can't handle and is growing into
+a general replacement ([ADR-0013](docs/adr/0013-position-as-general-data-sync-replacement.md)).
 
 ```mermaid
 flowchart LR
     Parent[("Parent<br/>Azure SQL Database")]
     Child[("Child<br/>Azure SQL Database")]
 
-    Parent -- "Azure SQL Data Sync<br/>(everything else, scheduled)" --> Child
-    Parent -- "SmartTableSync<br/>(exception tables, 5-min timer)" --> Child
+    Parent -- "SmartTableSync<br/>(5-minute timer)" --> Child
 ```
 
-## What it does
+## How it works
 
-A timer-triggered Azure Function that:
-
-- Runs on a 5-minute schedule
-- Connects to both databases directly (since the platform can't do it in SQL)
-- **Initial sync**: bulk-copies each table from empty, using keyset pagination (never `OFFSET`) so a crash or timeout can resume from the last completed batch instead of restarting from row 1
-- **Incremental sync**: after the first full sync, only pulls rows changed since the last run and merges them via a stored procedure `MERGE` — TVP-batched where there's no risk of a per-row error blocking the batch, row-by-row where isolation matters (e.g. tables with foreign-key timing dependencies on other, Data-Sync-managed tables)
-- **Delete reconciliation**: periodically removes rows from the target that no longer exist in the source
-- Emits custom metrics (rows synced/errored/deleted, duration, lag) to Application Insights per table per run
-
-## Example tables
-
-The repo ships with three representative example tables, each demonstrating a different reason a table might need this instead of Data Sync:
-
-| Table | Why it can't use Data Sync |
-|---|---|
-| `ProductAttributeValue` | Has an `nvarchar(max)` column used as an indexed key |
-| `ProductCatalogItem` | Same — a wide table with an `nvarchar(max)` search-key column |
-| `DocumentAsset` | Rows can exceed the 24 MB batch limit (binary content columns) |
-
-## Architecture
-
-What happens every 5-minute cycle, per table:
+Every run, for each configured table:
 
 ```mermaid
 flowchart TD
-    Timer["Timer trigger (5 min)"] --> SR["SchemaReader<br/>introspects parent schema"]
-    SR --> FP{"Schema fingerprint<br/>changed, or new table?"}
-    FP -- No --> Plan["Load persisted SyncPlan<br/>(SyncTableConfig)"]
-    FP -- Yes --> Heuristic["SyncPlanHeuristic<br/>derives merge + incremental strategy"]
-    Heuristic --> Persist["SyncTableProvisioner<br/>persists plan + fingerprint"]
-    Persist --> Plan
+    Timer["Timer trigger (5 min)"] --> Lock{"Run lock<br/>(sp_getapplock on child)"}
+    Lock -- "held by another instance" --> Skip["Skip this run"]
+    Lock -- acquired --> SR["SchemaReader<br/>inspects parent schema"]
+    SR --> FP{"Schema fingerprint changed,<br/>or new table?"}
+    FP -- No --> Plan["Load persisted SyncPlan<br/>(dbo.SyncTableConfig)"]
+    FP -- Yes --> Heuristic["SyncPlanHeuristic<br/>merge strategy + incremental strategy"]
+    Heuristic --> Plan
 
-    Plan --> Phase{"Ever synced<br/>before?"}
-    Phase -- No --> Initial["InitialSyncRunner<br/>keyset-paginated SqlBulkCopy"]
-    Phase -- Yes --> Incremental["Incremental runner<br/>Timestamp / RowVersion / FullRescan"]
+    Plan --> Phase{"Initial copy<br/>finished?"}
+    Phase -- No --> Initial["Initial copy<br/>keyset-paginated SqlBulkCopy, resumable"]
+    Phase -- Yes --> Incremental["Incremental pass<br/>changed rows, page by page"]
 
-    Initial --> Merge["MERGE via TVP or row-by-row"]
+    Initial --> Merge["MERGE (TVP batch or row by row)<br/>+ deletes"]
     Incremental --> Merge
     Merge --> ChildDB[("Child DB")]
-
-    Plan --> Reconcile["DeleteReconciler<br/>(hourly)"]
-    Reconcile --> ChildDB
-
-    Merge --> Metrics["Application Insights<br/>rows synced/errored, duration, lag"]
+    Plan --> Reconcile["Delete reconciliation<br/>(periodic key-set diff)"] --> ChildDB
+    Merge --> Metrics["Metrics<br/>System.Diagnostics.Metrics"]
 ```
 
-### Project layout
+### Incremental strategies
 
-The sync engine (`SmartTableSync.Core`) is a separate class library from the Azure Functions host (`SmartTableSyncFunction`), so it isn't tied to Azure Functions specifically. `SmartTableSync.Scaffold` is a manual, on-demand CLI (also installable as a `dotnet tool`, `smarttablesync-scaffold`) that introspects a table's schema and generates the SQL (table/UDT/stored procedure) for review, or writes the shared tracking-infrastructure schema via `--infrastructure` — it never executes DDL itself.
+How a table finds what changed since the last run. Chosen automatically per table — the first
+applicable one in this order wins — or forced with `SmartTableSync:IncrementalStrategyOverrides:<Table>`:
 
-### Architecture decisions
+| Strategy | Used when | Deletes |
+|---|---|---|
+| `SqlChangeTracking` | A DBA enabled SQL Server Change Tracking on the table | Reported directly, every run |
+| `RowVersion` | The table has a `rowversion` column | Periodic reconciliation |
+| `Timestamp` | The table has the configured datetime column (default `LastUpdate`) | Periodic reconciliation |
+| `FullRescan` | None of the above, and the table is small (≤ 50,000 rows) or listed in `AllowFullRescanFor` | Periodic reconciliation |
 
-Significant design decisions — what was chosen, what was rejected, and why — are recorded as
-[Architecture Decision Records](docs/adr/README.md) in `docs/adr/`. Start there for the
-reasoning behind the engine's shape (custom build vs. Data Factory/replication/migration
-tooling, the merge-strategy and incremental-strategy selection rules, the least-privilege
-identity model) rather than reverse-engineering it from the code.
+A large table with no usable strategy fails at provisioning with a message naming the setting to
+fix — it never silently re-scans millions of rows every five minutes.
+
+### Merge strategies
+
+- **TVP** — one stored-procedure call per batch, for tables that reference no other table and
+  have small rows.
+- **Row by row** — one call per row, so one failing row doesn't fail the batch: for tables that
+  reference another table (a row can arrive before the row it references; the FK error is retried
+  next run) or that have very large rows.
+
+### Reliability
+
+- Initial copy is keyset-paginated and resumable from the last completed batch.
+- Incremental passes read changes in bounded pages, so a backlog after an outage never loads
+  into memory at once.
+- The position is only advanced after a pass succeeds; a retryable failure re-reads the window.
+- Opening a connection retries transient Azure SQL errors with exponential backoff.
+- An application lock in the child database guarantees one run at a time across every host
+  instance; SQL Server releases it automatically if a host dies.
+
+## Configuration
+
+Connection strings: `ParentDbConnectionString`, `ChildDbConnectionString`, and — only for Auto
+mode — `ChildProvisioningConnectionString`. Engine settings (App Settings or `local.settings.json`;
+see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.template.json)):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `SmartTableSync:TableList` | — (required) | Comma-separated tables to sync |
+| `SmartTableSync:Mode` | `Manual` | `Auto` lets the engine create child tables/types/procedures itself |
+| `SmartTableSync:TimestampColumns:<Table>` | `LastUpdate` | Datetime column for the Timestamp strategy (old name `ChangeTrackingColumns` still read) |
+| `SmartTableSync:AllowFullRescanFor` | — | Large tables allowed to re-scan every run |
+| `SmartTableSync:IncrementalStrategyOverrides:<Table>` | — | Force `Timestamp`, `RowVersion`, `FullRescan` or `SqlChangeTracking` |
+| `SmartTableSync:ReconcileIntervalHours` | `1` | Delete-reconciliation interval for non Change Tracking tables |
+| `SmartTableSync:ChangeTrackingReconcileIntervalHours` | `24` | Same for Change Tracking tables (`0` = only after a fallback re-scan) |
+| `SmartTableSync:ConnectionOpenAttempts` | `5` | Attempts to open a connection on transient errors (1–60) |
+
+Settings are validated at startup: an empty or duplicated table list stops the host from starting.
 
 ## Getting started
 
@@ -89,13 +111,51 @@ cd SmartTableSyncFunction
 dotnet build
 ```
 
-The engine needs three tracking tables (`CustomSyncState`, `SyncBatchLog`, `SyncTableConfig`) on the child database before syncing any table — these are generated, not static files:
+1. Set up the three database identities from [`sql/07_permissions.sql`](sql/07_permissions.sql)
+   (runtime, parent introspection, child provisioning) — the always-on runtime never holds DDL rights.
+2. Child tracking tables (`CustomSyncState`, `SyncBatchLog`, `SyncTableConfig`) are generated:
+   **Auto mode** creates them on every run; in **Manual mode** run
+   `smarttablesync-scaffold --infrastructure` once and apply `00_infrastructure.sql`.
+3. Child business tables and their MERGE procedures: Auto mode creates them; in Manual mode run
+   `smarttablesync-scaffold <Table> ...` and apply the generated scripts after review.
+4. Optional, per table, applied by a DBA on the **parent**:
+   `smarttablesync-scaffold --change-tracking-setup <Table>` (enables Change Tracking and grants
+   `VIEW CHANGE TRACKING`) or `--rowversion-setup <Table>` (adds a rowversion column and index).
+5. Configure the connection strings and `SmartTableSync:TableList`, then publish the Function.
 
-- **Auto mode** (`SmartTableSync:Mode = Auto`): the Function creates them itself, automatically, on every run. Nothing to deploy by hand.
-- **Manual mode** (default): run `dotnet tool run smarttablesync-scaffold -- --infrastructure` once and apply the generated `00_infrastructure.sql` yourself.
+To host the engine elsewhere, reference `SmartTableSync.Core`, call `services.AddSmartTableSync()`
+and invoke `ISyncOrchestrator.RunAsync` on your own schedule. `ISyncRunLock`,
+`IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
+implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
+OpenTelemetry exporter can collect them.
 
-For this repo's own three example tables, also deploy `sql/02-05_*.sql` in numbered order (their stored procedures/UDT — hand-authored reference scripts for the worked example, not something the engine generates for you). Configure `ParentDbConnectionString` / `ChildDbConnectionString`, and publish the Function.
+## Project layout
+
+| Project | What it is |
+|---|---|
+| `SmartTableSync.Core` | The engine (NuGet package `SmartTableSync`) |
+| `SmartTableSyncFunction` | Thin Azure Functions host (timer trigger) |
+| `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
+| `SmartTableSync.Tests` | Unit tests |
+| `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker) |
+
+Inside Core, each incremental strategy is one class in `Strategies/` (when it applies, which
+column it reads, which runner executes it), and every runner derives from
+`ChangeWindowSyncRunner<TPosition>`, which owns paging, deletes, merging and the position rule —
+see [ADR-0017](docs/adr/0017-strategy-registry-and-template-method-runners.md).
+
+## Architecture decisions
+
+Significant decisions — what was chosen, what was rejected, and why — are recorded as
+[Architecture Decision Records](docs/adr/README.md).
 
 ## Status
 
-`SmartTableSync.Core` has evolved from the hardcoded, three-table version above into a general-purpose, self-configuring engine — give it a table name, it introspects the schema, derives a sync plan, and generates reviewable SQL (or applies it directly in Auto mode). Landed so far: the config-driven engine itself, Auto/Manual DDL provisioning, a configurable per-table change-tracking column (with a safe full-rescan fallback for tables that have none), full `SqlTypeMapping` type coverage, script-independent infrastructure DDL, a `dotnet tool`-packaged Scaffold CLI, and the three `/code-review` findings from the last audit pass. Verified against a real, disposable SQL Server (Testcontainers) — not yet against real Azure SQL Database, Managed Identity, or a deployed Function App. Still **not published** to NuGet/GitHub; the Function above is the current, working reference implementation.
+Version **0.3.0**. Verified against a real, disposable SQL Server (Testcontainers) — not yet
+against real Azure SQL Database, Managed Identity, or a deployed Function App. Not yet published
+to NuGet.
+
+0.3.0 is not drop-in compatible with 0.2.0 code that used engine types directly: the public API
+is now only what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and
+the replaceable services above). Hosts that only call `AddSmartTableSync()` are unaffected; the
+`SmartTableSync:ChangeTrackingColumns` setting keeps working.

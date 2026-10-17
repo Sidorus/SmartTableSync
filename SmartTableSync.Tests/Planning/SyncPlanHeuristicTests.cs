@@ -13,7 +13,7 @@ public class SyncPlanHeuristicTests
     private static TableProfile CreateProfile(
         string tableName = "TestTable",
         string? identityColumn = null,
-        bool hasIncomingForeignKeys = false,
+        bool referencesOtherTables = false,
         long avgRowSizeBytes = 500,
         long rowCount = 1000,
         IReadOnlyDictionary<string, long>? maxLobColumnSizeBytes = null) =>
@@ -23,7 +23,7 @@ public class SyncPlanHeuristicTests
             PrimaryKeyColumns: ["Id"],
             IdentityColumn: identityColumn,
             IndexedLobColumns: [],
-            HasIncomingForeignKeys: hasIncomingForeignKeys,
+            ReferencesOtherTables: referencesOtherTables,
             RowCount: rowCount,
             AvgRowSizeBytes: avgRowSizeBytes,
             MaxLobColumnSizeBytes: maxLobColumnSizeBytes ?? new Dictionary<string, long>());
@@ -33,7 +33,7 @@ public class SyncPlanHeuristicTests
     {
         // Reproduces ProductAttributeValue's actual reason for row-by-row: FK timing
         // races against Data Sync's own delivery of the referenced Attribute table.
-        var profile = CreateProfile(hasIncomingForeignKeys: true);
+        var profile = CreateProfile(referencesOtherTables: true);
 
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
@@ -48,7 +48,7 @@ public class SyncPlanHeuristicTests
         // row-by-row for large-row isolation, NOT foreign-key timing. A heuristic keyed
         // only on FK presence would wrongly pick Tvp for a table shaped like this.
         var maxLobSizes = new Dictionary<string, long> { ["FileContent"] = 52_000_000 };
-        var profile = CreateProfile(hasIncomingForeignKeys: false, maxLobColumnSizeBytes: maxLobSizes);
+        var profile = CreateProfile(referencesOtherTables: false, maxLobColumnSizeBytes: maxLobSizes);
 
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
@@ -62,7 +62,7 @@ public class SyncPlanHeuristicTests
     public void DerivePlan_WithNoForeignKeysAndSmallRows_ChoosesTvp()
     {
         // ProductCatalogItem's actual shape: no FK issues, no oversized rows.
-        var profile = CreateProfile(hasIncomingForeignKeys: false, avgRowSizeBytes: 2_000);
+        var profile = CreateProfile(referencesOtherTables: false, avgRowSizeBytes: 2_000);
 
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
@@ -140,10 +140,10 @@ public class SyncPlanHeuristicTests
     {
         var profile = CreateProfile();
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate");
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate");
 
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -151,10 +151,10 @@ public class SyncPlanHeuristicTests
     {
         var profile = CreateProfile(rowCount: 1_000);
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null);
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: null);
 
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
-        Assert.Null(plan.ChangeTrackingColumn);
+        Assert.Null(plan.IncrementalColumn);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
 
         Assert.Throws<InvalidOperationException>(
-            () => _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false));
+            () => _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: null, allowFullRescan: false));
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class SyncPlanHeuristicTests
     {
         var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: true);
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: null, allowFullRescan: true);
 
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
     }
@@ -184,7 +184,7 @@ public class SyncPlanHeuristicTests
         var plan = _heuristic.DerivePlan(profile, DefaultOptions, rowVersionColumn: "RowVer");
 
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
-        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+        Assert.Equal("RowVer", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -194,10 +194,10 @@ public class SyncPlanHeuristicTests
         // configured/default datetime column also exists on the same table.
         var profile = CreateProfile();
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer");
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer");
 
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
-        Assert.Equal("RowVer", plan.ChangeTrackingColumn);
+        Assert.Equal("RowVer", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class SyncPlanHeuristicTests
         // opt-in should resolve RowVersion (not throw) once a rowversion column is detected.
         var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false, rowVersionColumn: "RowVer");
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: null, allowFullRescan: false, rowVersionColumn: "RowVer");
 
         Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
     }
@@ -220,11 +220,11 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile();
 
         var plan = _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer",
+            profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer",
             strategyOverride: IncrementalStrategy.Timestamp);
 
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -244,7 +244,7 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile();
 
         Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: null,
+            profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: null,
             strategyOverride: IncrementalStrategy.RowVersion));
     }
 
@@ -254,7 +254,7 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile();
 
         Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: null, rowVersionColumn: null,
+            profile, DefaultOptions, timestampColumn: null, rowVersionColumn: null,
             strategyOverride: IncrementalStrategy.Timestamp));
     }
 
@@ -264,7 +264,7 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile();
 
         var plan = _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: null, rowVersionColumn: null,
+            profile, DefaultOptions, timestampColumn: null, rowVersionColumn: null,
             strategyOverride: IncrementalStrategy.FullRescan);
 
         Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
@@ -278,20 +278,20 @@ public class SyncPlanHeuristicTests
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
         Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
-        Assert.Null(plan.ChangeTrackingColumn);
+        Assert.Null(plan.IncrementalColumn);
     }
 
     [Fact]
     public void DerivePlan_ChangeTrackingEnabled_TakesPriorityOverRowVersionAndTimestampColumns()
     {
         // CT being enabled is a fact a DBA established - it wins over both column-based
-        // strategies, and ChangeTrackingColumn must not keep pointing at either column.
+        // strategies, and IncrementalColumn must not keep pointing at either column.
         var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: "LastUpdate", rowVersionColumn: "RowVer");
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer");
 
         Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
-        Assert.Null(plan.ChangeTrackingColumn);
+        Assert.Null(plan.IncrementalColumn);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class SyncPlanHeuristicTests
     {
         var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1) with { IsChangeTrackingEnabled = true };
 
-        var plan = _heuristic.DerivePlan(profile, DefaultOptions, changeTrackingColumn: null, allowFullRescan: false);
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: null, allowFullRescan: false);
 
         Assert.Equal(IncrementalStrategy.SqlChangeTracking, plan.IncrementalStrategy);
     }
@@ -312,10 +312,10 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile() with { IsChangeTrackingEnabled = true };
 
         var plan = _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", strategyOverride: IncrementalStrategy.Timestamp);
+            profile, DefaultOptions, timestampColumn: "LastUpdate", strategyOverride: IncrementalStrategy.Timestamp);
 
         Assert.Equal(IncrementalStrategy.Timestamp, plan.IncrementalStrategy);
-        Assert.Equal("LastUpdate", plan.ChangeTrackingColumn);
+        Assert.Equal("LastUpdate", plan.IncrementalColumn);
     }
 
     [Fact]
@@ -324,7 +324,7 @@ public class SyncPlanHeuristicTests
         var profile = CreateProfile();
 
         var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(
-            profile, DefaultOptions, changeTrackingColumn: "LastUpdate", strategyOverride: IncrementalStrategy.SqlChangeTracking));
+            profile, DefaultOptions, timestampColumn: "LastUpdate", strategyOverride: IncrementalStrategy.SqlChangeTracking));
 
         Assert.Contains("ENABLE CHANGE_TRACKING", ex.Message);
     }

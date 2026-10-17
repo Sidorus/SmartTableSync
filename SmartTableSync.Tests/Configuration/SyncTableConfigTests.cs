@@ -126,7 +126,7 @@ public class SyncTableConfigTests
             PrimaryKeyColumns: ["Id"],
             IdentityColumn: null,
             IndexedLobColumns: [],
-            HasIncomingForeignKeys: false,
+            ReferencesOtherTables: false,
             RowCount: 0,
             AvgRowSizeBytes: 0,
             MaxLobColumnSizeBytes: new Dictionary<string, long>());
@@ -151,19 +151,19 @@ public class SyncTableConfigTests
             PrimaryKeyColumns: ["Id"],
             IdentityColumn: null,
             IndexedLobColumns: [],
-            HasIncomingForeignKeys: false,
+            ReferencesOtherTables: false,
             RowCount: 0,
             AvgRowSizeBytes: 0,
             MaxLobColumnSizeBytes: new Dictionary<string, long>());
 
         var originalPlan = new SyncPlan(
             "TestTable", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "TestTableTableType",
-            ChangeTrackingColumn: null, IncrementalStrategy: IncrementalStrategy.FullRescan);
+            IncrementalColumn: null, IncrementalStrategy: IncrementalStrategy.FullRescan);
 
         var config = SyncTableConfig.FromPlan(profile, originalPlan, "fingerprint1", DateTime.UtcNow);
         var roundTripped = config.ToSyncPlan();
 
-        Assert.Null(roundTripped.ChangeTrackingColumn);
+        Assert.Null(roundTripped.IncrementalColumn);
         Assert.Equal(IncrementalStrategy.FullRescan, roundTripped.IncrementalStrategy);
     }
 
@@ -175,7 +175,7 @@ public class SyncTableConfigTests
     public void ResolveRetryableSqlErrorsOverride_RowByRowOverrideWithForeignKeysAndNoExistingOverride_Derives547()
     {
         var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, referencesOtherTables: true);
 
         Assert.Equal([547], result);
     }
@@ -187,7 +187,7 @@ public class SyncTableConfigTests
         // same as the heuristic's own "no FK timing race, purely row-size-driven RowByRow"
         // case (DocumentAsset's actual shape).
         var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: false);
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: null, referencesOtherTables: false);
 
         Assert.Null(result);
     }
@@ -196,7 +196,7 @@ public class SyncTableConfigTests
     public void ResolveRetryableSqlErrorsOverride_TvpOverride_NeverDerivesRetryOverride()
     {
         var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            mergeStrategyOverride: MergeStrategy.Tvp, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+            mergeStrategyOverride: MergeStrategy.Tvp, existingRetryableSqlErrorsOverride: null, referencesOtherTables: true);
 
         Assert.Null(result);
     }
@@ -205,7 +205,7 @@ public class SyncTableConfigTests
     public void ResolveRetryableSqlErrorsOverride_NoMergeStrategyOverrideAtAll_LeavesExistingAlone()
     {
         var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            mergeStrategyOverride: null, existingRetryableSqlErrorsOverride: null, hasIncomingForeignKeys: true);
+            mergeStrategyOverride: null, existingRetryableSqlErrorsOverride: null, referencesOtherTables: true);
 
         Assert.Null(result);
     }
@@ -217,7 +217,7 @@ public class SyncTableConfigTests
         // with an empty list) has that choice preserved - auto-derivation only fills a gap,
         // it never clobbers an existing, deliberately-set override.
         var result = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
-            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: [2601], hasIncomingForeignKeys: true);
+            mergeStrategyOverride: MergeStrategy.RowByRow, existingRetryableSqlErrorsOverride: [2601], referencesOtherTables: true);
 
         Assert.Equal([2601], result);
     }

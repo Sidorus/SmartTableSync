@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>SmartTableSync</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>A self-configuring sync engine for SQL tables Azure SQL Data Sync can't handle — nvarchar(max)/varbinary(max) indexed keys, rows over Data Sync's 24 MB batch limit. Give it a table name; it introspects the schema, derives a sync plan, and generates reviewable SQL.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -15,6 +15,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+    <!-- Direct reference only to lift Microsoft.Data.SqlClient's transitive dependency past a
+         known vulnerability (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7 in 9.0.13). Remove once
+         SqlClient itself depends on a fixed version. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
@@ -22,6 +26,16 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- The public API is only what a host calls, configures or replaces (AddSmartTableSync,
+       SyncSettings, ISyncOrchestrator, ISyncRunLock, IDbConnectionFactory, ISyncMetricsReporter).
+       Everything else is internal so it can change without breaking package users; the Scaffold
+       CLI (same product) and the test projects use it directly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartTableSync.Scaffold" />
+    <InternalsVisibleTo Include="SmartTableSync.Tests" />
+    <InternalsVisibleTo Include="SmartTableSync.IntegrationTests" />
   </ItemGroup>
 
 </Project>

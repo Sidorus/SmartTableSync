@@ -1,21 +1,19 @@
 namespace SmartTableSync.Planning;
 
-public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
+internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
 {
     public SyncPlan DerivePlan(
         TableProfile profile,
         PlanHeuristicOptions options,
-        string? changeTrackingColumn = null,
+        string? timestampColumn = null,
         bool allowFullRescan = false,
         string? rowVersionColumn = null,
         IncrementalStrategy? strategyOverride = null)
     {
-        // RowByRow when either an incoming FK could race against Data Sync's own delivery
-        // of the referenced table (ProductAttributeValue's actual reason), or rows are large
-        // enough that per-row failure isolation matters more than batching efficiency
-        // (DocumentAsset's actual reason — no FK involved, just large rows). A single
-        // "FK presence" rule alone would miss the second case entirely.
-        var mergeStrategy = profile.HasIncomingForeignKeys || profile.MaxLobRowSizeBytes > options.LargeRowThresholdBytes
+        // RowByRow when the table references another table (its row can arrive before the
+        // referenced row does, and fail the FK check) or when rows are large enough that one
+        // failure shouldn't fail a whole batch. Either reason alone is enough.
+        var mergeStrategy = profile.ReferencesOtherTables || profile.MaxLobRowSizeBytes > options.LargeRowThresholdBytes
             ? MergeStrategy.RowByRow
             : MergeStrategy.Tvp;
 
@@ -44,7 +42,7 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         // 547 = FK constraint violation. Only retryable when RowByRow was chosen for FK-
         // timing reasons specifically — a RowByRow choice driven by row size alone has no
         // FK timing race to retry around.
-        IReadOnlyList<int> retryableSqlErrorNumbers = mergeStrategy == MergeStrategy.RowByRow && profile.HasIncomingForeignKeys
+        IReadOnlyList<int> retryableSqlErrorNumbers = mergeStrategy == MergeStrategy.RowByRow && profile.ReferencesOtherTables
             ? [547]
             : [];
 
@@ -52,19 +50,11 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             ? $"{profile.TableName}TableType"
             : null;
 
-        var incrementalStrategy = DeriveIncrementalStrategy(profile, options, changeTrackingColumn, allowFullRescan, rowVersionColumn, strategyOverride);
-
-        // Must follow the RESOLVED strategy, not raw "rowVersionColumn ?? changeTrackingColumn"
-        // priority — otherwise a strategyOverride forcing Timestamp while a rowversion column
-        // also exists would leave ChangeTrackingColumn pointing at the rowversion column, and
-        // TableSyncCommandFactory.BuildIncrementalCommand would query the wrong (and wrong-
-        // typed) column entirely.
-        var resolvedChangeTrackingColumn = incrementalStrategy switch
-        {
-            IncrementalStrategy.RowVersion => rowVersionColumn,
-            IncrementalStrategy.Timestamp => changeTrackingColumn,
-            _ => null,
-        };
+        // An explicit FullRescan override is itself the operator's consent to re-scan every run.
+        var candidate = new StrategyCandidate(
+            profile, options, timestampColumn, rowVersionColumn,
+            AllowFullRescan: allowFullRescan || strategyOverride == IncrementalStrategy.FullRescan);
+        var incrementalStrategy = SelectIncrementalStrategy(candidate, strategyOverride);
 
         return new SyncPlan(
             TableName: profile.TableName,
@@ -74,68 +64,36 @@ public sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             BulkCopyTimeoutSeconds: bulkCopyTimeoutSeconds,
             RetryableSqlErrorNumbers: retryableSqlErrorNumbers,
             TvpTypeName: tvpTypeName,
-            ChangeTrackingColumn: resolvedChangeTrackingColumn,
-            IncrementalStrategy: incrementalStrategy);
+            IncrementalColumn: incrementalStrategy.IncrementalColumn(candidate),
+            IncrementalStrategy: incrementalStrategy.Kind);
     }
 
-    // No gate on the safe case (a usable column exists), explicit consent for the expensive
-    // case (a full re-scan every cycle) — same philosophy as Auto-mode DDL execution, here
-    // applied per-table instead of globally. SQL Server Change Tracking is checked first, then
-    // rowVersionColumn — both are facts, not guesses (a DBA enabled CT on this table; the
-    // engine maintains a rowversion column), so they win over a configured/default datetime
-    // column. CT wins over rowversion: it also reports deletes and needs no index or
-    // in-flight-transaction workaround. strategyOverride, when set, wins over everything
-    // below it (including CT), but is still validated against what's actually available.
-    private static IncrementalStrategy DeriveIncrementalStrategy(
-        TableProfile profile, PlanHeuristicOptions options, string? changeTrackingColumn, bool allowFullRescan,
-        string? rowVersionColumn, IncrementalStrategy? strategyOverride)
+    // An override wins but must still be applicable, so a misconfiguration fails here, at
+    // provisioning time, instead of producing a runner with nothing to query. Without an
+    // override, the first applicable strategy in registry order wins; FullRescan, the last one,
+    // is refused for a large table nobody consented to re-scan.
+    private static IIncrementalStrategy SelectIncrementalStrategy(StrategyCandidate candidate, IncrementalStrategy? strategyOverride)
     {
-        if (strategyOverride is not null)
-            return ValidateOverride(profile, changeTrackingColumn, rowVersionColumn, strategyOverride.Value);
+        var tableName = candidate.Profile.TableName;
 
-        // PrimaryKeyColumns check is belt-and-braces: SQL Server refuses to enable CT on a
-        // table without a PRIMARY KEY constraint in the first place.
-        if (profile.IsChangeTrackingEnabled && profile.PrimaryKeyColumns.Count > 0)
-            return IncrementalStrategy.SqlChangeTracking;
+        if (strategyOverride is { } forced)
+        {
+            var strategy = IncrementalStrategies.For(forced);
+            return strategy.WhyNotApplicable(candidate) is { } reason
+                ? throw new InvalidOperationException(
+                    $"{tableName}: SmartTableSync:IncrementalStrategyOverrides forces {forced}, but {reason}")
+                : strategy;
+        }
 
-        if (rowVersionColumn is not null)
-            return IncrementalStrategy.RowVersion;
-
-        if (changeTrackingColumn is not null)
-            return IncrementalStrategy.Timestamp;
-
-        if (profile.RowCount <= options.FullRescanRowCountThreshold || allowFullRescan)
-            return IncrementalStrategy.FullRescan;
+        foreach (var strategy in IncrementalStrategies.All)
+        {
+            if (strategy.WhyNotApplicable(candidate) is null)
+            {
+                return strategy;
+            }
+        }
 
         throw new InvalidOperationException(
-            $"{profile.TableName}: no usable change-tracking column and {profile.RowCount} rows exceeds the " +
-            $"FullRescan threshold ({options.FullRescanRowCountThreshold}) — set " +
-            $"SmartTableSync:ChangeTrackingColumns:{profile.TableName} to the correct column name, or add " +
-            $"'{profile.TableName}' to SmartTableSync:AllowFullRescanFor to accept a full re-scan every cycle.");
-    }
-
-    // An override forcing a strategy the table can't actually support (e.g. RowVersion with
-    // no rowversion column) fails loudly at provisioning time instead of silently falling
-    // through to a runner that has nothing to query.
-    private static IncrementalStrategy ValidateOverride(
-        TableProfile profile, string? changeTrackingColumn, string? rowVersionColumn, IncrementalStrategy strategyOverride)
-    {
-        if (strategyOverride == IncrementalStrategy.RowVersion && rowVersionColumn is null)
-            throw new InvalidOperationException(
-                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces RowVersion, but this " +
-                $"table has no rowversion/timestamp-typed column.");
-
-        if (strategyOverride == IncrementalStrategy.Timestamp && changeTrackingColumn is null)
-            throw new InvalidOperationException(
-                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces Timestamp, but the " +
-                $"configured (or default \"LastUpdate\") change-tracking column doesn't exist on this table.");
-
-        if (strategyOverride == IncrementalStrategy.SqlChangeTracking && !profile.IsChangeTrackingEnabled)
-            throw new InvalidOperationException(
-                $"{profile.TableName}: SmartTableSync:IncrementalStrategyOverrides forces SqlChangeTracking, but " +
-                $"SQL Server Change Tracking is not enabled on this table — a DBA must run " +
-                $"ALTER TABLE ... ENABLE CHANGE_TRACKING first (see SmartTableSync.Scaffold --change-tracking-setup).");
-
-        return strategyOverride;
+            $"{tableName}: {IncrementalStrategies.For(IncrementalStrategy.FullRescan).WhyNotApplicable(candidate)}");
     }
 }

@@ -2,8 +2,8 @@ namespace SmartTableSync.Syncers.MergeStrategies;
 
 /// <summary>Merges a whole batch in one stored-procedure call via a table-valued parameter —
 /// efficient, but one bad row fails the whole batch, so this is only chosen when the table
-/// has no FK-timing risk and rows are small enough that per-row isolation isn't needed.</summary>
-public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
+/// references no other table and rows are small enough that per-row isolation isn't needed.</summary>
+internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 {
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;
@@ -19,10 +19,9 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
         _plan = plan;
     }
 
-    public async Task<(int synced, int errored, bool retryable)> MergeBatchAsync(
-        DataTable batch, SqlConnection child, CancellationToken ct)
+    public async Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct)
     {
-        await using var sp = new SqlCommand($"[dbo].[sp_Sync{_profile.TableName}Batch]", child)
+        await using var sp = new SqlCommand(SqlArtifactGenerator.TvpProcedureName(_profile.TableName), child)
         {
             CommandType = CommandType.StoredProcedure,
             CommandTimeout = _plan.BulkCopyTimeoutSeconds
@@ -30,12 +29,12 @@ public sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 
         sp.Parameters.Add(new SqlParameter("@Rows", SqlDbType.Structured)
         {
-            TypeName = $"dbo.{_plan.TvpTypeName}",
+            TypeName = SqlIdentifier.DboTable(_plan.TvpTypeName!),
             Value = TvpShapedRows(batch)
         });
 
         await sp.ExecuteNonQueryAsync(ct);
-        return (batch.Rows.Count, 0, false);
+        return SyncOutcome.None with { Merged = batch.Rows.Count };
     }
 
     // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a real

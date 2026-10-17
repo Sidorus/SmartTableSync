@@ -1,6 +1,6 @@
 namespace SmartTableSync.State;
 
-public sealed class SyncStateRepository : ISyncStateRepository
+internal sealed class SyncStateRepository : ISyncStateRepository
 {
     public async Task<DateTime> GetLastSyncDateAsync(
         SqlConnection conn, string tableName, CancellationToken ct = default)

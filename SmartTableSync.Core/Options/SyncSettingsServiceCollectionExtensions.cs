@@ -15,7 +15,7 @@ public static class SyncSettingsServiceCollectionExtensions
 
     /// <summary>The actual binding logic, extracted so SmartTableSync.Scaffold's CLI — which
     /// has no DI container of its own — can resolve the identical SyncSettings (including
-    /// ChangeTrackingColumns/AllowFullRescanFor/IncrementalStrategyOverrides) directly from an
+    /// TimestampColumns/AllowFullRescanFor/IncrementalStrategyOverrides) directly from an
     /// IConfiguration built over environment variables, instead of re-deriving its own partial
     /// approximation of this logic that could silently drift from the runtime's.</summary>
     public static void Bind(SyncSettings options, IConfiguration configuration)
@@ -29,10 +29,13 @@ public static class SyncSettingsServiceCollectionExtensions
             ? mode
             : SyncMode.Manual;
 
-        options.ChangeTrackingColumns = configuration.GetSection("SmartTableSync:ChangeTrackingColumns")
-            .GetChildren()
+        // "ChangeTrackingColumns" is the original name of this setting, still read so existing
+        // deployments keep working; an entry under the new name wins for the same table.
+        options.TimestampColumns = configuration.GetSection("SmartTableSync:ChangeTrackingColumns").GetChildren()
+            .Concat(configuration.GetSection("SmartTableSync:TimestampColumns").GetChildren())
             .Where(c => !string.IsNullOrWhiteSpace(c.Value))
-            .ToDictionary(c => c.Key, c => c.Value!, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(c => c.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last().Value!, StringComparer.OrdinalIgnoreCase);
 
         var rawAllowFullRescanFor = configuration["SmartTableSync:AllowFullRescanFor"] ?? string.Empty;
         options.AllowFullRescanFor = rawAllowFullRescanFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -49,9 +52,23 @@ public static class SyncSettingsServiceCollectionExtensions
         // Whole hours, so it's easy to enter as one App Setting. Missing, unparseable or
         // negative keeps the 24-hour default; 0 explicitly disables the periodic run.
         options.ChangeTrackingReconcileInterval =
-            int.TryParse(configuration["SmartTableSync:ChangeTrackingReconcileIntervalHours"], NumberStyles.None,
-                CultureInfo.InvariantCulture, out var reconcileHours)
-                ? TimeSpan.FromHours(reconcileHours)
+            TryParseNonNegativeInt(configuration["SmartTableSync:ChangeTrackingReconcileIntervalHours"], out var changeTrackingReconcileHours)
+                ? TimeSpan.FromHours(changeTrackingReconcileHours)
                 : TimeSpan.FromHours(24);
+
+        // No zero here: for these strategies reconciliation is the only way deletes arrive.
+        options.ReconcileInterval =
+            TryParseNonNegativeInt(configuration["SmartTableSync:ReconcileIntervalHours"], out var reconcileHours) && reconcileHours > 0
+                ? TimeSpan.FromHours(reconcileHours)
+                : TimeSpan.FromHours(1);
+
+        // SqlClient accepts 1..60 total attempts; anything outside that keeps the default.
+        options.ConnectionOpenAttempts =
+            TryParseNonNegativeInt(configuration["SmartTableSync:ConnectionOpenAttempts"], out var attempts) && attempts is >= 1 and <= 60
+                ? attempts
+                : 5;
     }
+
+    private static bool TryParseNonNegativeInt(string? value, out int result) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result);
 }

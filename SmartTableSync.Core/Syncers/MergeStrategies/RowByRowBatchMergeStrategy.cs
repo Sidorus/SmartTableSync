@@ -1,10 +1,10 @@
 namespace SmartTableSync.Syncers.MergeStrategies;
 
-/// <summary>Merges a batch one row at a time, each via its own stored-procedure call —
-/// chosen when a single bad row shouldn't fail the rest of the batch: incoming foreign keys
-/// that can race against Data Sync's own delivery of the referenced table, or rows large
-/// enough that per-row failure isolation matters more than round-trip efficiency.</summary>
-public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
+/// <summary>Merges a batch one row at a time, each via its own stored-procedure call, so one
+/// bad row doesn't fail the rest. Failures whose SQL error number is in the plan's
+/// RetryableSqlErrorNumbers (547, an FK violation, for tables that reference another table)
+/// are reported as retryable, so the row is read again next run.</summary>
+internal sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 {
     private readonly TableProfile _profile;
     private readonly SyncPlan _plan;
@@ -17,11 +17,10 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
         _logger = logger;
     }
 
-    public async Task<(int synced, int errored, bool retryable)> MergeBatchAsync(
-        DataTable batch, SqlConnection child, CancellationToken ct)
+    public async Task<SyncOutcome> MergeBatchAsync(DataTable batch, SqlConnection child, CancellationToken ct)
     {
-        int synced = 0, errored = 0;
-        bool retryable = false;
+        int merged = 0, errored = 0;
+        var retryable = false;
 
         foreach (DataRow row in batch.Rows)
         {
@@ -29,7 +28,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             try
             {
                 await MergeSingleRowAsync(row, child, ct);
-                synced++;
+                merged++;
             }
             catch (Exception ex) when (IsExpectedError(ex))
             {
@@ -44,7 +43,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             }
         }
 
-        return (synced, errored, retryable);
+        return new SyncOutcome(merged, Deleted: 0, errored, retryable);
     }
 
     private bool IsExpectedError(Exception ex) =>
@@ -52,7 +51,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
 
     private async Task MergeSingleRowAsync(DataRow row, SqlConnection child, CancellationToken ct)
     {
-        await using var sp = new SqlCommand($"[dbo].[sp_Sync{_profile.TableName}]", child)
+        await using var sp = new SqlCommand(SqlArtifactGenerator.RowByRowProcedureName(_profile.TableName), child)
         {
             CommandType = CommandType.StoredProcedure,
             CommandTimeout = _plan.BulkCopyTimeoutSeconds
@@ -66,7 +65,7 @@ public sealed class RowByRowBatchMergeStrategy : IBatchMergeStrategy
             if (col.Name == _profile.RowVersionColumn) continue;
 
             var size = SqlTypeMapping.GetParameterSize(col);
-            sp.AddParam($"@{col.Name}", SqlTypeMapping.ToSqlDbType(col.SqlTypeName), row[col.Name], size);
+            sp.AddParam(SqlIdentifier.Parameter(col.Name), SqlTypeMapping.ToSqlDbType(col.SqlTypeName), row[col.Name], size);
         }
 
         await sp.ExecuteNonQueryAsync(ct);
