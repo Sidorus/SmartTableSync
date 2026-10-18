@@ -168,12 +168,42 @@ Logs and the `smarttablesync.*` metrics go to Application Insights.
 - **Enable Change Tracking later**: step 2; the table switches to `SqlChangeTracking` on its
   next run by itself.
 
-## Auto mode instead
+## Auto mode
 
-Set `SmartTableSync:Mode` to `Auto` and add `ChildProvisioningConnectionString` (the
-provisioning identity) to the Function. Steps 3 and 4 then happen inside the Function. Steps 1,
-2 and 5 stay manual: identities and parent changes are always a person's decision, and the
-runtime identity's grants on the new objects still need applying after the Function created them.
+In Auto mode the Function does steps 3 and 4 itself, so adding a table is a settings change.
+
+1. Create the identities as in step 1. On the **child**, give the runtime identity its rights on
+   the `dbo` schema instead of per object, before the first run. Schema grants also cover the
+   tables, table types and procedures the Function creates later, and still allow no DDL:
+
+   ```sql
+   ALTER ROLE db_ddladmin ADD MEMBER [smarttablesync-child-provisioning];
+   GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-runtime];
+   ```
+
+   These are broader than the per-object grants of Manual mode: the runtime identity can read
+   and write every `dbo` table in the child, so keep the child database for SmartTableSync only.
+2. Optional: prepare parent tables as in step 2.
+3. Add two settings to the Function, next to those of step 6:
+
+   | Setting | Value |
+   |---|---|
+   | `SmartTableSync:Mode` | `Auto` |
+   | `ChildProvisioningConnectionString` | provisioning identity → child |
+
+4. Deploy. On each run the Function first makes sure the tracking tables exist (a cheap
+   `IF NOT EXISTS` check with the provisioning identity). The first time it sees a table, or
+   after the table's parent schema changed, it creates the missing child table, the table type and
+   the merge procedure, logs `<Table>: child DDL objects verified/created` and counts it in the
+   `smarttablesync.table_provisioned` metric. Then it syncs.
+
+To add a table later: grant the runtime identity read access to it on the **parent** (step 1),
+then add it to `SmartTableSync:TableList`.
+
+What Auto mode doesn't do: it never alters an existing child table, and it doesn't recreate an
+existing table type. When a column changes in the parent, update the child table and the table
+type with a reviewed script (the scaffold tool generates the new versions), as in Manual mode.
+Tables with an `IDENTITY` column also need `ALTER` for the runtime identity, as in Manual mode.
 
 ## Troubleshooting
 

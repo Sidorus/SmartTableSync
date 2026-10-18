@@ -139,6 +139,47 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 
 Settings are validated at startup: an empty or duplicated table list stops the host from starting.
 
+## Manual or Auto mode
+
+The child database needs a table, a table type and a merge procedure for every synced table.
+The mode decides who creates them.
+
+| | **Manual** (default) | **Auto** |
+|---|---|---|
+| Who creates the child objects | You: run the scaffold tool, review the SQL, apply it | The Function, the first time it sees a table |
+| Adding a table | Scaffold, apply, grant, then add it to `TableList` | Grant read on the parent table, add it to `TableList` |
+| Best for | Production, where every schema change is reviewed | Dev, test and demo environments; many tables; quick start |
+
+**Turn on Auto mode** with two settings:
+
+```json
+"SmartTableSync:Mode": "Auto",
+"ChildProvisioningConnectionString": "Server=tcp:<server>.database.windows.net,1433;Database=<child>;Authentication=Active Directory Managed Identity;User Id=<provisioning identity client id>;Encrypt=True"
+```
+
+Then give the two identities their rights **once**, before the first run. Grants on the `dbo`
+schema also cover the objects the Function creates later. They're broader than Manual mode's
+per-object grants, so use a child database dedicated to the sync:
+
+```sql
+-- Child database
+ALTER ROLE db_ddladmin ADD MEMBER [smarttablesync-child-provisioning];       -- creates tables, types, procedures
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-runtime];   -- syncs data, no DDL
+```
+
+The parent needs the same read rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
+
+**What happens:** each run makes sure the tracking tables exist. When a table is new, or its
+parent schema changed, the Function creates the missing child table, its table type and its
+merge procedure with the provisioning identity, logs `child DDL objects verified/created`, and
+syncs. Every other run only syncs. Creating objects is left to the separate provisioning
+identity; the always-on runtime identity only reads and writes data.
+
+**Good to know:** Auto mode creates what is missing but never changes an existing child table. A
+column added to the parent later still needs a reviewed `ALTER` on the child. Tables with an
+`IDENTITY` column need one more grant in both modes. The [setup guide](docs/setup.md#auto-mode)
+has the details.
+
 ## Getting started
 
 - **See it run first:** [`demo/`](demo/README.md) deploys a parent and a child database, the

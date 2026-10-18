@@ -144,6 +144,14 @@ GO
 GRANT ALTER ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
 GO
 
+-- Auto mode (SmartTableSync:Mode = Auto): the Function creates tables, table types and
+-- procedures after these grants were given, so per-object grants can't exist in advance.
+-- Instead of the CHILD grants above, grant once on the schema; it covers objects created
+-- later and still gives no DDL (CREATE/ALTER/DROP stay denied). Broader than per-object
+-- grants: use a child database dedicated to SmartTableSync. The ALTER grant for IDENTITY
+-- tables is still needed.
+-- GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::[dbo] TO [smarttablesync-runtime];
+
 -- ============================================================
 -- Connection string reference (Managed Identity, Microsoft.Data.SqlClient):
 --
