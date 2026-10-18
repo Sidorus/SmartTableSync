@@ -83,13 +83,11 @@ GRANT VIEW DATABASE STATE TO [smarttablesync-parent-introspection];
 GO
 
 -- ============================================================
--- 3. Runtime — used by the always-on Azure Function. No DDL rights,
--- with one known exception (ALTER on child tables that have an
--- IDENTITY column, see the end of this section); SELECT on the
--- parent's synced tables, read/write only on the child's synced
--- tables plus the tracking tables (including SyncTableConfig —
--- writing a config row is DML, not DDL, so it belongs here, not
--- with child-provisioning).
+-- 3. Runtime — used by the always-on Azure Function. No DDL rights;
+-- SELECT on the parent's synced tables, read/write only on the
+-- child's synced tables plus the tracking tables (including
+-- SyncTableConfig — writing a config row is DML, not DDL, so it
+-- belongs here, not with child-provisioning).
 -- ============================================================
 
 -- Run on the PARENT database:
@@ -142,19 +140,19 @@ GO
 GRANT EXECUTE ON TYPE::[dbo].[ProductCatalogItemTableType] TO [smarttablesync-runtime];
 GO
 
--- Tables with an IDENTITY column (here ProductAttributeValue): the initial bulk copy and the
--- merge procedure keep the parent's identity values with SET IDENTITY_INSERT, which SQL Server
--- only allows with ALTER on the table. Known limitation: until the engine stops needing it,
--- the runtime identity needs ALTER on each such child table (and only on those).
-GRANT ALTER ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
-GO
+-- Parent tables with an IDENTITY column (here ProductAttributeValue) need nothing extra: the
+-- scaffold tool and Auto mode create the child column WITHOUT IDENTITY, because the child only
+-- stores values copied from the parent. Only a child table that does have an IDENTITY column,
+-- created by an earlier SmartTableSync version or by hand, needs SET IDENTITY_INSERT, which SQL
+-- Server allows only with ALTER on the table. For such a table, either recreate it from the
+-- scaffold tool's CREATE TABLE script, or grant ALTER on it (and only on it). Example:
+-- GRANT ALTER ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
 
 -- Auto mode (SmartTableSync:Mode = Auto): the Function creates tables, table types and
 -- procedures after these grants were given, so per-object grants can't exist in advance.
 -- Instead of the CHILD grants above, grant once on the schema; it covers objects created
 -- later and still gives no DDL (CREATE/ALTER/DROP stay denied). Broader than per-object
--- grants: use a child database dedicated to SmartTableSync. The ALTER grant for IDENTITY
--- tables is still needed.
+-- grants: use a child database dedicated to SmartTableSync.
 -- GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::[dbo] TO [smarttablesync-runtime];
 
 -- ============================================================

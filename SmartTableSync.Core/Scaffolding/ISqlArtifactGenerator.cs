@@ -12,6 +12,14 @@ internal interface ISqlArtifactGenerator
     string GenerateTvpUdtScript(TableProfile profile, string typeName);
     string GenerateMergeProcedureScript(TableProfile profile, SyncPlan plan);
 
+    /// <summary>ALTER TABLE ... ADD for parent columns an existing child table doesn't have yet
+    /// (ChildSchemaComparer.ColumnsToAdd), all nullable.</summary>
+    string GenerateAddColumnsScript(TableProfile profile, IReadOnlyList<ColumnProfile> columns);
+
+    /// <summary>Drops a table type that no longer matches the table, together with the TVP
+    /// procedure that uses it; GenerateTvpUdtScript and GenerateMergeProcedureScript recreate both.</summary>
+    string GenerateDropTvpTypeScript(string tableName, string typeName);
+
     /// <summary>Table-agnostic — no TableProfile needed. Produces the fixed, idempotent DDL
     /// for the three tables every managed table depends on regardless of which business
     /// tables are synced: CustomSyncState/SyncBatchLog (sync-cursor and initial-load-resume

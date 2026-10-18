@@ -8,7 +8,8 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         string? timestampColumn = null,
         bool allowFullRescan = false,
         string? rowVersionColumn = null,
-        IncrementalStrategy? strategyOverride = null)
+        IncrementalStrategy? strategyOverride = null,
+        string? childIdentityColumn = null)
     {
         // RowByRow when the table references another table (its row can arrive before the
         // referenced row does, and fail the FK check) or when rows are large enough that one
@@ -30,7 +31,9 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         var rawBatchSize = (int)Math.Min(int.MaxValue, options.TargetBatchPayloadBytes / effectiveRowSize);
         var batchSize = Math.Clamp(rawBatchSize, options.MinBatchSize, options.MaxBatchSize);
 
-        var bulkCopyOptions = profile.IdentityColumn is not null
+        // Only a child table that itself has an IDENTITY column needs the parent's values kept
+        // explicitly; SmartTableSync's own child tables have none.
+        var bulkCopyOptions = childIdentityColumn is not null
             ? SqlBulkCopyOptions.KeepIdentity
             : SqlBulkCopyOptions.Default;
 
@@ -65,7 +68,8 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             RetryableSqlErrorNumbers: retryableSqlErrorNumbers,
             TvpTypeName: tvpTypeName,
             IncrementalColumn: incrementalStrategy.IncrementalColumn(candidate),
-            IncrementalStrategy: incrementalStrategy.Kind);
+            IncrementalStrategy: incrementalStrategy.Kind,
+            ChildIdentityColumn: childIdentityColumn);
     }
 
     // An override wins but must still be applicable, so a misconfiguration fails here, at

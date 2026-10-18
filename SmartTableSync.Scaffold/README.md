@@ -35,7 +35,7 @@ dotnet tool install --global SmartTableSync.Scaffold --add-source ./nupkg
 | Command | Writes | Apply to | Needs |
 |---|---|---|---|
 | `--infrastructure` | `00_infrastructure.sql`: the tracking tables `CustomSyncState`, `SyncBatchLog`, `SyncTableConfig` | child, once | nothing |
-| `<Table> [<Table> ...]` | per table: `<Table>.sql` (only when the child table doesn't exist yet), `<Table>TableType.sql` (TVP tables), `sp_Sync<Table>Batch.sql` or `sp_Sync<Table>.sql` | child | both connection strings |
+| `<Table> [<Table> ...]` | per table: `<Table>.sql` when the child table doesn't exist yet, or `<Table>_AddColumns.sql` when the parent has columns the existing child table lacks; `<Table>TableType.sql` (TVP tables; drops and recreates an out-of-date type first); `sp_Sync<Table>Batch.sql` or `sp_Sync<Table>.sql` | child | both connection strings |
 | `--change-tracking-setup <Table> [...] [--retention-days <N>]` | `<Table>_ChangeTrackingSetup.sql`: enables Change Tracking on the database (default 2-day retention) and the table, and grants `VIEW CHANGE TRACKING` to `smarttablesync-runtime` | parent, by a DBA | parent connection string |
 | `--rowversion-setup <Table> [...] [--column <Name>]` | `<Table>_RowVersionSetup.sql`: adds a rowversion column (default `RowVer`) and its index | parent, by a DBA | parent connection string |
 
@@ -50,7 +50,12 @@ sync engine derives at runtime:
   MergeStrategy=Tvp, BatchSize=1000, BulkCopyTimeoutSeconds=120, IncrementalStrategy=SqlChangeTracking
 ```
 
-Apply the child files in this order: tables, table types, procedures.
+Apply the child files in this order: tables (or added columns), table types, procedures.
+
+For an existing child table, the tool compares it with the parent, the same way Auto mode does.
+New columns get the `_AddColumns.sql` script. Changes that could lose data (a changed type or
+length, a changed primary key, a removed `NOT NULL` column) are printed as `NEEDS A MANUAL
+CHANGE` and left to you.
 
 ## Connection strings
 

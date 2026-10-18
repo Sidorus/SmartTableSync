@@ -21,8 +21,8 @@ Set with `SmartTableSync:Mode`.
 - **Manual** (default): a person creates the child's tables and procedures from the scaffold
   tool's scripts. The Function only ever reads and writes data.
 - **Auto**: the Function creates the child's tracking tables, tables and procedures itself when
-  it first sees a table, using a separate provisioning identity. It creates missing tables but
-  never alters an existing one; a later column change still needs a reviewed script.
+  it first sees a table, using a separate provisioning identity, and adds columns that appear in
+  the parent later. Changes that could lose data still need a reviewed script.
 
 ## Identities and their rights
 
@@ -46,9 +46,13 @@ Why the less obvious ones are needed:
 - **`EXECUTE` on the table type**: passing a table-valued parameter to `sp_Sync<Table>Batch` is
   checked against the type too; without it every batch fails with *"The EXECUTE permission was
   denied on the object '<Table>TableType'"*.
-- **Tables with an `IDENTITY` column**: keeping the parent's identity values uses
-  `SET IDENTITY_INSERT`, which SQL Server only allows with `ALTER` on the table. Until the engine
-  stops needing it, grant the runtime identity `ALTER` on those child tables, and only on those.
+- **Tables with an `IDENTITY` column need nothing extra.** The child is a copy: its key values
+  come from the parent, so the scaffold tool and Auto mode create the child column as a plain key
+  column without `IDENTITY`, and the runtime writes the parent's values into it with ordinary
+  `INSERT`. Only a child table that does have `IDENTITY`, created by an earlier SmartTableSync
+  version or by hand, needs `SET IDENTITY_INSERT` and therefore `ALTER` on that table. Recreate
+  it from the scaffold tool's `CREATE TABLE` script, or grant `ALTER` on that table only. Before
+  ever turning the child into a writable database, add `IDENTITY` (or a sequence) back first.
 
 Two more steps are applied by a **DBA on the parent**, never by SmartTableSync: enabling Change
 Tracking (`ALTER DATABASE` and `ALTER TABLE`) and adding a rowversion column. The scaffold tool
@@ -163,10 +167,15 @@ Logs and the `smarttablesync.*` metrics go to Application Insights.
 ## Later changes
 
 - **Add a table**: steps 2 to 5 for that table, then add it to `SmartTableSync:TableList`.
-- **A column changes in the parent**: the Function notices (the table's schema fingerprint
-  changes) and re-plans the table. Run the scaffold tool for the table again: it skips
-  `CREATE TABLE` because the child table exists, so add the column to the child table by hand,
-  then apply the regenerated table type and procedure.
+- **A column is added in the parent**: the Function notices (the table's schema fingerprint
+  changes) and re-plans the table. Run the scaffold tool for the table again: for an existing
+  child table it writes `<Table>_AddColumns.sql` instead of `CREATE TABLE`, and a table type
+  script that drops and recreates the type when it's out of date. Apply them in that order, then
+  the procedure. Existing rows get values in the new columns when they next change; Auto mode
+  re-scans the table instead, so they get them at once.
+- **Other column changes** (type, length, primary key, a removed `NOT NULL` column): the scaffold
+  tool prints `NEEDS A MANUAL CHANGE` with the details; change the child table yourself, then
+  apply the regenerated table type and procedure.
 - **Enable Change Tracking later**: step 2; the table switches to `SqlChangeTracking` on its
   next run by itself.
 
@@ -202,10 +211,18 @@ In Auto mode the Function does steps 3 and 4 itself, so adding a table is a sett
 To add a table later: grant the runtime identity read access to it on the **parent** (step 1),
 then add it to `SmartTableSync:TableList`.
 
-What Auto mode doesn't do: it never alters an existing child table, and it doesn't recreate an
-existing table type. When a column changes in the parent, update the child table and the table
-type with a reviewed script (the scaffold tool generates the new versions), as in Manual mode.
-Tables with an `IDENTITY` column also need `ALTER` for the runtime identity, as in Manual mode.
+### When the parent schema changes
+
+| Change in the parent | What Auto mode does |
+|---|---|
+| A column is added | Adds it to the child table (nullable, since existing rows have no value yet), recreates the table type and procedure, then **re-scans the table once** so every row gets the new values. Logged as a full re-scan with reason `schema_changed`. |
+| A column is removed | Leaves a nullable child column in place (it doesn't block inserts) and logs a warning. A `NOT NULL` child column would block inserts, so that's reported as below. |
+| A column's type or length changes, the primary key changes, or a column now allows `NULL` that the child doesn't | **Nothing is changed.** The table stops with an error naming the change, on every run, until you apply a reviewed script (the scaffold tool writes the new table type and procedure). Other tables keep syncing. |
+| Change Tracking enabled or disabled | No child change; the table switches strategy and is re-scanned once. |
+
+The new plan is saved only after the child changes and the re-scan succeeded. If anything fails
+in between, the next run sees the change again and repeats the steps, which are safe to repeat.
+The re-scan copies every row once, so on a very large table a schema change costs one full pass.
 
 ## Troubleshooting
 
@@ -214,7 +231,7 @@ Tables with an `IDENTITY` column also need `ALTER` for the runtime identity, as 
 | *Cannot find an authentication provider for 'ActiveDirectoryManagedIdentity'* | Since Microsoft.Data.SqlClient 7.0, Entra sign-in is a separate package | Your host needs `Microsoft.Data.SqlClient.Extensions.Azure` (the bundled Function and scaffold tool have it) |
 | *VIEW DATABASE PERFORMANCE STATE permission denied* | Profiling a table without `VIEW DATABASE STATE` | Grant it on the parent to the runtime and introspection identities |
 | *The EXECUTE permission was denied on the object '\<Table\>TableType'* | TVP batches without `EXECUTE` on the type | `GRANT EXECUTE ON TYPE::dbo.<Table>TableType TO [smarttablesync-runtime]` |
-| *Cannot find the object ... or you do not have permissions* on `SET IDENTITY_INSERT` | Table with an `IDENTITY` column | `GRANT ALTER ON dbo.<Table> TO [smarttablesync-runtime]` on the child |
+| *Cannot find the object ... or you do not have permissions* on `SET IDENTITY_INSERT` | A child table that has an `IDENTITY` column (created by an earlier version or by hand) | Recreate it from the scaffold tool's `CREATE TABLE` script (no `IDENTITY`), or `GRANT ALTER ON dbo.<Table> TO [smarttablesync-runtime]` on the child |
 | *VIEW CHANGE TRACKING permission denied* | Change Tracking table without the grant | Apply the scaffolded `<Table>_ChangeTrackingSetup.sql`, which includes it |
 | *... not currently available* on the first connection | A serverless database resuming from pause | Retried automatically (`SmartTableSync:ConnectionOpenAttempts`) |
 

@@ -9,10 +9,16 @@ namespace SmartTableSync.Planning;
 /// redundant introspection call of their own.</summary>
 internal interface ISyncTableProvisioner
 {
-    /// <summary>WasFreshlyProvisioned is true only on the new-table-or-schema-drift path
-    /// (false on the common fast path where an existing config's fingerprint still matches).
-    /// This is also the signal SyncOrchestrator uses to decide when to run Auto-mode child DDL
-    /// provisioning - it doesn't introduce a separate "have I done this before" tracking
-    /// mechanism, it reuses this one.</summary>
+    /// <summary>PlanAsync followed by SaveAsync. WasFreshlyProvisioned is true only on the
+    /// new-table-or-schema-drift path (false on the common fast path where an existing config's
+    /// fingerprint still matches).</summary>
     Task<(TableProfile Profile, SyncPlan Plan, bool WasFreshlyProvisioned)> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct);
+
+    /// <summary>Returns the saved plan when the parent schema still matches it, or derives a new
+    /// one (Change NewTable or SchemaChanged) without saving it yet.</summary>
+    Task<TableProvisioning> PlanAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct);
+
+    /// <summary>Saves a plan PlanAsync derived. Until it's saved, every run derives it again, so
+    /// work that has to happen first (Auto mode's child DDL) is retried if it failed.</summary>
+    Task SaveAsync(SqlConnection child, TableProvisioning provisioning, CancellationToken ct);
 }

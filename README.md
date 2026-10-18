@@ -175,9 +175,11 @@ merge procedure with the provisioning identity, logs `child DDL objects verified
 syncs. Every other run only syncs. Creating objects is left to the separate provisioning
 identity; the always-on runtime identity only reads and writes data.
 
-**Good to know:** Auto mode creates what is missing but never changes an existing child table. A
-column added to the parent later still needs a reviewed `ALTER` on the child. Tables with an
-`IDENTITY` column need one more grant in both modes. The [setup guide](docs/setup.md#auto-mode)
+**When the parent schema changes:** a **new column** is added to the child automatically, the
+table type and procedure are recreated, and the table is re-scanned once so existing rows get
+the new values. Changes that could lose data (a changed type or length, a changed primary key, a
+removed `NOT NULL` column) are never applied automatically: the table stops with an error that
+names the change until a reviewed script is applied. The [setup guide](docs/setup.md#auto-mode)
 has the details.
 
 ## Getting started
@@ -193,8 +195,8 @@ has the details.
 In short:
 
 1. Create the runtime, parent-introspection and child-provisioning identities
-   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights,
-   apart from `ALTER` on child tables that have an `IDENTITY` column.
+   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights.
+   Child tables are created without `IDENTITY`, since their key values are copied from the parent.
 2. Optional, per table, applied by a DBA on the **parent**:
    `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
 3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
@@ -235,6 +237,47 @@ merging and the position rule — see
 
 Significant decisions — what was chosen, what was rejected, and why — are recorded as
 [Architecture Decision Records](docs/adr/README.md).
+
+## Known limitations
+
+What changed and which problems were fixed is in the [changelog](CHANGELOG.md). Still open:
+
+**Scope**
+- One-way only, parent → child. The child is a read-only copy; rows written directly into it
+  are overwritten or removed by the next sync.
+- Only the `dbo` schema, and every synced table needs a primary key.
+- Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
+  supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
+
+**Change detection**
+- **Timestamp** strategy: a row is only seen as changed when the application updates its datetime
+  column on every `UPDATE` (a column default fires only on `INSERT`). Rows where that column is
+  `NULL` are copied by the first sync but not picked up as changed later.
+- **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
+  and full re-scan tables get them from the delete reconciliation, by default hourly.
+
+**Schema changes**
+- Auto mode adds new parent columns by itself, but a changed column type or length, a changed
+  primary key or a removed `NOT NULL` column needs a reviewed script; until then that table
+  stops with an error. A precision or scale change that keeps the same storage size (for example
+  `decimal(10,2)` → `decimal(10,4)`) isn't detected.
+- In Auto mode, a schema change costs one full re-scan of that table.
+- In Manual mode, rows synced before a column was added get its value only when they next change.
+
+**Security and setup**
+- Auto mode's runtime identity needs schema-level grants on the child (broader than per-object
+  grants), so use a child database dedicated to the sync.
+- Child tables created **with** `IDENTITY` by an earlier version still need `ALTER` for the
+  runtime identity until they're recreated from the scaffold tool's script.
+- Before turning a child into a writable database (for example in disaster recovery), add
+  `IDENTITY` or a sequence back to its key columns: child tables are created without them.
+
+**Not yet verified**
+- The current version hasn't run on real Azure yet: the [demo](demo/README.md) is ready but
+  unrun, so Flex Consumption with .NET 10 and Managed Identity end to end are untested there.
+- Whether the run lock's connection, which stays idle during a run, survives a run longer than
+  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes).
+- Not yet published to NuGet.
 
 ## Status
 

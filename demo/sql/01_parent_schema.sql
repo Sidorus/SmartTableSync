@@ -8,8 +8,6 @@
 --
 -- Document also has a composite key and a few rows over 1 MB, so it's merged row by row
 -- instead of in table-valued-parameter batches.
--- No IDENTITY columns: the runtime identity would need ALTER on the child table to bulk copy
--- with KeepIdentity.
 -- Safe to re-run: existing tables are left as they are.
 -- ============================================================
 

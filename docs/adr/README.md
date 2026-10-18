@@ -33,6 +33,8 @@ direction but not fully executed yet. `Superseded` — replaced by a later ADR (
 | [0015](0015-implement-rowversion-as-second-strategy.md) | Implement Rowversion as the second incremental strategy | Accepted | 2026-08-01 |
 | [0016](0016-implement-change-tracking-as-third-strategy.md) | Implement SQL Server Change Tracking as the third incremental strategy | Accepted | 2026-10-17 |
 | [0017](0017-strategy-registry-and-template-method-runners.md) | Strategy registry, template-method runners, and a minimal public API | Accepted | 2026-10-17 |
+| [0018](0018-child-tables-without-identity.md) | Create child tables without IDENTITY, so the runtime identity needs no ALTER | Accepted | 2026-10-18 |
+| [0019](0019-auto-mode-schema-evolution.md) | Auto mode evolves the child schema for added columns, and nothing riskier | Accepted | 2026-10-18 |
 
 See also: the top-level [README](../../README.md) for architecture and getting-started
 instructions.

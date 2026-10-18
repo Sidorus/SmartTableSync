@@ -71,13 +71,29 @@ public class SyncPlanHeuristicTests
     }
 
     [Fact]
-    public void DerivePlan_WithIdentityColumn_UsesKeepIdentity()
+    public void DerivePlan_ParentIdentityColumnOnly_CopiesWithoutKeepIdentity()
     {
+        // SmartTableSync's own child tables have no IDENTITY: the parent's values are copied as
+        // plain values, so no KeepIdentity and no ALTER needed on the child table.
         var profile = CreateProfile(identityColumn: "Id");
 
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
+        Assert.Equal(SqlBulkCopyOptions.Default, plan.BulkCopyOptions);
+        Assert.Null(plan.ChildIdentityColumn);
+    }
+
+    [Fact]
+    public void DerivePlan_ChildTableWithIdentityColumn_UsesKeepIdentity()
+    {
+        // A child table created with IDENTITY (by an earlier version or by hand) keeps working:
+        // the parent's values are written into it with KeepIdentity / IDENTITY_INSERT.
+        var profile = CreateProfile(identityColumn: "Id");
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, childIdentityColumn: "Id");
+
         Assert.Equal(SqlBulkCopyOptions.KeepIdentity, plan.BulkCopyOptions);
+        Assert.Equal("Id", plan.ChildIdentityColumn);
     }
 
     [Fact]

@@ -226,11 +226,24 @@ foreach (var tableName in tableNames)
         var strategyOverride = syncSettings.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
-        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride);
+        // Same as SyncTableProvisioner: a new child table is generated without IDENTITY, and only
+        // an existing child table that has one gets procedures with IDENTITY_INSERT.
         var childExists = await schemaReader.TableExistsAsync(child, tableName, CancellationToken.None);
+        var childIdentityColumn = childExists
+            ? await schemaReader.GetIdentityColumnAsync(child, tableName, CancellationToken.None)
+            : null;
+
+        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride,
+            childIdentityColumn);
 
         Console.WriteLine($"  MergeStrategy={plan.MergeStrategy}, BatchSize={plan.BatchSize}, " +
             $"BulkCopyTimeoutSeconds={plan.BulkCopyTimeoutSeconds}, IncrementalStrategy={plan.IncrementalStrategy}");
+
+        if (childIdentityColumn is not null)
+        {
+            Console.WriteLine($"  child column {childIdentityColumn} is an IDENTITY column: the runtime identity needs ALTER on dbo.{tableName} " +
+                "(see sql/07_permissions.sql), or recreate the child table without IDENTITY");
+        }
 
         if (!childExists)
         {
@@ -240,14 +253,49 @@ foreach (var tableName in tableNames)
         }
         else
         {
-            Console.WriteLine("  child table already exists — skipping CREATE TABLE");
+            // Same comparison Auto mode uses: new parent columns get an ALTER TABLE script; changes
+            // that could lose data are only reported, for a person to handle.
+            var diff = ChildSchemaComparer.Compare(profile, await schemaReader.GetFingerprintInputsAsync(child, tableName, CancellationToken.None));
+
+            if (diff.ColumnsToAdd.Count > 0)
+            {
+                var addColumnsPath = Path.Combine(outputDir, $"{tableName}_AddColumns.sql");
+                await File.WriteAllTextAsync(addColumnsPath, generator.GenerateAddColumnsScript(profile, diff.ColumnsToAdd));
+                Console.WriteLine($"  wrote {addColumnsPath} (columns new in the parent; existing rows get their values only " +
+                    "when they change or the table is re-scanned)");
+            }
+            else
+            {
+                Console.WriteLine("  child table already exists and has every parent column — skipping CREATE TABLE");
+            }
+
+            foreach (var problem in diff.Problems)
+            {
+                Console.WriteLine($"  NEEDS A MANUAL CHANGE: {problem}");
+            }
+
+            foreach (var column in diff.ExtraNullableColumns)
+            {
+                Console.WriteLine($"  note: child column {column} no longer exists in the parent (nullable, so it can stay)");
+            }
         }
 
         if (plan.MergeStrategy == MergeStrategy.Tvp)
         {
+            // A table type can't be altered: when the existing one no longer matches, the script
+            // drops it and its procedure first.
+            var typeColumns = childExists
+                ? await schemaReader.GetTableTypeColumnsAsync(child, plan.TvpTypeName!, CancellationToken.None)
+                : [];
+            var typeIsOutdated = typeColumns.Count > 0 && !ChildSchemaComparer.TableTypeMatches(profile, typeColumns);
+            var udtScript = (typeIsOutdated ? generator.GenerateDropTvpTypeScript(tableName, plan.TvpTypeName!) : "") +
+                generator.GenerateTvpUdtScript(profile, plan.TvpTypeName!);
+
             var udtPath = Path.Combine(outputDir, $"{plan.TvpTypeName}.sql");
-            await File.WriteAllTextAsync(udtPath, generator.GenerateTvpUdtScript(profile, plan.TvpTypeName!));
-            Console.WriteLine($"  wrote {udtPath}");
+            await File.WriteAllTextAsync(udtPath, udtScript);
+            Console.WriteLine(typeIsOutdated
+                ? $"  wrote {udtPath} (the existing table type is out of date: drops and recreates it; apply the procedure script after it)"
+                : $"  wrote {udtPath}");
         }
 
         var spName = plan.MergeStrategy == MergeStrategy.Tvp ? $"sp_Sync{tableName}Batch" : $"sp_Sync{tableName}";
