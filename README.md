@@ -281,9 +281,8 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 
 ## Status
 
-Version **0.3.0**, with unreleased changes for **0.4.0** listed in the
-[changelog](CHANGELOG.md). The sync engine runs in production on Azure SQL Database with a
-deployed Function App. Not yet published to NuGet.
+Version **0.4.0**; what changed is in the [changelog](CHANGELOG.md). The sync engine runs in
+production on Azure SQL Database with a deployed Function App. Not yet published to NuGet.
 
 Upgrading from 0.3.0: hosts that only call `AddSmartTableSync()` are unaffected. Code that uses
 the engine's types directly needs new `using` lines, because the public types moved namespace
