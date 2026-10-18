@@ -6,7 +6,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>smarttablesync-scaffold</ToolCommandName>
     <PackageId>SmartTableSync.Scaffold</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
+    <PackageReleaseNotes>0.4.0: signs in with Microsoft Entra identities (Active Directory Default and others); new child tables are generated without IDENTITY; for an existing child table, writes an AddColumns script for new parent columns and recreates an out-of-date table type; fixes CREATE TABLE for tables without large-object columns. Full list: https://github.com/Sidorus/SmartTableSync/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>Manual schema-scaffolding CLI for SmartTableSync — introspects a table (or generates the shared tracking infrastructure) and writes reviewable .sql files. Never executes anything against a database itself.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

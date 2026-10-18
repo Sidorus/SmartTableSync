@@ -7,6 +7,8 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-18
+
 ### Fixed
 
 | Problem | Fix |
