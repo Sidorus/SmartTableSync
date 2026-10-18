@@ -28,7 +28,9 @@ Set with `SmartTableSync:Mode`.
 
 Three identities, each with only what its job needs. Prefer managed identities or Microsoft
 Entra accounts, so there are no passwords to store. [`sql/07_permissions.sql`](../sql/07_permissions.sql)
-contains the full script for the example tables; replace the table names with yours.
+contains the full script for the example tables; replace the table names with yours. The
+integration tests run that script as written, for Manual and for Auto mode, and then sync as
+these identities with nothing more, so the rights below are tested on every build.
 
 | Identity | Used by | Database | Rights |
 |---|---|---|---|

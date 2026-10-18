@@ -28,6 +28,8 @@
   <ItemGroup>
     <None Include="Schema\**\*.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="SeedData\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The documented least-privilege grants, run as written by LeastPrivilegeSyncTests -->
+    <None Include="..\sql\07_permissions.sql" Link="sql\07_permissions.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

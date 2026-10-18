@@ -75,9 +75,11 @@ internal sealed class TableSyncCommandFactory
     }
 
     public SqlCommand BuildParentKeyCommand(SqlConnection parent) =>
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
         new($"SELECT {BuildKeySelectExpression()} FROM {_table}", parent) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
 
     public SqlCommand BuildChildKeyCommand(SqlConnection child) =>
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
         new($"SELECT {BuildKeySelectExpression()} FROM {_table}", child) { CommandTimeout = _plan.BulkCopyTimeoutSeconds };
 
     /// <summary>afterKey null means the first page: no key condition at all. (A "before every
@@ -101,6 +103,7 @@ internal sealed class TableSyncCommandFactory
 
         var where = conditions.Count > 0 ? $"WHERE  {string.Join("\n  AND  ", conditions)}" : string.Empty;
 
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- identifiers quoted by SqlIdentifier; page size, keys and versions are parameters
         var cmd = new SqlCommand($"""
             SELECT TOP (@Size) {selectList}
             FROM   {source}

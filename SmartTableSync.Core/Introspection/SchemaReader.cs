@@ -233,8 +233,10 @@ internal sealed class SchemaReader : ISchemaReader
         SqlConnection parent, string tableName, IReadOnlyList<string> lobColumnNames, CancellationToken ct)
     {
         var selectList = string.Join(", ", lobColumnNames.Select(col => $"MAX(DATALENGTH({SqlIdentifier.Quote(col)})) AS {SqlIdentifier.Quote(col)}"));
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
         var sql = $"SELECT {selectList} FROM {SqlIdentifier.Quote(tableName)}";
 
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- see above
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 120 };
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 

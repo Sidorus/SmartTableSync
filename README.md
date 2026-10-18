@@ -222,7 +222,7 @@ package. SQL authentication doesn't need it.
 | `SmartTableSyncFunction` | Thin Azure Functions host (timer trigger) |
 | `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
 | `SmartTableSync.Tests` | Unit tests |
-| `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker) |
+| `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker), including syncs that run as the three identities with exactly the grants in `sql/07_permissions.sql` |
 | `demo/` | Terraform, SQL and a script that deploy and run the whole setup on Azure |
 
 Inside Core, each incremental strategy has its own folder under `Strategies/` holding the

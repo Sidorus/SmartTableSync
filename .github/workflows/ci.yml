@@ -1,0 +1,118 @@
+name: CI
+
+# Build, test and security checks. Runs on every push to main, on pull requests, and on demand
+# from the Actions tab. Nothing is published or deployed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+# A newer push to the same branch makes an older, still-running check pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow only reads the repository; give its token no write access.
+permissions:
+  contents: read
+
+jobs:
+  # 1. Build: compile the whole solution, check NuGet packages for known vulnerabilities, and
+  # make sure both NuGet packages (the library and the scaffold tool) can be packed.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore SmartTableSync.slnx
+
+      - name: Build
+        run: dotnet build SmartTableSync.slnx --no-restore --configuration Release
+
+      # `dotnet list package --vulnerable` prints a report and exits 0 even when it finds
+      # something, hence the grep. --include-transitive also checks indirect dependencies.
+      - name: Check for vulnerable NuGet packages
+        run: |
+          dotnet list SmartTableSync.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
+          if grep -q "has the following vulnerable packages" vulnerable-packages.txt; then
+            echo "::error::Vulnerable NuGet packages found -- see the step output above."
+            exit 1
+          fi
+
+      - name: Pack (sanity check, not published)
+        run: |
+          dotnet pack SmartTableSync.Core/SmartTableSync.Core.csproj --no-build --configuration Release --output packages
+          dotnet pack SmartTableSync.Scaffold/SmartTableSync.Scaffold.csproj --no-build --configuration Release --output packages
+
+  # Runs next to the build: the demo's Terraform must stay formatted and valid. Validation
+  # needs no Azure sign-in and creates nothing.
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform fmt -check -diff
+
+      - name: Validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  # 2. Test: only after a successful build. Each job runs on a fresh runner, so dotnet test
+  # compiles again here rather than reusing the build job's output. The integration tests start
+  # their own throwaway SQL Server containers through Testcontainers; the runner's Docker is all
+  # they need.
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Unit and integration tests
+        run: dotnet test SmartTableSync.slnx --configuration Release
+
+  # 3. Semgrep: only after the tests pass. Static analysis that needs no license or account
+  # (CodeQL on a private repository needs GitHub Advanced Security). Only ERROR severity fails
+  # the job. The image is pinned so a new Semgrep release can't change the result unnoticed.
+  semgrep:
+    needs: test
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.178.0
+    steps:
+      - uses: actions/checkout@v4
+
+      # All C# rules on the shipped code. Product code that has to build SQL from table and
+      # column names (they can't be SQL parameters) quotes them with SqlIdentifier and marks the
+      # line with a "nosemgrep" comment saying why; any other interpolated SQL still fails here.
+      - name: Semgrep scan (shipped code)
+        run: >
+          semgrep scan
+          --config p/csharp --config p/secrets
+          --exclude SmartTableSync.Tests --exclude SmartTableSync.IntegrationTests
+          --severity ERROR --metrics=off --error
+
+      # The test projects build SQL against tables the tests create themselves and never ship,
+      # so they're only checked for committed secrets.
+      - name: Semgrep scan (tests, secrets only)
+        run: >
+          semgrep scan
+          --config p/secrets
+          --severity ERROR --metrics=off --error
+          SmartTableSync.Tests SmartTableSync.IntegrationTests

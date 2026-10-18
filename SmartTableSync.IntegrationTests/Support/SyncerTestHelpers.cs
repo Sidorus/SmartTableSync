@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Planning;
 using SmartTableSync.Sql;
@@ -8,6 +9,7 @@ using SmartTableSync.Diagnostics;
 using SmartTableSync.Hosting;
 using SmartTableSync.State;
 using SmartTableSync.Orchestration;
+using SmartTableSync.Scaffolding;
 
 namespace SmartTableSync.IntegrationTests.Support;
 
@@ -43,6 +45,48 @@ internal static class SyncerTestHelpers
     /// default SyncSettings (5 connection-open attempts).</summary>
     public static DbConnectionFactory CreateConnectionFactory(Microsoft.Extensions.Configuration.IConfiguration configuration) =>
         new(configuration, Microsoft.Extensions.Options.Options.Create(new SyncSettings()), NullLogger<DbConnectionFactory>.Instance);
+
+    /// <summary>Runs one SyncOrchestrator pass, wired as the Function wires it, over the given
+    /// connection strings (keys as in app settings), and returns the errors it logged: each failed
+    /// table is logged and skipped rather than thrown. A new orchestrator per call starts with no
+    /// reconcile history, so every Timestamp/RowVersion table also runs its delete reconciliation.</summary>
+    public static async Task<IReadOnlyList<string>> RunOrchestratorAsync(
+        IReadOnlyDictionary<string, string?> connectionStrings, SyncSettings settings)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(connectionStrings)
+            .Build();
+        var connections = CreateConnectionFactory(configuration);
+        var logger = new ErrorCollectingLogger<SyncOrchestrator>();
+
+        var orchestrator = new SyncOrchestrator(
+            new SyncTableProvisioner(
+                new SchemaReader(), new SyncPlanHeuristic(), new SyncTableConfigRepository(),
+                new NoOpSyncMetricsReporter(), Microsoft.Extensions.Options.Options.Create(settings),
+                NullLogger<SyncTableProvisioner>.Instance),
+            new TableSyncerFactory(new BatchLogger(), new SyncStateRepository(), new NoOpSyncMetricsReporter(), NullLoggerFactory.Instance),
+            new ChildDdlProvisioner(new SchemaReader(), new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance),
+            connections,
+            new ChildDatabaseRunLock(connections),
+            new SyncStateRepository(),
+            new NoOpSyncMetricsReporter(),
+            Microsoft.Extensions.Options.Options.Create(settings),
+            logger);
+
+        await orchestrator.RunAsync(CancellationToken.None);
+        return logger.Errors;
+    }
+
+    /// <summary>Row count and a checksum over every column of a table, to compare a parent table
+    /// with its child copy (same column order on both sides).</summary>
+    public static async Task<(int Rows, int? Checksum)> TableFingerprintAsync(SqlConnection connection, string tableName)
+    {
+        await using var cmd = new SqlCommand(
+            $"SELECT COUNT(*), CHECKSUM_AGG(BINARY_CHECKSUM(*)) FROM [dbo].[{tableName}]", connection);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return (reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetInt32(1));
+    }
 
     public static async Task InsertNewProductAttributeValueRowAsync(
         SqlConnection parent, int attributeId, string slug, DateTime lastUpdate)
