@@ -141,24 +141,24 @@ Settings are validated at startup: an empty or duplicated table list stops the h
 
 ## Getting started
 
-To see it run on Azure first, [`demo/`](demo/README.md) deploys a parent and a child database,
-the Function and three demo tables to your own subscription with one script, then syncs them.
+- **See it run first:** [`demo/`](demo/README.md) deploys a parent and a child database, the
+  Function and three demo tables to your own Azure subscription with one script, then syncs them.
+- **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
+  database identities and the exact rights each needs, preparing parent tables, generating and
+  applying the child's SQL, the Function settings, and troubleshooting.
+- **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
+  parent's schema and writes the SQL for review; it never executes anything.
 
-```bash
-cd SmartTableSyncFunction
-dotnet build
-```
+In short:
 
-1. Set up the three database identities from [`sql/07_permissions.sql`](sql/07_permissions.sql)
-   (runtime, parent introspection, child provisioning) — the always-on runtime never holds DDL rights.
-2. Child tracking tables (`CustomSyncState`, `SyncBatchLog`, `SyncTableConfig`) are generated:
-   **Auto mode** creates them on every run; in **Manual mode** run
-   `smarttablesync-scaffold --infrastructure` once and apply `00_infrastructure.sql`.
-3. Child business tables and their MERGE procedures: Auto mode creates them; in Manual mode run
-   `smarttablesync-scaffold <Table> ...` and apply the generated scripts after review.
-4. Optional, per table, applied by a DBA on the **parent**:
-   `smarttablesync-scaffold --change-tracking-setup <Table>` (enables Change Tracking and grants
-   `VIEW CHANGE TRACKING`) or `--rowversion-setup <Table>` (adds a rowversion column and index).
+1. Create the runtime, parent-introspection and child-provisioning identities
+   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights,
+   apart from `ALTER` on child tables that have an `IDENTITY` column.
+2. Optional, per table, applied by a DBA on the **parent**:
+   `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
+3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
+   review and apply the generated scripts to the **child**, or let **Auto mode** create them.
+4. Grant the runtime identity access to the new child objects.
 5. Configure the connection strings and `SmartTableSync:TableList`, then publish the Function.
 
 To host the engine elsewhere, reference `SmartTableSync.Core`, call `services.AddSmartTableSync()`

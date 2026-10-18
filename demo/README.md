@@ -7,6 +7,11 @@ deletes. It uses the same tools a real setup would: Terraform for the Azure reso
 
 Everything is created in one resource group and removed again with `-Destroy`.
 
+The demo is the [setup guide](../docs/setup.md) performed by a script. The guide's
+[last section](../docs/setup.md#the-demo-as-a-worked-example) maps each demo step to its guide
+step, and [From the demo to your own tables](#from-the-demo-to-your-own-tables) below lists what
+changes for a real setup.
+
 ## What gets created
 
 ```mermaid
@@ -113,6 +118,23 @@ between the strategies:
 To look around yourself, connect with SSMS or Azure Data Studio to the server name from
 `terraform -chdir=demo/terraform output sql_server_fqdn`, using Microsoft Entra authentication.
 Logs and the `smarttablesync.*` metrics are in the Application Insights resource.
+
+## From the demo to your own tables
+
+The demo keeps everything to one person and one script. For your own databases, follow the
+[setup guide](../docs/setup.md); the differences are:
+
+| In the demo | In a real setup |
+|---|---|
+| You run the scaffold tool and apply its SQL as the SQL server's Entra admin | The scaffold tool uses the **parent-introspection** identity; child scripts are applied by the **child-provisioning** identity; parent scripts (Change Tracking, rowversion) by a DBA |
+| `sql/02_parent_grants.sql` and `sql/03_child_grants.sql` grant the runtime identity on the demo tables | The same grants for your tables, as in [`sql/07_permissions.sql`](../sql/07_permissions.sql) and the guide's rights table |
+| Terraform creates new databases and fills the parent | Your parent and child already exist; only the Function, its identity and monitoring are new |
+| Firewall allows Azure services | VNet integration and a private endpoint |
+| The script triggers each sync | The 5-minute timer does |
+
+The runtime identity's rights are the same in both: in the parent, read access to the synced
+tables plus the metadata needed to profile them; in the child, data access, `EXECUTE` on the
+merge procedures and their table types, and no DDL.
 
 ## Remove it
 
