@@ -11,12 +11,13 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 /// the provisioning identity, the runtime's parent grants, and on the child only the
 /// schema-level runtime grant given before any synced object exists. The child starts without
 /// tracking tables, synced tables, table types or procedures; the Function has to create them
-/// with the provisioning identity and sync with the runtime identity. Uses its own container
-/// because it drops those child objects.
+/// with the provisioning identity and sync with the runtime identity. ProductAttributeValue has
+/// an IDENTITY column in the parent; its child column is created without one, so the runtime
+/// needs no ALTER. Uses its own container because it drops those child objects.
 /// </summary>
 public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeTests.AutoModeGrants>
 {
-    private static readonly string[] _tables = ["ProductCatalogItem", "DocumentAsset"];
+    private static readonly string[] _tables = ["ProductAttributeValue", "ProductCatalogItem", "DocumentAsset"];
 
     private readonly MsSqlTestFixture _sql;
     private readonly LeastPrivilegeIdentities _identities;
@@ -31,8 +32,10 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
     public sealed class AutoModeGrants : LeastPrivilegeFixture
     {
         protected override Task PrepareDatabasesAsync() => RunOnChildAsync("""
+            DROP PROCEDURE IF EXISTS [dbo].[sp_SyncProductAttributeValue];
             DROP PROCEDURE IF EXISTS [dbo].[sp_SyncProductCatalogItemBatch];
             DROP PROCEDURE IF EXISTS [dbo].[sp_SyncDocumentAsset];
+            DROP TABLE IF EXISTS [dbo].[ProductAttributeValue];
             DROP TABLE IF EXISTS [dbo].[ProductCatalogItem];
             DROP TABLE IF EXISTS [dbo].[DocumentAsset];
             DROP TYPE IF EXISTS [dbo].[ProductCatalogItemTableType];
@@ -60,6 +63,9 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         await child.OpenAsync();
 
         var seedData = Path.Combine(AppContext.BaseDirectory, "SeedData");
+        await SeedDataLoader.EnsureSeededAsync(parent, "Attribute", "Attribute.json", hasIdentityColumn: true);
+        await SeedDataLoader.InsertRowsAsync(parent, "ProductAttributeValue",
+            await SeedDataLoader.LoadAsync(Path.Combine(seedData, "ProductAttributeValue.json")), hasIdentityColumn: true);
         await SeedDataLoader.InsertRowsAsync(parent, "ProductCatalogItem",
             await SeedDataLoader.LoadAsync(Path.Combine(seedData, "ProductCatalogItem.json")));
         await SeedDataLoader.InsertRowsAsync(parent, "DocumentAsset",
@@ -74,7 +80,12 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         Assert.Empty(errors);
         await AssertChildMatchesParentAsync(parent, child);
 
-        // Arrange - an insert and an update for the next run
+        Assert.Null(await new SmartTableSync.Introspection.SchemaReader().GetIdentityColumnAsync(
+            child, "ProductAttributeValue", CancellationToken.None));
+
+        // Arrange - inserts and an update for the next run; the new ProductAttributeValue row
+        // gets its key from the parent's IDENTITY and is copied as a plain value
+        await SyncerTestHelpers.InsertNewProductAttributeValueRowAsync(parent, attributeId: 1, slug: "auto-mode", lastUpdate: DateTime.UtcNow);
         await SyncerTestHelpers.InsertNewProductCatalogItemRowAsync(parent, "AUTO-NEW-1", "Added after the first sync", DateTime.UtcNow);
         await ExecuteAsync(parent, "UPDATE TOP (1) [dbo].[DocumentAsset] SET [Notes] = N'Changed after the first sync', [LastUpdate] = GETUTCDATE()");
 

@@ -2,7 +2,8 @@ namespace SmartTableSync.Planning;
 
 /// <summary>The persisted row for one managed table in dbo.SyncTableConfig — introspected
 /// shape + heuristically-derived plan + optional hand-set overrides, surviving container
-/// redeploys because it lives in the child DB rather than a local file.</summary>
+/// redeploys because it lives in the child DB rather than a local file. IdentityColumn is the
+/// CHILD table's IDENTITY column (SyncPlan.ChildIdentityColumn), not the parent's.</summary>
 internal sealed record SyncTableConfig(
     string TableName,
     IReadOnlyList<string> PrimaryKeyColumns,
@@ -45,7 +46,8 @@ internal sealed record SyncTableConfig(
             RetryableSqlErrorNumbers: RetryableSqlErrorsOverride ?? RetryableSqlErrorNumbers,
             TvpTypeName: resolvedTvpTypeName,
             IncrementalColumn: IncrementalColumn,
-            IncrementalStrategy: IncrementalStrategy);
+            IncrementalStrategy: IncrementalStrategy,
+            ChildIdentityColumn: IdentityColumn);
     }
 
     public static SyncTableConfig FromPlan(
@@ -59,7 +61,7 @@ internal sealed record SyncTableConfig(
         IReadOnlyList<int>? retryableSqlErrorsOverride = null) => new(
         TableName: profile.TableName,
         PrimaryKeyColumns: profile.PrimaryKeyColumns,
-        IdentityColumn: profile.IdentityColumn,
+        IdentityColumn: plan.ChildIdentityColumn,
         MergeStrategy: plan.MergeStrategy,
         BatchSize: plan.BatchSize,
         BulkCopyTimeoutSeconds: plan.BulkCopyTimeoutSeconds,

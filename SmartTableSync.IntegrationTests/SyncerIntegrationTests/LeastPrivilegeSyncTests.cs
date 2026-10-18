@@ -16,8 +16,9 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 /// written, and nothing more; then each does its real job. A failure means the documented
 /// least-privilege setup doesn't work.
 ///
-/// Covers the example tables 07_permissions.sql names: ProductAttributeValue (IDENTITY column,
-/// row-by-row merge), ProductCatalogItem (TVP merge, Change Tracking) and DocumentAsset
+/// Covers the example tables 07_permissions.sql names: ProductAttributeValue (IDENTITY column in
+/// the parent, a plain key column in the scaffolded child, row-by-row merge), ProductCatalogItem
+/// (TVP merge, Change Tracking) and DocumentAsset
 /// (row-by-row merge for large rows). Uses its own container (IClassFixture) because it creates
 /// logins and changes grants, sync state and data.
 /// </summary>
@@ -37,6 +38,28 @@ public class LeastPrivilegeSyncTests : IClassFixture<LeastPrivilegeSyncTests.Man
     /// <summary>Every part of 07_permissions.sql except the Auto mode alternative.</summary>
     public sealed class ManualModeGrants : LeastPrivilegeFixture
     {
+        /// <summary>The shared test schema's child ProductAttributeValue is hand-written with an
+        /// IDENTITY column. Replaces it, and its procedure, with what the scaffold tool generates
+        /// for a new child table, as a Manual mode setup applies them.</summary>
+        protected override async Task PrepareDatabasesAsync()
+        {
+            await RunOnChildAsync("""
+                DROP PROCEDURE IF EXISTS [dbo].[sp_SyncProductAttributeValue];
+                DROP TABLE IF EXISTS [dbo].[ProductAttributeValue];
+                """, "drop hand-written ProductAttributeValue");
+
+            await using var parent = new SqlConnection(Sql.ParentConnectionString);
+            await using var child = new SqlConnection(Sql.ChildConnectionString);
+            await parent.OpenAsync();
+            await child.OpenAsync();
+
+            var reader = new SchemaReader();
+            var profile = await reader.ProfileTableAsync(parent, "ProductAttributeValue", CancellationToken.None);
+            var plan = new SyncPlanHeuristic().DerivePlan(profile, new PlanHeuristicOptions(), "LastUpdate");
+            await new ChildDdlProvisioner(reader, new SqlArtifactGenerator(), NullLogger<ChildDdlProvisioner>.Instance)
+                .EnsureChildObjectsExistAsync(child, profile, plan, CancellationToken.None);
+        }
+
         internal override async Task ApplyGrantsAsync(PermissionsScript script)
         {
             await RunOnChildAsync(script.For(ChildProvisioning, ChildDatabase), "07_permissions.sql: child-provisioning");

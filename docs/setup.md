@@ -46,9 +46,13 @@ Why the less obvious ones are needed:
 - **`EXECUTE` on the table type**: passing a table-valued parameter to `sp_Sync<Table>Batch` is
   checked against the type too; without it every batch fails with *"The EXECUTE permission was
   denied on the object '<Table>TableType'"*.
-- **Tables with an `IDENTITY` column**: keeping the parent's identity values uses
-  `SET IDENTITY_INSERT`, which SQL Server only allows with `ALTER` on the table. Until the engine
-  stops needing it, grant the runtime identity `ALTER` on those child tables, and only on those.
+- **Tables with an `IDENTITY` column need nothing extra.** The child is a copy: its key values
+  come from the parent, so the scaffold tool and Auto mode create the child column as a plain key
+  column without `IDENTITY`, and the runtime writes the parent's values into it with ordinary
+  `INSERT`. Only a child table that does have `IDENTITY`, created by an earlier SmartTableSync
+  version or by hand, needs `SET IDENTITY_INSERT` and therefore `ALTER` on that table. Recreate
+  it from the scaffold tool's `CREATE TABLE` script, or grant `ALTER` on that table only. Before
+  ever turning the child into a writable database, add `IDENTITY` (or a sequence) back first.
 
 Two more steps are applied by a **DBA on the parent**, never by SmartTableSync: enabling Change
 Tracking (`ALTER DATABASE` and `ALTER TABLE`) and adding a rowversion column. The scaffold tool
@@ -205,7 +209,6 @@ then add it to `SmartTableSync:TableList`.
 What Auto mode doesn't do: it never alters an existing child table, and it doesn't recreate an
 existing table type. When a column changes in the parent, update the child table and the table
 type with a reviewed script (the scaffold tool generates the new versions), as in Manual mode.
-Tables with an `IDENTITY` column also need `ALTER` for the runtime identity, as in Manual mode.
 
 ## Troubleshooting
 
@@ -214,7 +217,7 @@ Tables with an `IDENTITY` column also need `ALTER` for the runtime identity, as 
 | *Cannot find an authentication provider for 'ActiveDirectoryManagedIdentity'* | Since Microsoft.Data.SqlClient 7.0, Entra sign-in is a separate package | Your host needs `Microsoft.Data.SqlClient.Extensions.Azure` (the bundled Function and scaffold tool have it) |
 | *VIEW DATABASE PERFORMANCE STATE permission denied* | Profiling a table without `VIEW DATABASE STATE` | Grant it on the parent to the runtime and introspection identities |
 | *The EXECUTE permission was denied on the object '\<Table\>TableType'* | TVP batches without `EXECUTE` on the type | `GRANT EXECUTE ON TYPE::dbo.<Table>TableType TO [smarttablesync-runtime]` |
-| *Cannot find the object ... or you do not have permissions* on `SET IDENTITY_INSERT` | Table with an `IDENTITY` column | `GRANT ALTER ON dbo.<Table> TO [smarttablesync-runtime]` on the child |
+| *Cannot find the object ... or you do not have permissions* on `SET IDENTITY_INSERT` | A child table that has an `IDENTITY` column (created by an earlier version or by hand) | Recreate it from the scaffold tool's `CREATE TABLE` script (no `IDENTITY`), or `GRANT ALTER ON dbo.<Table> TO [smarttablesync-runtime]` on the child |
 | *VIEW CHANGE TRACKING permission denied* | Change Tracking table without the grant | Apply the scaffolded `<Table>_ChangeTrackingSetup.sql`, which includes it |
 | *... not currently available* on the first connection | A serverless database resuming from pause | Retried automatically (`SmartTableSync:ConnectionOpenAttempts`) |
 

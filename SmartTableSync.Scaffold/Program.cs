@@ -226,11 +226,24 @@ foreach (var tableName in tableNames)
         var strategyOverride = syncSettings.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
-        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride);
+        // Same as SyncTableProvisioner: a new child table is generated without IDENTITY, and only
+        // an existing child table that has one gets procedures with IDENTITY_INSERT.
         var childExists = await schemaReader.TableExistsAsync(child, tableName, CancellationToken.None);
+        var childIdentityColumn = childExists
+            ? await schemaReader.GetIdentityColumnAsync(child, tableName, CancellationToken.None)
+            : null;
+
+        var plan = heuristic.DerivePlan(profile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, profile.RowVersionColumn, strategyOverride,
+            childIdentityColumn);
 
         Console.WriteLine($"  MergeStrategy={plan.MergeStrategy}, BatchSize={plan.BatchSize}, " +
             $"BulkCopyTimeoutSeconds={plan.BulkCopyTimeoutSeconds}, IncrementalStrategy={plan.IncrementalStrategy}");
+
+        if (childIdentityColumn is not null)
+        {
+            Console.WriteLine($"  child column {childIdentityColumn} is an IDENTITY column: the runtime identity needs ALTER on dbo.{tableName} " +
+                "(see sql/07_permissions.sql), or recreate the child table without IDENTITY");
+        }
 
         if (!childExists)
         {

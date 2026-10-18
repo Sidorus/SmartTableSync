@@ -7,6 +7,10 @@ namespace SmartTableSync.Planning;
 /// <param name="IncrementalColumn">The column the incremental strategy filters on: the
 /// datetime column for Timestamp, the rowversion column for RowVersion, null for FullRescan and
 /// SqlChangeTracking.</param>
+/// <param name="ChildIdentityColumn">The IDENTITY column of the CHILD table, when it has one.
+/// SmartTableSync creates child tables without IDENTITY (every key value comes from the parent),
+/// so this is only set for a child table created that way by an earlier version or by hand;
+/// copying into it then needs SET IDENTITY_INSERT, and with it ALTER on the table.</param>
 internal sealed record SyncPlan(
     string TableName,
     MergeStrategy MergeStrategy,
@@ -16,4 +20,5 @@ internal sealed record SyncPlan(
     IReadOnlyList<int> RetryableSqlErrorNumbers,
     string? TvpTypeName,
     string? IncrementalColumn = null,
-    IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp);
+    IncrementalStrategy IncrementalStrategy = IncrementalStrategy.Timestamp,
+    string? ChildIdentityColumn = null);

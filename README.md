@@ -176,9 +176,8 @@ syncs. Every other run only syncs. Creating objects is left to the separate prov
 identity; the always-on runtime identity only reads and writes data.
 
 **Good to know:** Auto mode creates what is missing but never changes an existing child table. A
-column added to the parent later still needs a reviewed `ALTER` on the child. Tables with an
-`IDENTITY` column need one more grant in both modes. The [setup guide](docs/setup.md#auto-mode)
-has the details.
+column added to the parent later still needs a reviewed `ALTER` on the child. The
+[setup guide](docs/setup.md#auto-mode) has the details.
 
 ## Getting started
 
@@ -193,8 +192,8 @@ has the details.
 In short:
 
 1. Create the runtime, parent-introspection and child-provisioning identities
-   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights,
-   apart from `ALTER` on child tables that have an `IDENTITY` column.
+   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights.
+   Child tables are created without `IDENTITY`, since their key values are copied from the parent.
 2. Optional, per table, applied by a DBA on the **parent**:
    `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
 3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then

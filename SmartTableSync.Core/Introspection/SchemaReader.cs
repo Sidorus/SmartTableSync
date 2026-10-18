@@ -84,6 +84,20 @@ internal sealed class SchemaReader : ISchemaReader
         return result is int intResult && intResult == 1;
     }
 
+    public async Task<string?> GetIdentityColumnAsync(SqlConnection connection, string tableName, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT c.name
+            FROM   sys.identity_columns c
+            WHERE  c.object_id = OBJECT_ID(@TableName)
+            """;
+
+        await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result as string;
+    }
+
     private static async Task<IReadOnlyList<ColumnProfile>> GetColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {
         const string sql = """
@@ -135,20 +149,6 @@ internal sealed class SchemaReader : ISchemaReader
             keyColumns.Add(reader.GetString(0));
 
         return keyColumns;
-    }
-
-    private static async Task<string?> GetIdentityColumnAsync(SqlConnection parent, string tableName, CancellationToken ct)
-    {
-        const string sql = """
-            SELECT c.name
-            FROM   sys.identity_columns c
-            WHERE  c.object_id = OBJECT_ID(@TableName)
-            """;
-
-        await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result as string;
     }
 
     private static async Task<bool> GetIsChangeTrackingEnabledAsync(SqlConnection parent, string tableName, CancellationToken ct)

@@ -58,8 +58,13 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
         var strategyOverride = _settings.Value.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
+        // Null for a child table SmartTableSync creates (or will create in Auto mode): those have
+        // no IDENTITY. Only an existing child table with one needs IDENTITY_INSERT.
+        var childIdentityColumn = await _schemaReader.GetIdentityColumnAsync(child, tableName, ct);
+
         var plan = _heuristic.DerivePlan(
-            fullProfile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride);
+            fullProfile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride,
+            childIdentityColumn);
 
         var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
             existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.ReferencesOtherTables);

@@ -9,9 +9,12 @@ namespace SmartTableSync.Scaffolding;
 /// </summary>
 internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 {
+    // No IDENTITY, even when the parent column has one: the child never generates key values,
+    // every one is copied from the parent, and copying into an IDENTITY column would need
+    // SET IDENTITY_INSERT and with it ALTER on the table for the runtime identity.
     public string GenerateCreateTableScript(TableProfile profile)
     {
-        var columnLines = profile.Columns.Select(c => FormatColumnDefinition(c, isIdentity: c.Name == profile.IdentityColumn));
+        var columnLines = profile.Columns.Select(FormatColumnDefinition);
         var columnsBlock = string.Join(",\n", columnLines);
         var pkColumnsBlock = string.Join(",\n", profile.PrimaryKeyColumns.Select(c => $"\t{SqlIdentifier.Quote(c)} ASC"));
 
@@ -70,7 +73,7 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
     public string GenerateMergeProcedureScript(TableProfile profile, SyncPlan plan) => plan.MergeStrategy switch
     {
         MergeStrategy.Tvp => GenerateTvpMergeProcedure(profile, plan),
-        MergeStrategy.RowByRow => GenerateRowByRowMergeProcedure(profile),
+        MergeStrategy.RowByRow => GenerateRowByRowMergeProcedure(profile, plan),
         _ => throw new NotSupportedException($"Unhandled merge strategy: {plan.MergeStrategy}"),
     };
 
@@ -309,7 +312,7 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
 
     private static string GenerateTvpMergeProcedure(TableProfile profile, SyncPlan plan)
     {
-        var merge = BuildMergeParts(profile);
+        var merge = BuildMergeParts(profile, plan);
 
         return $"""
             -- ============================================================
@@ -340,12 +343,12 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
             """;
     }
 
-    private static string GenerateRowByRowMergeProcedure(TableProfile profile)
+    private static string GenerateRowByRowMergeProcedure(TableProfile profile, SyncPlan plan)
     {
         var insertableColumns = InsertableColumns(profile);
         var parameters = string.Join(",\n", insertableColumns.Select(c => $"    {SqlIdentifier.Parameter(c.Name)} {FormatSqlType(c)}"));
         var sourceSelect = string.Join(", ", insertableColumns.Select(c => $"{SqlIdentifier.Parameter(c.Name)} AS {SqlIdentifier.Quote(c.Name)}"));
-        var merge = BuildMergeParts(profile);
+        var merge = BuildMergeParts(profile, plan);
 
         return $"""
             -- ============================================================
@@ -376,13 +379,14 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
     }
 
     // The parts both MERGE procedures share. IDENTITY_INSERT is switched on around the MERGE
-    // when the table has an identity column, so the parent's key values are kept.
-    private static MergeParts BuildMergeParts(TableProfile profile)
+    // only when the CHILD table has an identity column (one created by an earlier version or by
+    // hand), so the parent's key values can be written into it.
+    private static MergeParts BuildMergeParts(TableProfile profile, SyncPlan plan)
     {
         var insertableColumns = InsertableColumns(profile);
         var updateColumns = insertableColumns.Where(c => !profile.PrimaryKeyColumns.Contains(c.Name));
         var table = SqlIdentifier.DboTable(profile.TableName);
-        var hasIdentity = profile.IdentityColumn is not null;
+        var hasIdentity = plan.ChildIdentityColumn is not null;
 
         return new MergeParts(
             Table: table,
@@ -401,11 +405,10 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
     private static IReadOnlyList<ColumnProfile> InsertableColumns(TableProfile profile) =>
         profile.Columns.Where(c => c.Name != profile.RowVersionColumn).ToList();
 
-    private static string FormatColumnDefinition(ColumnProfile col, bool isIdentity)
+    private static string FormatColumnDefinition(ColumnProfile col)
     {
-        var identitySql = isIdentity ? " IDENTITY(1,1)" : string.Empty;
         var nullability = col.IsNullable ? "NULL" : "NOT NULL";
-        return $"\t{SqlIdentifier.Quote(col.Name)} {FormatSqlType(col)}{identitySql} {nullability}";
+        return $"\t{SqlIdentifier.Quote(col.Name)} {FormatSqlType(col)} {nullability}";
     }
 
     // The column types TEXTIMAGE_ON applies to: any (max) type, xml, and the legacy LOB types.

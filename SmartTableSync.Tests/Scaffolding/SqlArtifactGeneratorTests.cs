@@ -29,15 +29,26 @@ public class SqlArtifactGeneratorTests
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
 
+    // A child table SmartTableSync creates: no IDENTITY, so no IDENTITY_INSERT
     private static SyncPlan ProductAttributeValuePlan() => new(
-        "ProductAttributeValue", MergeStrategy.RowByRow, 500, SqlBulkCopyOptions.KeepIdentity, 60, [547], null);
+        "ProductAttributeValue", MergeStrategy.RowByRow, 500, SqlBulkCopyOptions.Default, 60, [547], null);
+
+    // A child table that already exists with an IDENTITY column (earlier version or by hand)
+    private static SyncPlan ProductAttributeValuePlanForIdentityChildTable() => ProductAttributeValuePlan() with
+    {
+        BulkCopyOptions = SqlBulkCopyOptions.KeepIdentity,
+        ChildIdentityColumn = "AttributeValueId",
+    };
 
     [Fact]
-    public void GenerateCreateTableScript_IdentityColumn_IncludesIdentityClause()
+    public void GenerateCreateTableScript_ParentIdentityColumn_CreatesPlainColumnWithoutIdentity()
     {
+        // The child never generates key values, it copies them, so the column is a plain NOT NULL
+        // key column and the runtime identity needs no ALTER to write explicit values into it.
         var script = _generator.GenerateCreateTableScript(ProductAttributeValueProfile());
 
-        Assert.Contains("[AttributeValueId] [int] IDENTITY(1,1) NOT NULL", script);
+        Assert.Contains("[AttributeValueId] [int] NOT NULL", script);
+        Assert.DoesNotContain("IDENTITY", script);
     }
 
     [Fact]
@@ -86,9 +97,19 @@ public class SqlArtifactGeneratorTests
     }
 
     [Fact]
-    public void GenerateMergeProcedureScript_RowByRowWithIdentity_WrapsInIdentityInsert()
+    public void GenerateMergeProcedureScript_RowByRowChildWithoutIdentity_HasNoIdentityInsert()
     {
         var script = _generator.GenerateMergeProcedureScript(ProductAttributeValueProfile(), ProductAttributeValuePlan());
+
+        Assert.DoesNotContain("IDENTITY_INSERT", script);
+        Assert.Contains("CREATE OR ALTER PROCEDURE [dbo].[sp_SyncProductAttributeValue]", script);
+        Assert.Contains("@AttributeValueId [int]", script);
+    }
+
+    [Fact]
+    public void GenerateMergeProcedureScript_RowByRowChildWithIdentity_WrapsInIdentityInsert()
+    {
+        var script = _generator.GenerateMergeProcedureScript(ProductAttributeValueProfile(), ProductAttributeValuePlanForIdentityChildTable());
 
         Assert.Contains("SET IDENTITY_INSERT [dbo].[ProductAttributeValue] ON;", script);
         Assert.Contains("SET IDENTITY_INSERT [dbo].[ProductAttributeValue] OFF;", script);
@@ -410,11 +431,13 @@ public class SqlArtifactGeneratorTests
         AvgRowSizeBytes: 500,
         MaxLobColumnSizeBytes: new Dictionary<string, long>());
 
+    // The child table exists with an IDENTITY column (earlier version or by hand)
     private static SyncPlan IdentityTvpPlan() => new(
-        "LookupCode", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.KeepIdentity, 120, [], "LookupCodeTableType");
+        "LookupCode", MergeStrategy.Tvp, 200, SqlBulkCopyOptions.KeepIdentity, 120, [], "LookupCodeTableType",
+        ChildIdentityColumn: "LookupCodeId");
 
     [Fact]
-    public void GenerateMergeProcedureScript_TvpWithIdentity_WrapsInIdentityInsert()
+    public void GenerateMergeProcedureScript_TvpChildWithIdentity_WrapsInIdentityInsert()
     {
         // Regression test for the confirmed bug: GenerateRowByRowMergeProcedure already
         // wrapped identity-column inserts in SET IDENTITY_INSERT ON/OFF, but
