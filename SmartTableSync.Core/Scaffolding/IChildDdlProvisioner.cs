@@ -9,6 +9,10 @@ namespace SmartTableSync.Scaffolding;
 /// re-provision (new table or parent schema drift) - never on the routine sync path.</summary>
 internal interface IChildDdlProvisioner
 {
+    /// <summary>Creates a missing child table; for an existing one, adds columns that are new in
+    /// the parent and throws, changing nothing, for a change that could lose data
+    /// (ChildSchemaComparer). Recreates a table type that no longer matches, then the procedure.
+    /// Safe to repeat.</summary>
     Task EnsureChildObjectsExistAsync(
         SqlConnection childProvisioning, TableProfile profile, SyncPlan plan, CancellationToken ct);
 

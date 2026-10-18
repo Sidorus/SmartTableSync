@@ -113,13 +113,20 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
 
             // Cheap unless the parent schema changed (see SyncTableProvisioner). The syncer is
             // built here, per run, because the table's shape and plan are only known now.
-            var (profile, plan, wasFreshlyProvisioned) = await _provisioner.EnsureProvisionedAsync(parent, child, tableName, ct);
+            var provisioning = await _provisioner.PlanAsync(parent, child, tableName, ct);
+            var (profile, plan) = (provisioning.Profile, provisioning.Plan);
+            var lastSync = await _syncState.GetLastSyncDateAsync(child, tableName, ct);
 
-            if (_mode == SyncMode.Auto && wasFreshlyProvisioned)
+            // A new plan is saved only after the child matches it: in Auto mode a failed DDL step
+            // or re-scan leaves the old plan in place, so the next run tries again.
+            if (provisioning.Change != ProvisioningChange.None)
             {
-                await using var childProvisioning = _connFactory.CreateChildProvisioningConnection();
-                await childProvisioning.OpenAsync(ct);
-                await _childDdlProvisioner.EnsureChildObjectsExistAsync(childProvisioning, profile, plan, ct);
+                if (_mode == SyncMode.Auto && !await ApplyChildSchemaAsync(parent, child, provisioning, lastSync, ct))
+                {
+                    return;
+                }
+
+                await _provisioner.SaveAsync(child, provisioning, ct);
             }
 
             var syncer = _syncerFactory.Create(profile, plan);
@@ -129,7 +136,6 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             // values that SQL Server stamped — eliminates any app-server clock skew gap.
             var syncStartedAt = await GetDbUtcNowAsync(parent, ct);
 
-            var lastSync = await _syncState.GetLastSyncDateAsync(child, syncer.TableName, ct);
             var result = await syncer.SyncAsync(parent, child, lastSync, ct);
             // Deletes applied during the pass itself (SqlChangeTracking) plus any found by the
             // periodic key-set reconciliation.
@@ -176,6 +182,41 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
         {
             _logger.LogError(ex, "{Table}: sync failed — will retry on next run", tableName);
         }
+    }
+
+    // Auto mode: creates or evolves the child objects for a new plan. After a parent schema change
+    // on a table that was already synced, one full re-scan copies every row again, so existing
+    // rows get values in added columns; incremental strategies would only copy rows that change.
+    // Returns false when the re-scan had errors: the new plan then stays unsaved and the next
+    // run evolves (idempotently) and re-scans again.
+    private async Task<bool> ApplyChildSchemaAsync(
+        SqlConnection parent, SqlConnection child, TableProvisioning provisioning, DateTime lastSync, CancellationToken ct)
+    {
+        await using (var childProvisioning = _connFactory.CreateChildProvisioningConnection())
+        {
+            await childProvisioning.OpenAsync(ct);
+            await _childDdlProvisioner.EnsureChildObjectsExistAsync(childProvisioning, provisioning.Profile, provisioning.Plan, ct);
+        }
+
+        if (provisioning.Change != ProvisioningChange.SchemaChanged || SyncConstants.IsInitial(lastSync))
+        {
+            return true;
+        }
+
+        var tableName = provisioning.Profile.TableName;
+        _logger.LogWarning("{Table}: parent schema changed — running one full re-scan so every child row matches the new schema", tableName);
+        _metrics.FullRescan(tableName, "schema_changed");
+
+        var rescanPlan = provisioning.Plan with { IncrementalStrategy = IncrementalStrategy.FullRescan, IncrementalColumn = null };
+        var rescan = await _syncerFactory.Create(provisioning.Profile, rescanPlan).SyncAsync(parent, child, lastSync, ct);
+        if (rescan.RowsErrored == 0 && !rescan.HasRetryableErrors)
+        {
+            return true;
+        }
+
+        _logger.LogWarning("{Table}: the re-scan after the schema change had {Errors} error(s) — it runs again next run",
+            tableName, rescan.RowsErrored);
+        return false;
     }
 
     // SqlChangeTracking tables get deletes from CT itself every cycle, so their full key-set

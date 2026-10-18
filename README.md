@@ -175,9 +175,12 @@ merge procedure with the provisioning identity, logs `child DDL objects verified
 syncs. Every other run only syncs. Creating objects is left to the separate provisioning
 identity; the always-on runtime identity only reads and writes data.
 
-**Good to know:** Auto mode creates what is missing but never changes an existing child table. A
-column added to the parent later still needs a reviewed `ALTER` on the child. The
-[setup guide](docs/setup.md#auto-mode) has the details.
+**When the parent schema changes:** a **new column** is added to the child automatically, the
+table type and procedure are recreated, and the table is re-scanned once so existing rows get
+the new values. Changes that could lose data (a changed type or length, a changed primary key, a
+removed `NOT NULL` column) are never applied automatically: the table stops with an error that
+names the change until a reviewed script is applied. The [setup guide](docs/setup.md#auto-mode)
+has the details.
 
 ## Getting started
 

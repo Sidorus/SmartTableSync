@@ -98,6 +98,34 @@ internal sealed class SchemaReader : ISchemaReader
         return result as string;
     }
 
+    public async Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable
+            FROM   sys.table_types tt
+            JOIN   sys.columns c ON c.object_id = tt.type_table_object_id
+            JOIN   sys.types t   ON c.user_type_id = t.user_type_id
+            WHERE  tt.name = @TypeName AND tt.schema_id = SCHEMA_ID('dbo')
+            ORDER  BY c.column_id
+            """;
+
+        await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
+        cmd.AddParam("@TypeName", SqlDbType.NVarChar, typeName, 128);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        var columns = new List<ColumnProfile>();
+        while (await reader.ReadAsync(ct))
+        {
+            columns.Add(new ColumnProfile(
+                Name: reader.GetString(0),
+                SqlTypeName: reader.GetString(1),
+                MaxLength: reader.GetInt16(2),
+                IsNullable: reader.GetBoolean(3)));
+        }
+
+        return columns;
+    }
+
     private static async Task<IReadOnlyList<ColumnProfile>> GetColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {
         const string sql = """

@@ -21,8 +21,8 @@ Set with `SmartTableSync:Mode`.
 - **Manual** (default): a person creates the child's tables and procedures from the scaffold
   tool's scripts. The Function only ever reads and writes data.
 - **Auto**: the Function creates the child's tracking tables, tables and procedures itself when
-  it first sees a table, using a separate provisioning identity. It creates missing tables but
-  never alters an existing one; a later column change still needs a reviewed script.
+  it first sees a table, using a separate provisioning identity, and adds columns that appear in
+  the parent later. Changes that could lose data still need a reviewed script.
 
 ## Identities and their rights
 
@@ -167,10 +167,15 @@ Logs and the `smarttablesync.*` metrics go to Application Insights.
 ## Later changes
 
 - **Add a table**: steps 2 to 5 for that table, then add it to `SmartTableSync:TableList`.
-- **A column changes in the parent**: the Function notices (the table's schema fingerprint
-  changes) and re-plans the table. Run the scaffold tool for the table again: it skips
-  `CREATE TABLE` because the child table exists, so add the column to the child table by hand,
-  then apply the regenerated table type and procedure.
+- **A column is added in the parent**: the Function notices (the table's schema fingerprint
+  changes) and re-plans the table. Run the scaffold tool for the table again: for an existing
+  child table it writes `<Table>_AddColumns.sql` instead of `CREATE TABLE`, and a table type
+  script that drops and recreates the type when it's out of date. Apply them in that order, then
+  the procedure. Existing rows get values in the new columns when they next change; Auto mode
+  re-scans the table instead, so they get them at once.
+- **Other column changes** (type, length, primary key, a removed `NOT NULL` column): the scaffold
+  tool prints `NEEDS A MANUAL CHANGE` with the details; change the child table yourself, then
+  apply the regenerated table type and procedure.
 - **Enable Change Tracking later**: step 2; the table switches to `SqlChangeTracking` on its
   next run by itself.
 
@@ -206,9 +211,18 @@ In Auto mode the Function does steps 3 and 4 itself, so adding a table is a sett
 To add a table later: grant the runtime identity read access to it on the **parent** (step 1),
 then add it to `SmartTableSync:TableList`.
 
-What Auto mode doesn't do: it never alters an existing child table, and it doesn't recreate an
-existing table type. When a column changes in the parent, update the child table and the table
-type with a reviewed script (the scaffold tool generates the new versions), as in Manual mode.
+### When the parent schema changes
+
+| Change in the parent | What Auto mode does |
+|---|---|
+| A column is added | Adds it to the child table (nullable, since existing rows have no value yet), recreates the table type and procedure, then **re-scans the table once** so every row gets the new values. Logged as a full re-scan with reason `schema_changed`. |
+| A column is removed | Leaves a nullable child column in place (it doesn't block inserts) and logs a warning. A `NOT NULL` child column would block inserts, so that's reported as below. |
+| A column's type or length changes, the primary key changes, or a column now allows `NULL` that the child doesn't | **Nothing is changed.** The table stops with an error naming the change, on every run, until you apply a reviewed script (the scaffold tool writes the new table type and procedure). Other tables keep syncing. |
+| Change Tracking enabled or disabled | No child change; the table switches strategy and is re-scanned once. |
+
+The new plan is saved only after the child changes and the re-scan succeeded. If anything fails
+in between, the next run sees the change again and repeats the steps, which are safe to repeat.
+The re-scan copies every row once, so on a very large table a schema change costs one full pass.
 
 ## Troubleshooting
 

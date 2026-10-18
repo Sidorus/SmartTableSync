@@ -550,4 +550,35 @@ public class SqlArtifactGeneratorTests
         Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'SyncTableConfig'", script);
         Assert.Contains("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SyncTableConfig') AND name = 'ChangeTrackingColumn'", script);
     }
+
+    [Fact]
+    public void GenerateAddColumnsScript_AddsEveryColumnAsNullable()
+    {
+        // Existing rows have no value for the new columns until the table is re-scanned, so even
+        // a NOT NULL parent column is added as nullable; a rowversion column fills itself.
+        var columns = new[]
+        {
+            new ColumnProfile("Price", "decimal", 9, false),
+            new ColumnProfile("Note", "nvarchar", 100, true),
+            new ColumnProfile("RowVer", "timestamp", 8, false),
+        };
+
+        var script = _generator.GenerateAddColumnsScript(ProductAttributeValueProfile(), columns);
+
+        Assert.Contains("ALTER TABLE [dbo].[ProductAttributeValue] ADD", script);
+        Assert.Contains("[Price] [decimal] NULL,", script);
+        Assert.Contains("[Note] [nvarchar](50) NULL,", script);
+        Assert.Contains("[RowVer] [timestamp];", script);
+    }
+
+    [Fact]
+    public void GenerateDropTvpTypeScript_DropsTheProcedureBeforeTheType()
+    {
+        // A table type can't be dropped while a procedure still uses it.
+        var script = _generator.GenerateDropTvpTypeScript("LookupCode", "LookupCodeTableType");
+
+        var dropProcedure = script.IndexOf("DROP PROCEDURE IF EXISTS [dbo].[sp_SyncLookupCodeBatch];", StringComparison.Ordinal);
+        var dropType = script.IndexOf("DROP TYPE IF EXISTS [dbo].[LookupCodeTableType];", StringComparison.Ordinal);
+        Assert.True(dropProcedure >= 0 && dropType > dropProcedure);
+    }
 }
