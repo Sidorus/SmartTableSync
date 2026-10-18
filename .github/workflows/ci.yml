@@ -98,8 +98,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Semgrep scan
+      # All C# rules on the shipped code. Product code that has to build SQL from table and
+      # column names (they can't be SQL parameters) quotes them with SqlIdentifier and marks the
+      # line with a "nosemgrep" comment saying why; any other interpolated SQL still fails here.
+      - name: Semgrep scan (shipped code)
         run: >
           semgrep scan
           --config p/csharp --config p/secrets
+          --exclude SmartTableSync.Tests --exclude SmartTableSync.IntegrationTests
           --severity ERROR --metrics=off --error
+
+      # The test projects build SQL against tables the tests create themselves and never ship,
+      # so they're only checked for committed secrets.
+      - name: Semgrep scan (tests, secrets only)
+        run: >
+          semgrep scan
+          --config p/secrets
+          --severity ERROR --metrics=off --error
+          SmartTableSync.Tests SmartTableSync.IntegrationTests
