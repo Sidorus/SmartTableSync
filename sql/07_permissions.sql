@@ -70,14 +70,21 @@ GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-parent-introspe
 GRANT SELECT ON [dbo].[DocumentAsset]         TO [smarttablesync-parent-introspection];
 -- SELECT is needed for the MAX(DATALENGTH()) row-size sampling in ProfileTableAsync —
 -- schema metadata alone isn't enough for that specific check.
+
+GRANT VIEW DATABASE STATE TO [smarttablesync-parent-introspection];
+-- Row count and average row size come from sys.dm_db_partition_stats. Without this grant the
+-- scaffold tool's per-table generation and --rowversion-setup fail with
+-- "VIEW DATABASE PERFORMANCE STATE permission denied". Read-only server metadata.
 GO
 
 -- ============================================================
--- 3. Runtime — used by the always-on Azure Function. No DDL rights
--- at all; SELECT on the parent's synced tables, read/write only on
--- the child's synced tables plus the tracking tables (including
--- SyncTableConfig — writing a config row is DML, not DDL, so it
--- belongs here, not with child-provisioning).
+-- 3. Runtime — used by the always-on Azure Function. No DDL rights,
+-- with one known exception (ALTER on child tables that have an
+-- IDENTITY column, see the end of this section); SELECT on the
+-- parent's synced tables, read/write only on the child's synced
+-- tables plus the tracking tables (including SyncTableConfig —
+-- writing a config row is DML, not DDL, so it belongs here, not
+-- with child-provisioning).
 -- ============================================================
 
 -- Run on the PARENT database:
@@ -124,6 +131,19 @@ GRANT EXECUTE ON [dbo].[sp_SyncProductCatalogItemBatch]    TO [smarttablesync-ru
 GRANT EXECUTE ON [dbo].[sp_SyncDocumentAsset]              TO [smarttablesync-runtime];
 GO
 
+-- Tables merged in TVP batches (sp_Sync<Table>Batch): passing the table-valued parameter also
+-- needs EXECUTE on its table type, or every batch fails with "The EXECUTE permission was
+-- denied on the object '<Table>TableType'". One grant per TVP table:
+GRANT EXECUTE ON TYPE::[dbo].[ProductCatalogItemTableType] TO [smarttablesync-runtime];
+GO
+
+-- Tables with an IDENTITY column (here ProductAttributeValue): the initial bulk copy and the
+-- merge procedure keep the parent's identity values with SET IDENTITY_INSERT, which SQL Server
+-- only allows with ALTER on the table. Known limitation: until the engine stops needing it,
+-- the runtime identity needs ALTER on each such child table (and only on those).
+GRANT ALTER ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
+GO
+
 -- ============================================================
 -- Connection string reference (Managed Identity, Microsoft.Data.SqlClient):
 --
@@ -131,7 +151,8 @@ GO
 --   Authentication=Active Directory Managed Identity;User Id=<managed-identity-client-id>;
 --
 -- No Azure.Identity API calls are needed in code for this — the connection-string
--- keyword handles the token acquisition. Set ParentDbConnectionString/
+-- keyword handles the token acquisition, through the Microsoft.Data.SqlClient.Extensions.Azure
+-- package the Function and the scaffold tool reference. Set ParentDbConnectionString/
 -- ChildDbConnectionString (Function) and ParentIntrospectionConnectionString/
 -- ChildProvisioningConnectionString (Scaffold tool) to the matching identity's string.
 -- ============================================================
