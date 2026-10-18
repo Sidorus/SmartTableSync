@@ -27,6 +27,10 @@
          the runtime does, via SyncSettingsServiceCollectionExtensions.Bind. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+    <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
+         out of the core package; needed to connect with an Entra identity. Keep the same
+         version as the Microsoft.Data.SqlClient reference in SmartTableSync.Core. -->
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
   </ItemGroup>
 
   <ItemGroup>

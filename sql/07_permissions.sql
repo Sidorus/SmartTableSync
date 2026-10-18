@@ -90,6 +90,16 @@ GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-runtime];
 GRANT SELECT ON [dbo].[DocumentAsset]         TO [smarttablesync-runtime];
 GO
 
+-- The Function profiles a table the first time it sees it (and after schema drift), with
+-- this identity: row count and average row size come from sys.dm_db_partition_stats, which
+-- fails with "VIEW DATABASE PERFORMANCE STATE permission denied" under SELECT alone.
+-- Read-only metadata; no table data and no DDL rights.
+GRANT VIEW DEFINITION ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
+GRANT VIEW DEFINITION ON [dbo].[ProductCatalogItem]    TO [smarttablesync-runtime];
+GRANT VIEW DEFINITION ON [dbo].[DocumentAsset]         TO [smarttablesync-runtime];
+GRANT VIEW DATABASE STATE TO [smarttablesync-runtime];
+GO
+
 -- Only for tables where a DBA has enabled SQL Server Change Tracking (the
 -- SqlChangeTracking incremental strategy): CHANGETABLE and
 -- CHANGE_TRACKING_MIN_VALID_VERSION also need VIEW CHANGE TRACKING. Without it,
