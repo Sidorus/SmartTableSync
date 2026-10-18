@@ -139,26 +139,67 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 
 Settings are validated at startup: an empty or duplicated table list stops the host from starting.
 
-## Getting started
+## Manual or Auto mode
 
-To see it run on Azure first, [`demo/`](demo/README.md) deploys a parent and a child database,
-the Function and three demo tables to your own subscription with one script, then syncs them.
+The child database needs a table, a table type and a merge procedure for every synced table.
+The mode decides who creates them.
 
-```bash
-cd SmartTableSyncFunction
-dotnet build
+| | **Manual** (default) | **Auto** |
+|---|---|---|
+| Who creates the child objects | You: run the scaffold tool, review the SQL, apply it | The Function, the first time it sees a table |
+| Adding a table | Scaffold, apply, grant, then add it to `TableList` | Grant read on the parent table, add it to `TableList` |
+| Best for | Production, where every schema change is reviewed | Dev, test and demo environments; many tables; quick start |
+
+**Turn on Auto mode** with two settings:
+
+```json
+"SmartTableSync:Mode": "Auto",
+"ChildProvisioningConnectionString": "Server=tcp:<server>.database.windows.net,1433;Database=<child>;Authentication=Active Directory Managed Identity;User Id=<provisioning identity client id>;Encrypt=True"
 ```
 
-1. Set up the three database identities from [`sql/07_permissions.sql`](sql/07_permissions.sql)
-   (runtime, parent introspection, child provisioning) — the always-on runtime never holds DDL rights.
-2. Child tracking tables (`CustomSyncState`, `SyncBatchLog`, `SyncTableConfig`) are generated:
-   **Auto mode** creates them on every run; in **Manual mode** run
-   `smarttablesync-scaffold --infrastructure` once and apply `00_infrastructure.sql`.
-3. Child business tables and their MERGE procedures: Auto mode creates them; in Manual mode run
-   `smarttablesync-scaffold <Table> ...` and apply the generated scripts after review.
-4. Optional, per table, applied by a DBA on the **parent**:
-   `smarttablesync-scaffold --change-tracking-setup <Table>` (enables Change Tracking and grants
-   `VIEW CHANGE TRACKING`) or `--rowversion-setup <Table>` (adds a rowversion column and index).
+Then give the two identities their rights **once**, before the first run. Grants on the `dbo`
+schema also cover the objects the Function creates later. They're broader than Manual mode's
+per-object grants, so use a child database dedicated to the sync:
+
+```sql
+-- Child database
+ALTER ROLE db_ddladmin ADD MEMBER [smarttablesync-child-provisioning];       -- creates tables, types, procedures
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-runtime];   -- syncs data, no DDL
+```
+
+The parent needs the same read rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
+
+**What happens:** each run makes sure the tracking tables exist. When a table is new, or its
+parent schema changed, the Function creates the missing child table, its table type and its
+merge procedure with the provisioning identity, logs `child DDL objects verified/created`, and
+syncs. Every other run only syncs. Creating objects is left to the separate provisioning
+identity; the always-on runtime identity only reads and writes data.
+
+**Good to know:** Auto mode creates what is missing but never changes an existing child table. A
+column added to the parent later still needs a reviewed `ALTER` on the child. Tables with an
+`IDENTITY` column need one more grant in both modes. The [setup guide](docs/setup.md#auto-mode)
+has the details.
+
+## Getting started
+
+- **See it run first:** [`demo/`](demo/README.md) deploys a parent and a child database, the
+  Function and three demo tables to your own Azure subscription with one script, then syncs them.
+- **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
+  database identities and the exact rights each needs, preparing parent tables, generating and
+  applying the child's SQL, the Function settings, and troubleshooting.
+- **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
+  parent's schema and writes the SQL for review; it never executes anything.
+
+In short:
+
+1. Create the runtime, parent-introspection and child-provisioning identities
+   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights,
+   apart from `ALTER` on child tables that have an `IDENTITY` column.
+2. Optional, per table, applied by a DBA on the **parent**:
+   `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
+3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
+   review and apply the generated scripts to the **child**, or let **Auto mode** create them.
+4. Grant the runtime identity access to the new child objects.
 5. Configure the connection strings and `SmartTableSync:TableList`, then publish the Function.
 
 To host the engine elsewhere, reference `SmartTableSync.Core`, call `services.AddSmartTableSync()`

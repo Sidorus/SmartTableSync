@@ -31,7 +31,7 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
                                                    --change-tracking-setup (parent-only).
 
         Per-table generation also reads the same SmartTableSync:* settings the runtime does
-        (SmartTableSync__ChangeTrackingColumns__<Table>, SmartTableSync__AllowFullRescanFor,
+        (SmartTableSync__TimestampColumns__<Table>, SmartTableSync__AllowFullRescanFor,
         SmartTableSync__IncrementalStrategyOverrides__<Table>) from environment variables, so
         generated artifacts match what SyncTableProvisioner will actually derive at runtime for
         the same settings — set them the same way you would for the Function host.
