@@ -5,13 +5,18 @@
 --
 -- | Identity              | Used by                              | Runs                          |
 -- |------------------------|----------------------------------------|---------------------------------|
--- | Child-provisioning     | Scaffold tool; the Function (opt-in)  | manual, on demand; or on cold start/schema drift when SmartTableSync:Mode is Auto |
--- | Parent-introspection   | Scaffold tool; the Function           | manual, on demand; or on cold start/schema drift |
--- | Runtime                | the Azure Function                    | always-on                     |
+-- | Child-provisioning     | Scaffold tool; applying the child scripts; the Function (opt-in) | manual, on demand; in Auto mode a cheap check at the start of each run, DDL only for a new table or parent schema drift |
+-- | Parent-introspection   | Scaffold tool                         | manual, on demand             |
+-- | Runtime                | the Azure Function                    | always-on; also profiles a new or changed parent table |
 --
 -- Table names below (ProductAttributeValue, ProductCatalogItem,
 -- DocumentAsset) match this repo's example schema — substitute your
 -- actual managed table list.
+--
+-- SmartTableSync.IntegrationTests runs this script as written (LeastPrivilegeSyncTests): it
+-- creates the three identities, runs each section on the database its "run on the PARENT /
+-- CHILD database" marker names, and syncs with nothing more. Keep the numbered section
+-- headers and those markers when editing.
 --
 -- Two auth options are shown per identity: Azure AD / Managed Identity
 -- (recommended — no secret to manage) and SQL authentication (if you
@@ -25,10 +30,10 @@
 -- and stored procedures for a human to review and apply by hand
 -- (SmartTableSync:Mode = Manual, the default). Also used, opt-in, by
 -- the Function itself via ChildDdlProvisioner/ChildProvisioningConnectionString
--- when SmartTableSync:Mode = Auto — and even then, only briefly, on
--- the same infrequent occasions provisioning already re-runs (a new
--- table, or parent schema drift), never on the routine sync path. The
--- runtime identity below never gains these rights either way.
+-- when SmartTableSync:Mode = Auto: a cheap IF NOT EXISTS check of the
+-- tracking tables at the start of each run, and DDL only for a new
+-- table or after parent schema drift. The runtime identity below never
+-- gains these rights either way.
 -- ============================================================
 
 -- Option A — Azure AD / Managed Identity (recommended):
@@ -45,8 +50,8 @@ GO
 
 -- ============================================================
 -- 2. Parent-introspection — run on the PARENT database.
--- Used only by SmartTableSync.Scaffold (schema generation) and by the
--- Function's SyncTableProvisioner (schema-drift checks on cold start).
+-- Used only by SmartTableSync.Scaffold (schema generation). The Function
+-- profiles tables with its runtime identity instead (section 3).
 -- Read-only: schema metadata + the data needed for row/size sampling.
 -- No DDL rights at all.
 -- ============================================================

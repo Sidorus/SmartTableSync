@@ -103,7 +103,8 @@ public sealed class MsSqlTestFixture : IAsyncLifetime
             await ExecuteBatchesAsync(connection, await File.ReadAllTextAsync(path), Path.GetFileName(path));
     }
 
-    private static async Task RunGeneratedScriptAsync(string connectionString, string script, string scriptLabel)
+    /// <summary>Runs a script that may contain GO separators, one batch at a time.</summary>
+    public static async Task RunGeneratedScriptAsync(string connectionString, string script, string scriptLabel)
     {
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
