@@ -133,7 +133,8 @@ internal sealed class SchemaReader : ISchemaReader
         SqlConnection connection, string tableName, string typeName, CancellationToken ct)
     {
         const string sql = """
-            SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable
+            SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable,
+                   c.precision AS [Precision], c.scale AS Scale
             FROM   sys.table_types tt
             JOIN   sys.columns c ON c.object_id = tt.type_table_object_id
             JOIN   sys.types t   ON c.user_type_id = t.user_type_id
@@ -153,7 +154,9 @@ internal sealed class SchemaReader : ISchemaReader
                 Name: reader.GetString(0),
                 SqlTypeName: reader.GetString(1),
                 MaxLength: reader.GetInt16(2),
-                IsNullable: reader.GetBoolean(3)));
+                IsNullable: reader.GetBoolean(3),
+                Precision: reader.GetByte(4),
+                Scale: reader.GetByte(5)));
         }
 
         return columns;
@@ -162,7 +165,8 @@ internal sealed class SchemaReader : ISchemaReader
     private static async Task<IReadOnlyList<ColumnProfile>> GetColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
     {
         const string sql = """
-            SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable
+            SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable,
+                   c.precision AS [Precision], c.scale AS Scale
             FROM   sys.columns c
             JOIN   sys.types t ON c.user_type_id = t.user_type_id
             WHERE  c.object_id = OBJECT_ID(@TableName)
@@ -180,7 +184,9 @@ internal sealed class SchemaReader : ISchemaReader
                 Name: reader.GetString(0),
                 SqlTypeName: reader.GetString(1),
                 MaxLength: reader.GetInt16(2),
-                IsNullable: reader.GetBoolean(3)));
+                IsNullable: reader.GetBoolean(3),
+                Precision: reader.GetByte(4),
+                Scale: reader.GetByte(5)));
         }
 
         if (columns.Count == 0)

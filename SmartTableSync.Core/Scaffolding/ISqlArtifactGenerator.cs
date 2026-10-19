@@ -16,6 +16,11 @@ internal interface ISqlArtifactGenerator
     /// (ChildSchemaComparer.ColumnsToAdd), all nullable.</summary>
     string GenerateAddColumnsScript(TableProfile profile, IReadOnlyList<ColumnProfile> columns);
 
+    /// <summary>ALTER TABLE ... ALTER COLUMN giving decimal and numeric columns the parent's
+    /// precision and scale (ChildSchemaComparer.ColumnsToRetype), with the steps to copy the
+    /// table again so values rounded before get their exact parent values.</summary>
+    string GenerateAlterColumnsScript(TableProfile profile, IReadOnlyList<ColumnProfile> columns);
+
     /// <summary>Drops a table type that no longer matches the table, together with the TVP
     /// procedure that uses it; GenerateTvpUdtScript and GenerateMergeProcedureScript recreate both.</summary>
     string GenerateDropTvpTypeScript(string tableName, string typeName);

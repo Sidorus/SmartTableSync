@@ -291,6 +291,11 @@ Prometheus, Grafana, OTLP, every metric's meaning and how to turn monitoring off
   now allows `NULL` in the parent but not in the child): the scaffold tool prints `NEEDS A MANUAL
   CHANGE` with the details; change the child table yourself, then apply the regenerated table
   type and procedure.
+- **A `decimal` or `numeric` column with a different precision or scale** (a changed parent
+  column, or a child created by a version before 0.5 that rounded values to `decimal(18,0)`):
+  the scaffold tool writes `<Table>_AlterColumns.sql`. Apply it, run the two `DELETE` statements
+  at its end so the next run copies the table again with exact values, then apply the
+  regenerated table type and procedure.
 - **Enable Change Tracking later**: step 2; the table switches to `SqlChangeTracking` on its
   next run by itself, starting with a full re-scan because there is no saved Change Tracking
   version yet.

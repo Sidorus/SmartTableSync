@@ -326,9 +326,8 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Schema changes**
 - Auto mode adds new parent columns by itself, but a changed column type or length, a changed
   primary key, a removed `NOT NULL` column or a column that now allows `NULL` in the parent but
-  not in the child needs a reviewed script; until then that table
-  stops with an error. A precision or scale change that keeps the same storage size (for example
-  `decimal(10,2)` → `decimal(10,4)`) isn't detected.
+  not in the child, or a different precision or scale of a `decimal` or `numeric` column, needs a
+  reviewed script; until then that table stops with an error.
 - In Auto mode, a schema change costs one full re-scan of that table.
 - In Manual mode, rows synced before a column was added get its value only when they next change.
 

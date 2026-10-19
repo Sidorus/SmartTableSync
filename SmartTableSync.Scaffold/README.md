@@ -59,7 +59,10 @@ Apply the child files in this order: tables (or added columns), table types, pro
 For an existing child table, the tool compares it with the parent, the same way Auto mode does.
 New columns get the `_AddColumns.sql` script. Changes that could lose data (a changed type or
 length, a changed primary key, a removed `NOT NULL` column, a column that now allows `NULL` in
-the parent but not in the child) are printed as `NEEDS A MANUAL CHANGE` and left to you.
+the parent but not in the child) are printed as `NEEDS A MANUAL CHANGE` and left to you. A
+`decimal` or `numeric` column whose precision or scale differs from the parent also gets
+`<Table>_AlterColumns.sql`, which fixes the column and says how to copy the table again so the
+values that were rounded become exact.
 
 The Change Tracking script grants `VIEW CHANGE TRACKING` to `smarttablesync-runtime`. If your
 runtime identity has another name, change it in the script before applying.
