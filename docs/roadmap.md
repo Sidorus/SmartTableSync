@@ -2,7 +2,7 @@
 
 What is planned next. **Nothing on this page is built yet**; what works today is in the
 [README](../README.md), and the open problems are under
-[known limitations](../README.md#known-limitations). Order is a priority, not a promise of dates.
+[known limitations](limitations.md). Order is a priority, not a promise of dates.
 
 ## 1. Fixes for open problems
 

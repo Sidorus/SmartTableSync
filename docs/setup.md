@@ -7,6 +7,11 @@ users instead and grant them the same rights. The [Azure demo](../demo/README.md
 below with one script; the [last section](#the-demo-as-a-worked-example) maps its steps to this
 guide.
 
+**Both databases already exist on Azure SQL Database?** The [quick start](../quickstart/README.md)
+does everything in this guide with one script: the Function, its managed identities, the database
+users with these rights, and the first sync. Read on to understand each step, or to set it up
+another way (SQL Server on-premises, your own host, SQL logins).
+
 ## The pieces
 
 | Piece | What it is |
@@ -365,91 +370,11 @@ A table seen for the first time isn't re-scanned: it gets its first copy instead
 
 ## Hosting the engine yourself
 
-The Azure Function in this repository is one example host. The engine is a library: reference
-the `SmartTableSync.Core` project (NuGet package `SmartTableSync`, once published), register it
-with `AddSmartTableSync()`, and call `ISyncOrchestrator.RunAsync` on whatever schedule you want,
-from whatever scheduler you already use. Your host reads the same settings as the Function
-(`ParentDbConnectionString`, `ChildDbConnectionString`, the `SmartTableSync:*` settings), from
-`appsettings.json`, environment variables or any other configuration source.
-
-Four things hold for every host:
-
-- **`SmartTableSync:TableList` is required.** `AddSmartTableSync()` checks it when the host
-  starts; an empty or duplicated list stops the host from starting.
-- **Overlapping runs are safe.** If a run starts while the previous one is still working, it
-  does nothing. This also holds across several machines or instances, through a lock in the child
-  database.
-- **Register the engine once** with `AddSmartTableSync()`. The orchestrator is a singleton and
-  remembers when each table last ran its delete check.
-- **A failing table doesn't stop the run.** It is logged and retried next run. Only a failure
-  before any table starts, such as an unreachable child database, throws from `RunAsync`, so catch
-  and log it in a loop you own.
-
-All examples need these namespaces:
-
-```csharp
-using SmartTableSync.Abstractions;   // ISyncOrchestrator
-using SmartTableSync.Hosting;        // AddSmartTableSync
-```
-
-**A background service** in any .NET host (ASP.NET Core, a Windows service, a container), with
-no extra packages:
-
-```csharp
-builder.Services.AddSmartTableSync();
-builder.Services.AddHostedService<SmartTableSyncWorker>();
-
-public sealed class SmartTableSyncWorker(ISyncOrchestrator orchestrator, ILogger<SmartTableSyncWorker> logger)
-    : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
-        do
-        {
-            try
-            {
-                await orchestrator.RunAsync(stoppingToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogError(ex, "SmartTableSync run failed; trying again next tick");
-            }
-        }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
-}
-```
-
-**Hangfire**, as a recurring job, in an app where Hangfire is already set up (`AddHangfire` with
-a storage, and `AddHangfireServer`). Register the job after the app is built, when Hangfire's
-storage is ready; Hangfire passes its own cancellation token in place of `CancellationToken.None`:
-
-```csharp
-builder.Services.AddSmartTableSync();
-var app = builder.Build();
-
-app.Services.GetRequiredService<IRecurringJobManager>().AddOrUpdate<ISyncOrchestrator>(
-    "smarttablesync", orchestrator => orchestrator.RunAsync(CancellationToken.None), "*/5 * * * *");
-```
-
-**Quartz.NET**, as a job, with the `Quartz.Extensions.Hosting` package:
-
-```csharp
-builder.Services.AddSmartTableSync();
-builder.Services.AddQuartz(q => q.ScheduleJob<SmartTableSyncJob>(
-    trigger => trigger.WithCronSchedule("0 0/5 * * * ?")));
-builder.Services.AddQuartzHostedService();
-
-[DisallowConcurrentExecution]
-public sealed class SmartTableSyncJob(ISyncOrchestrator orchestrator) : IJob
-{
-    public Task Execute(IJobExecutionContext context) => orchestrator.RunAsync(context.CancellationToken);
-}
-```
-
-Every 5 minutes is only the example interval. Use whatever suits your data: every minute for
-near real-time copies, or once a night for a reporting copy.
+The Azure Function in this repository is one example host. The engine is a library: register it
+with `AddSmartTableSync()` and call `ISyncOrchestrator.RunAsync` from whatever scheduler you already
+use. [Run it in your own app](guides/hosting.md) has complete examples for a background service,
+Hangfire and Quartz.NET, the packages and settings each needs, and what holds for every host
+(required settings, overlapping runs, failing tables).
 
 ## Troubleshooting
 
