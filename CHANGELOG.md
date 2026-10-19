@@ -46,10 +46,10 @@ All notable changes to SmartTableSync. The format follows
   schema, so it depended on the identity's default schema.
 - The example Function sent only warnings and errors to Application Insights, and no
   `smarttablesync.*` metrics at all: the Application Insights SDK keeps only warnings from the
-  worker by default, and no exporter was registered for the `SmartTableSync` meter. It now uses
-  OpenTelemetry with the Azure Monitor exporter, as Microsoft's isolated worker guide recommends,
-  so each table's per-run summary and the metrics arrive too. See
-  [logs and metrics](docs/setup.md#logs-and-metrics).
+  worker by default, and no exporter was registered for the `SmartTableSync` meter. Its logs now
+  go through the Functions host, so they arrive with their level and appear in the portal's Log
+  stream like any Function's, and the metrics go through OpenTelemetry with the Azure Monitor
+  exporter. See [logs and metrics](docs/setup.md#logs-and-metrics).
 
 ### Upgrading
 

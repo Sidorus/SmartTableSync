@@ -243,10 +243,11 @@ SELECT TOP (20) * FROM dbo.SyncBatchLog ORDER BY LogId DESC;                    
 
 ### Logs and metrics
 
-When the Function App is connected to Application Insights, the example Function sends its logs,
-traces and the SmartTableSync metrics there through OpenTelemetry (`Program.cs`). Azure provides
-the connection through the `APPLICATIONINSIGHTS_CONNECTION_STRING` setting; without it nothing is
-exported and the sync runs as usual. In the Application Insights resource, open **Logs**:
+When the Function App is connected to Application Insights, the example Function sends its logs
+there through the Functions host, so the portal's **Log stream** also shows them live with their
+level, and the SmartTableSync metrics through OpenTelemetry (`Program.cs`). Azure provides the
+connection through the `APPLICATIONINSIGHTS_CONNECTION_STRING` setting; without it the metrics
+aren't exported and the sync runs as usual. In the Application Insights resource, open **Logs**:
 
 ```kusto
 // What each run did, per table: "Product: 12 synced, 1 deleted, 0 errors, 0.8s (incremental)"

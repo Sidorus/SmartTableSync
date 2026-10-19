@@ -252,8 +252,8 @@ To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet
 `IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
 OpenTelemetry exporter can collect them; a host has to register that meter with its exporter.
-The example Function does that and sends its logs and metrics to Application Insights through
-OpenTelemetry ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
+The example Function does that; it sends its metrics to Application Insights through
+OpenTelemetry, and its logs through the Functions host ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
 use Prometheus, Grafana or OTLP instead or turn it off, is in [observability](docs/observability.md).
 
 To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
