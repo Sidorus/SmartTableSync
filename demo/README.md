@@ -272,7 +272,7 @@ command again: it repeats every step safely, and Terraform changes only the Func
 onto the Timestamp strategy: `SmartTableSync__IncrementalStrategyOverrides__Customer = "Timestamp"`.
 Because `Customer` is already set up, that takes effect only after you
 [reset its plan](../docs/how-it-works.md#changing-a-tables-strategy-later). Every setting is
-listed in the README's [Configuration](../README.md#configuration) section, and what the sync
+described in the [configuration reference](../docs/configuration.md), and what the sync
 decided per table is in the child's `dbo.SyncTableConfig`.
 
 ## How the Function connects to the databases
