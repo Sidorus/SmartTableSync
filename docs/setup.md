@@ -11,7 +11,7 @@ create, exactly which rights each one needs, and the steps with the scaffold too
 |---|---|
 | **Parent database** | Where the data is written by your applications. SmartTableSync only reads it. |
 | **Child database** | Where SmartTableSync keeps copies of the parent's tables, plus three tracking tables. |
-| **Function** (`SmartTableSyncFunction`) | An example host that runs a sync every 5 minutes; use any interval you need. Or host the engine yourself, for example on-premises: reference the `SmartTableSync` package and call `ISyncOrchestrator.RunAsync`. |
+| **Function** (`SmartTableSyncFunction`) | An example host that runs a sync every 5 minutes; use any interval you need. Or host the engine yourself, for example in a background service or a Hangfire or Quartz.NET job ([how](#hosting-the-engine-yourself)): reference the `SmartTableSync` package and call `ISyncOrchestrator.RunAsync`. |
 | **Scaffold tool** (`SmartTableSync.Scaffold`, command `smarttablesync-scaffold`) | Reads the parent's schema and **writes** the SQL the child needs, for you to review and apply. It never runs anything against a database. See its [README](../SmartTableSync.Scaffold/README.md). |
 
 ### Manual or Auto mode
@@ -226,6 +226,81 @@ then add it to `SmartTableSync:TableList`.
 The new plan is saved only after the child changes and the re-scan succeeded. If anything fails
 in between, the next run sees the change again and repeats the steps, which are safe to repeat.
 The re-scan copies every row once, so on a very large table a schema change costs one full pass.
+
+## Hosting the engine yourself
+
+The Azure Function in this repository is one example host. The engine is a NuGet package
+(`SmartTableSync`): register it with `AddSmartTableSync()` and call `ISyncOrchestrator.RunAsync`
+on whatever schedule you want, from whatever scheduler you already use. Your host reads the same
+settings as the Function (`ParentDbConnectionString`, `ChildDbConnectionString`, the
+`SmartTableSync:*` settings), from `appsettings.json`, environment variables or any other
+configuration source.
+
+Three things hold for every host:
+
+- **Overlapping runs are safe.** If a run starts while the previous one is still working, it
+  does nothing. This also holds across several machines or instances, through a lock in the child
+  database.
+- **Register the engine once** with `AddSmartTableSync()`. The orchestrator is a singleton and
+  remembers when each table last ran its delete check.
+- **A failing table doesn't stop the run.** It is logged and retried next run. Only a failure
+  before any table starts, such as an unreachable child database, throws from `RunAsync`, so catch
+  and log it in a loop you own.
+
+**A background service** in any .NET host (ASP.NET Core, a Windows service, a container):
+
+```csharp
+builder.Services.AddSmartTableSync();
+builder.Services.AddHostedService<SmartTableSyncWorker>();
+
+public sealed class SmartTableSyncWorker(ISyncOrchestrator orchestrator, ILogger<SmartTableSyncWorker> logger)
+    : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+        do
+        {
+            try
+            {
+                await orchestrator.RunAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "SmartTableSync run failed; trying again next tick");
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+```
+
+**Hangfire**, as a recurring job:
+
+```csharp
+builder.Services.AddSmartTableSync();
+
+RecurringJob.AddOrUpdate<ISyncOrchestrator>(
+    "smarttablesync", orchestrator => orchestrator.RunAsync(CancellationToken.None), "*/5 * * * *");
+```
+
+**Quartz.NET**, as a job:
+
+```csharp
+builder.Services.AddSmartTableSync();
+builder.Services.AddQuartz(q => q.ScheduleJob<SmartTableSyncJob>(
+    trigger => trigger.WithCronSchedule("0 0/5 * * * ?")));
+builder.Services.AddQuartzHostedService();
+
+[DisallowConcurrentExecution]
+public sealed class SmartTableSyncJob(ISyncOrchestrator orchestrator) : IJob
+{
+    public Task Execute(IJobExecutionContext context) => orchestrator.RunAsync(context.CancellationToken);
+}
+```
+
+Every 5 minutes is only the example interval. Use whatever suits your data: every minute for
+near real-time copies, or once a night for a reporting copy.
 
 ## Troubleshooting
 

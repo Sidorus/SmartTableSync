@@ -38,8 +38,8 @@ flowchart LR
 |---|---|
 | **Databases** | Azure SQL Database, Azure SQL Managed Instance, SQL Server on-premises or in a VM. Parent and child can be any mix, for example an on-premises parent and an Azure SQL child. The generated SQL needs SQL Server 2016 SP1 or later; the integration tests run against SQL Server 2022. |
 | **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
-| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function, a worker service, a scheduled task, a container. The included Azure Function is an example you can deploy as it is or adapt. The host only needs network access to both databases. |
-| **Schedule** | Any interval you choose: your host decides when to call `RunAsync`. The example Function runs every 5 minutes. |
+| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function, a background service, a Hangfire or Quartz.NET job, a Windows service, a container. The included Azure Function is one example. The host only needs network access to both databases. See [hosting the engine yourself](docs/setup.md#hosting-the-engine-yourself). |
+| **Schedule** | Decided by the host: any interval, from every minute to once a night. The example Function runs every 5 minutes. |
 
 ## Why build it: the alternatives and their cost
 
