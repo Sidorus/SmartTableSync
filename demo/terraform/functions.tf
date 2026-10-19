@@ -43,9 +43,15 @@ resource "azurerm_function_app_flex_consumption" "sync" {
   resource_group_name = azurerm_resource_group.demo.name
   service_plan_id     = azurerm_service_plan.function.id
 
+  # The Functions runtime's own storage (timer leases, keys, the deployment package) uses the
+  # account key, the setup this provider fully manages: with "SystemAssignedIdentity", azurerm
+  # 4.81 writes an AzureWebJobsStorage connection string with an empty AccountKey, and the app
+  # starts unhealthy ("Unable to access AzureWebJobsStorage"). The SQL connections are not
+  # affected: they still use the runtime managed identity, with no password.
   storage_container_type      = "blobContainer"
   storage_container_endpoint  = "${azurerm_storage_account.function.primary_blob_endpoint}${azurerm_storage_container.deployment.name}"
-  storage_authentication_type = "SystemAssignedIdentity"
+  storage_authentication_type = "StorageAccountConnectionString"
+  storage_access_key          = azurerm_storage_account.function.primary_access_key
 
   runtime_name           = "dotnet-isolated"
   runtime_version        = "10.0"
