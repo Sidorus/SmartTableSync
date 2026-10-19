@@ -86,6 +86,9 @@ SmartTableSync picks how to detect changes per table, in this order:
    default; another name through `SmartTableSync:TimestampColumns:<Table>`).
 4. **Full re-scan**, for small tables, or large ones listed in `SmartTableSync:AllowFullRescanFor`.
 
+[How SmartTableSync finds what changed](sync-strategies.md) shows each strategy step by step with
+a diagram, to help you decide which one a table should use.
+
 To give a table a better strategy, generate the script and have a DBA review and apply it on
 the **parent**:
 

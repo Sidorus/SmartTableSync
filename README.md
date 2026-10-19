@@ -94,10 +94,12 @@ applicable one in this order wins — or forced with `SmartTableSync:Incremental
 
 | Strategy | Used when | Deletes |
 |---|---|---|
-| `SqlChangeTracking` | A DBA enabled SQL Server Change Tracking on the table | Reported directly, every run |
-| `RowVersion` | The table has a `rowversion` column | Periodic reconciliation |
-| `Timestamp` | The table has the configured datetime column (default `LastUpdate`) | Periodic reconciliation |
-| `FullRescan` | None of the above, and the table is small (≤ 50,000 rows) or listed in `AllowFullRescanFor` | Periodic reconciliation |
+| [`SqlChangeTracking`](docs/sync-strategies.md#sqlchangetracking) | A DBA enabled SQL Server Change Tracking on the table | Reported directly, every run |
+| [`RowVersion`](docs/sync-strategies.md#rowversion) | The table has a `rowversion` column | Periodic reconciliation |
+| [`Timestamp`](docs/sync-strategies.md#timestamp) | The table has the configured datetime column (default `LastUpdate`) | Periodic reconciliation |
+| [`FullRescan`](docs/sync-strategies.md#fullrescan) | None of the above, and the table is small (≤ 50,000 rows) or listed in `AllowFullRescanFor` | Periodic reconciliation |
+
+How each one works, step by step with a diagram: [How SmartTableSync finds what changed](docs/sync-strategies.md).
 
 A large table with no usable strategy fails at provisioning with a message naming the setting to
 fix — it never silently re-scans millions of rows every five minutes.
@@ -189,6 +191,8 @@ has the details.
 - **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
   database identities and the exact rights each needs, preparing parent tables, generating and
   applying the child's SQL, the Function settings, and troubleshooting.
+- **Understand how changes are found:** [how SmartTableSync finds what changed](docs/sync-strategies.md)
+  explains Change Tracking, RowVersion, Timestamp and full re-scan, each with a diagram.
 - **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
   parent's schema and writes the SQL for review; it never executes anything.
 

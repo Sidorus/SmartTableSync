@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="840" viewBox="0 0 680 840" role="img" aria-labelledby="title desc">
+  <title id="title">SqlChangeTracking strategy</title>
+  <desc id="desc">The application changes dbo.Customer. During the statement SQL Server writes key, operation and transaction id into the change table; at commit the commit table maps the transaction id to a version. CHANGETABLE joins the two on transaction id and returns key, version and operation, skipping the open transaction 54. SmartTableSync left-joins that to dbo.Customer for the values, applies upserts and the delete to the child and saves CT:103.</desc>
+  <style>
+    svg { --bg:#ffffff; --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --surface:#f6f8fa; --df:#eeedfe; --ds:#534ab7; --dt:#3c3489; --cf:#e1f5ee; --cs:#0f6e56; --ctx:#085041; --wr:#bc4c00; --rf:#faece7; --rs:#993c1d; --rt:#712b13; }
+    @media (prefers-color-scheme: dark) { svg { --bg:#0d1117; --fg:#e6edf3; --muted:#9198a1; --line:#3d444d; --surface:#151b23; --df:#2a2650; --ds:#afa9ec; --dt:#cecbf6; --cf:#0b3a30; --cs:#5dcaa5; --ctx:#9fe1cb; --wr:#f0883e; --rf:#3d1e12; --rs:#f0997b; --rt:#f5c4b3; } }
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .bg { fill: var(--bg); }
+    .box { fill: var(--surface); stroke: var(--line); }
+    .data { fill: var(--df); stroke: var(--ds); }
+    .ct { fill: var(--cf); stroke: var(--cs); }
+    .t { fill: var(--fg); font-size: 14px; font-weight: 600; }
+    .s { fill: var(--muted); font-size: 12px; }
+    .dt { fill: var(--dt); font-size: 14px; font-weight: 600; }
+    .ds { fill: var(--dt); font-size: 12px; }
+    .ctt { fill: var(--ctx); font-size: 14px; font-weight: 600; }
+    .cts { fill: var(--ctx); font-size: 12px; font-family: Consolas, "SFMono-Regular", Menlo, monospace; }
+    .arr { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+    .wr { stroke: var(--wr); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .wl { fill: var(--wr); font-size: 12px; font-weight: 600; }
+    .rule { stroke: var(--cs); stroke-width: 0.5; }
+    .mk { stroke: var(--muted); }
+    .mkw { stroke: var(--wr); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk" d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mkw" d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="680" height="840" rx="12"/>
+
+  <rect class="box" x="260" y="30" width="160" height="50" rx="8"/>
+  <text class="t" x="340" y="49" text-anchor="middle" dominant-baseline="central">Application</text>
+  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE … COMMIT</text>
+  <line class="arr" x1="340" y1="80" x2="340" y2="116" marker-end="url(#a)"/>
+
+  <path class="wr" d="M260 55 L150 55 L150 286" marker-end="url(#w)"/>
+  <text class="wl" x="140" y="100" text-anchor="end" dominant-baseline="central">② at COMMIT</text>
+
+  <rect class="data" x="250" y="120" width="180" height="120" rx="10"/>
+  <text class="dt" x="340" y="145" text-anchor="middle" dominant-baseline="central">dbo.Customer</text>
+  <text class="ds" x="340" y="163" text-anchor="middle" dominant-baseline="central">current values</text>
+  <text class="ds" x="340" y="188" text-anchor="middle" dominant-baseline="central">1 · Anna</text>
+  <text class="ds" x="340" y="206" text-anchor="middle" dominant-baseline="central">2 · Erik L.</text>
+  <text class="ds" x="340" y="224" text-anchor="middle" dominant-baseline="central">4 · Lars</text>
+
+  <path class="wr" d="M430 160 L530 160 L530 286" marker-end="url(#w)"/>
+  <text class="wl" x="442" y="144" dominant-baseline="central">① during the statement</text>
+
+  <rect class="ct" x="40" y="290" width="220" height="140" rx="10"/>
+  <text class="ctt" x="150" y="310" text-anchor="middle" dominant-baseline="central">Commit table</text>
+  <text class="cts" x="150" y="328" text-anchor="middle" dominant-baseline="central">sys.syscommittab</text>
+  <text class="cts" x="150" y="356" text-anchor="middle" dominant-baseline="central">tx 51 → version 101</text>
+  <text class="cts" x="150" y="376" text-anchor="middle" dominant-baseline="central">tx 52 → version 102</text>
+  <text class="cts" x="150" y="396" text-anchor="middle" dominant-baseline="central">tx 53 → version 103</text>
+  <text class="cts" x="150" y="416" text-anchor="middle" dominant-baseline="central">tx 54 → none yet</text>
+
+  <rect class="ct" x="420" y="290" width="220" height="140" rx="10"/>
+  <text class="ctt" x="530" y="310" text-anchor="middle" dominant-baseline="central">Change table</text>
+  <text class="cts" x="530" y="328" text-anchor="middle" dominant-baseline="central">sys.change_tracking_&lt;id&gt;</text>
+  <text class="cts" x="530" y="356" text-anchor="middle" dominant-baseline="central">key 2 · U · tx 51</text>
+  <text class="cts" x="530" y="376" text-anchor="middle" dominant-baseline="central">key 4 · I · tx 52</text>
+  <text class="cts" x="530" y="396" text-anchor="middle" dominant-baseline="central">key 3 · D · tx 53</text>
+  <text class="cts" x="530" y="416" text-anchor="middle" dominant-baseline="central">key 5 · I · tx 54 open</text>
+
+  <text class="s" x="340" y="344" text-anchor="middle" dominant-baseline="central">join on tx</text>
+  <line class="arr" x1="418" y1="362" x2="264" y2="362" marker-end="url(#a)"/>
+
+  <path class="arr" d="M150 430 L150 540 L166 540" marker-end="url(#a)"/>
+  <path class="arr" d="M530 430 L530 540 L514 540" marker-end="url(#a)"/>
+
+  <rect class="ct" x="170" y="470" width="340" height="140" rx="10"/>
+  <text class="ctt" x="340" y="490" text-anchor="middle" dominant-baseline="central">CHANGETABLE(CHANGES, 100)</text>
+  <text class="ctt" x="240" y="520" text-anchor="middle" dominant-baseline="central">Key</text>
+  <text class="ctt" x="340" y="520" text-anchor="middle" dominant-baseline="central">Version</text>
+  <text class="ctt" x="440" y="520" text-anchor="middle" dominant-baseline="central">Op</text>
+  <line class="rule" x1="190" y1="532" x2="490" y2="532"/>
+  <text class="cts" x="240" y="550" text-anchor="middle" dominant-baseline="central">2</text>
+  <text class="cts" x="340" y="550" text-anchor="middle" dominant-baseline="central">101</text>
+  <text class="cts" x="440" y="550" text-anchor="middle" dominant-baseline="central">U</text>
+  <text class="cts" x="240" y="570" text-anchor="middle" dominant-baseline="central">4</text>
+  <text class="cts" x="340" y="570" text-anchor="middle" dominant-baseline="central">102</text>
+  <text class="cts" x="440" y="570" text-anchor="middle" dominant-baseline="central">I</text>
+  <text class="cts" x="240" y="590" text-anchor="middle" dominant-baseline="central">3</text>
+  <text class="cts" x="340" y="590" text-anchor="middle" dominant-baseline="central">103</text>
+  <text class="cts" x="440" y="590" text-anchor="middle" dominant-baseline="central">D</text>
+
+  <line class="arr" x1="340" y1="610" x2="340" y2="646" marker-end="url(#a)"/>
+  <rect class="box" x="150" y="650" width="380" height="60" rx="8"/>
+  <text class="t" x="340" y="670" text-anchor="middle" dominant-baseline="central">SmartTableSync run</text>
+  <text class="s" x="340" y="690" text-anchor="middle" dominant-baseline="central">LEFT JOIN dbo.Customer on key for values</text>
+
+  <line class="arr" x1="340" y1="710" x2="340" y2="746" marker-end="url(#a)"/>
+  <rect class="data" x="150" y="750" width="380" height="60" rx="8"/>
+  <text class="dt" x="340" y="770" text-anchor="middle" dominant-baseline="central">Child database</text>
+  <text class="ds" x="340" y="790" text-anchor="middle" dominant-baseline="central">upsert 2, 4 · delete 3 · save CT:103</text>
+</svg>
