@@ -60,7 +60,7 @@ flowchart TD
    diagram, in [how SmartTableSync finds what changed](sync-strategies.md).
 4. **Pick how to write rows.** In batches through one stored-procedure call, or row by row for
    tables that reference other tables or have rows over about 1 MB. See
-   [merge strategies](../README.md#merge-strategies).
+   [how rows are written](#how-rows-are-written).
 5. **Make the child table match.**
    - **Auto mode:** SmartTableSync creates the child table, or adds the new columns. If the table
      already had data, it then reads the whole table once, so existing rows get the new values. A
@@ -84,6 +84,36 @@ flowchart TD
    other tables carry on. A row that failed only because the row it references hadn't arrived
    yet also holds progress back, so it is retried. Any other row that can't be written is logged
    and skipped.
+
+## How rows are written
+
+The first copy of a table always uses bulk copy (`SqlBulkCopy`). After it, changed rows are
+written in one of two ways, chosen with the plan (step 4):
+
+- **TVP** (table-valued parameter: the whole batch goes to the child as one parameter): one
+  stored-procedure call per batch, for tables that reference no other table and whose rows stay
+  under about 1 MB.
+- **Row by row:** one call per row, so one failing row doesn't fail the batch. For tables that
+  reference another table (a row can arrive before the row it references; that foreign-key error
+  is retried next run) or that have rows over about 1 MB.
+
+Both merge with `MERGE`, so writing the same row twice gives the same result.
+
+## Reliability
+
+- The first copy reads the table in key order, one batch at a time, and continues from the last
+  finished batch if it stops.
+- Later runs read changes in bounded pages, so a backlog after an outage never loads into memory
+  at once.
+- The position (where the next run starts) only moves forward when a run succeeds. A row that
+  failed because the row it references hadn't arrived yet makes the next run read it again. Any
+  other row that can't be written is logged and skipped; it is synced again when it next changes
+  (on a full re-scan table, on the next run).
+- Opening a connection retries transient Azure SQL errors with exponential backoff
+  (`SmartTableSync:ConnectionOpenAttempts`).
+- An application lock in the child database guarantees one run at a time across every host
+  instance; SQL Server releases it automatically if a host dies.
+- A failing table doesn't stop the others: it's logged and retried on the next run.
 
 ## Changing a table's strategy later
 
