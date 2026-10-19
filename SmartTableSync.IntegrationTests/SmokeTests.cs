@@ -7,10 +7,9 @@ namespace SmartTableSync.IntegrationTests;
 
 /// <summary>
 /// One end-to-end proof that the whole pipeline works: container starts, both databases
-/// exist, the copied schema scripts ran without error, seed data loads, and - the thing
-/// that's been unverified all along - SchemaReader's introspection queries are actually
-/// syntactically correct against a real SQL Server, not just unit-tested against synthetic
-/// TableProfile records.
+/// exist, the copied schema scripts ran without error, seed data loads, and SchemaReader's
+/// introspection queries run correctly against a real SQL Server, not just against synthetic
+/// TableProfile records in unit tests.
 /// </summary>
 [Collection("SqlServer")]
 public class SmokeTests

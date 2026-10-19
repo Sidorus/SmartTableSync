@@ -66,12 +66,3 @@ fixed is in the [changelog](../CHANGELOG.md); what's planned is in the [roadmap]
   `IDENTITY` or a sequence back to its key columns: child tables are created without them.
 - The [quick start](../quickstart/README.md) covers Azure SQL Database with Microsoft Entra
   sign-in and public endpoints only; other setups follow the [setup guide](setup.md).
-
-## Not yet verified
-
-- Whether the run lock's connection, which stays idle during a run, survives a run longer than
-  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes). If
-  it doesn't, two runs could overlap: the data stays correct, because every write is an
-  idempotent `MERGE`, but the work is done twice.
-- The Hangfire and Quartz.NET [hosting examples](guides/hosting.md) haven't been compiled in a
-  real host.

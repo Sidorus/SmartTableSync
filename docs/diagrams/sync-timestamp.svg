@@ -33,7 +33,7 @@
 
   <rect class="box" x="220" y="30" width="240" height="50" rx="8"/>
   <text class="t" x="340" y="49" text-anchor="middle" dominant-baseline="central">Application</text>
-  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE … SET LastUpdate = now</text>
+  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE ... SET LastUpdate = now</text>
   <line class="wr" x1="340" y1="80" x2="340" y2="116" marker-end="url(#w)"/>
   <text class="wl" x="352" y="98" dominant-baseline="central">the application must set LastUpdate</text>
 

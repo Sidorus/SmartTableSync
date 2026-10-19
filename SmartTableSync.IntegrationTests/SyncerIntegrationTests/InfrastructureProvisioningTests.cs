@@ -13,7 +13,7 @@ using SmartTableSync.Orchestration;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Item 6 — infrastructure DDL (CustomSyncState/SyncBatchLog/SyncTableConfig) is generated,
+/// Item 6 - infrastructure DDL (CustomSyncState/SyncBatchLog/SyncTableConfig) is generated,
 /// not distributed as static files. Proves IChildDdlProvisioner.EnsureInfrastructureExistsAsync
 /// actually (re)creates the three tables when missing, and that the full Auto-mode
 /// construction path succeeds against a child database that never had this tracking

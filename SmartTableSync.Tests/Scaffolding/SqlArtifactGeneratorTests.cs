@@ -251,7 +251,7 @@ public class SqlArtifactGeneratorTests
         Assert.Contains("CREATE TYPE [dbo].[ProductCatalogItemTableType] AS TABLE", script);
         Assert.Contains("[Sku]", script);
         // Case/bracket style is a cosmetic generator convention, not something that needs to
-        // match the original scripts exactly — just confirm the type and length made it in.
+        // match the original scripts exactly - just confirm the type and length made it in.
         Assert.Contains("nvarchar", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("(100)", script);
     }
@@ -267,7 +267,7 @@ public class SqlArtifactGeneratorTests
         Assert.DoesNotContain("IDENTITY_INSERT", script);
     }
 
-    // --- Rowversion shape: Tvp, with a rowversion/timestamp column — SQL Server rejects any
+    // --- Rowversion shape: Tvp, with a rowversion/timestamp column - SQL Server rejects any
     // explicit value written into a rowversion column, so it must be excluded from generated
     // INSERT/UPDATE column lists regardless of merge strategy. ---
 

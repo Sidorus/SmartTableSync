@@ -1,7 +1,7 @@
 namespace SmartTableSync.Planning;
 
 /// <summary>Uses the same MERGE ... WITH (HOLDLOCK) upsert idiom as
-/// SyncStateRepository.UpdateLastSyncDateAsync — a proven pattern, not a new one.</summary>
+/// SyncStateRepository.UpdateLastSyncDateAsync - a proven pattern, not a new one.</summary>
 internal sealed class SyncTableConfigRepository : ISyncTableConfigRepository
 {
     public async Task<SyncTableConfig?> GetAsync(SqlConnection child, string tableName, CancellationToken ct)

@@ -9,7 +9,7 @@ Accepted
 ## Context
 Initial sync bulk-copies a table from empty, potentially millions of rows, across multiple
 batches. A crash, timeout, or Function cold-start restart mid-load needs to resume without
-starting over from row 1 — restarting a large initial load from scratch on every transient
+starting over from row 1 - restarting a large initial load from scratch on every transient
 failure is untenable.
 
 ## Decision
@@ -19,7 +19,7 @@ Generalized via `KeysetPredicateBuilder`/`CompositeKey` to work for any number o
 primary-key columns (single or composite), not just the original hand-written 2-column case.
 
 ## Alternatives Considered
-- **`OFFSET`/`FETCH NEXT` pagination.** Rejected — `OFFSET` re-scans and discards every row
+- **`OFFSET`/`FETCH NEXT` pagination.** Rejected - `OFFSET` re-scans and discards every row
   before the offset on each page, getting progressively slower as the offset grows, and a
   resumed load after a crash still has to re-count from row 1 to find where it left off.
   Keyset pagination jumps straight to the resume position via an index seek regardless of how
@@ -31,5 +31,5 @@ and stays that way at any table size. Works uniformly for single and composite k
 same generalized builder.
 
 **Negative:** requires the primary key (or an equivalent unique, ordered key) to be usable as a
-seek predicate — not a concern for any table this project targets (all have a real PK), but a
+seek predicate - not a concern for any table this project targets (all have a real PK), but a
 structural assumption worth naming.

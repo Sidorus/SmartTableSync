@@ -1,6 +1,6 @@
 namespace SmartTableSync.Diagnostics;
 
-/// <summary>Default when no APM adapter is registered — e.g. a NuGet consumer that hasn't
+/// <summary>Default when no APM adapter is registered - e.g. a NuGet consumer that hasn't
 /// wired up their own ISyncMetricsReporter yet. Deliberately does nothing.</summary>
 public sealed class NoOpSyncMetricsReporter : ISyncMetricsReporter
 {

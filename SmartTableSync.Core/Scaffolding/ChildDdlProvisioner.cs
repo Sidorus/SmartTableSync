@@ -18,7 +18,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
     {
         if (!await _schemaReader.TableExistsAsync(childProvisioning, profile.TableName, ct))
         {
-            _logger.LogInformation("{Table}: child table missing — auto-creating", profile.TableName);
+            _logger.LogInformation("{Table}: child table missing - auto-creating", profile.TableName);
             await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateCreateTableScript(profile), ct);
         }
         else
@@ -30,7 +30,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
         {
             if (string.IsNullOrEmpty(plan.TvpTypeName))
                 throw new InvalidOperationException(
-                    $"{profile.TableName}: MergeStrategy is Tvp but TvpTypeName is null/empty — refusing to " +
+                    $"{profile.TableName}: MergeStrategy is Tvp but TvpTypeName is null/empty - refusing to " +
                     $"generate/execute a CREATE TYPE with no name. This should never happen via " +
                     $"SyncTableConfig.ToSyncPlan()/SyncPlanHeuristic.DerivePlan; check whatever constructed this plan.");
 
@@ -39,7 +39,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
             var typeColumns = await _schemaReader.GetTableTypeColumnsAsync(childProvisioning, profile.TableName, plan.TvpTypeName, ct);
             if (typeColumns.Count > 0 && !ChildSchemaComparer.TableTypeMatches(profile, typeColumns))
             {
-                _logger.LogWarning("{Table}: table type {Type} no longer matches the table — recreating it", profile.TableName, plan.TvpTypeName);
+                _logger.LogWarning("{Table}: table type {Type} no longer matches the table - recreating it", profile.TableName, plan.TvpTypeName);
                 await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateDropTvpTypeScript(profile.TableName, plan.TvpTypeName), ct);
             }
 
@@ -47,7 +47,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
             await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateTvpUdtScript(profile, plan.TvpTypeName), ct);
         }
 
-        // CREATE OR ALTER — idempotent by construction, always safe to (re)run.
+        // CREATE OR ALTER - idempotent by construction, always safe to (re)run.
         await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateMergeProcedureScript(profile, plan), ct);
 
         _logger.LogInformation("{Table}: child DDL objects verified/created", profile.TableName);

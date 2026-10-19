@@ -80,7 +80,7 @@ All notable changes to SmartTableSync. The format follows
 - **Tables with `decimal` or `numeric` columns** are planned again on the first run after the
   upgrade (their schema fingerprint now includes precision and scale; other tables keep theirs).
   A child created by an earlier version has those columns as `decimal(18,0)` and rounded values:
-  - The table stops with *"column … is decimal(18,0) in the child but decimal(10,2) in the
+  - The table stops with *"column ... is decimal(18,0) in the child but decimal(10,2) in the
     parent"*. Run the scaffold tool for it and apply `<Table>_AlterColumns.sql` to the child.
   - **Auto mode** then copies the table again by itself on the next run, so every value is exact.
   - **Manual mode:** also run the two `DELETE` statements at the end of that script, so the next

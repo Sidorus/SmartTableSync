@@ -8,7 +8,7 @@ internal interface ISyncPlanHeuristic
     /// reads configuration and checks columns): timestampColumn is null when the configured
     /// (default "LastUpdate") column doesn't exist, rowVersionColumn is null when there is no
     /// rowversion column. The incremental strategy is the first applicable one in
-    /// IncrementalStrategies.All, unless strategyOverride forces one — which must then be
+    /// IncrementalStrategies.All, unless strategyOverride forces one - which must then be
     /// applicable, or this throws. childIdentityColumn is the existing child table's IDENTITY
     /// column (null when the child table doesn't exist yet or has none): only then are the
     /// parent's key values copied with IDENTITY_INSERT.</summary>

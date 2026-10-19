@@ -39,7 +39,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
 
         if (existing is null)
         {
-            _logger.LogInformation("{Table}: not yet configured — introspecting and deriving a sync plan", tableName);
+            _logger.LogInformation("{Table}: not yet configured - introspecting and deriving a sync plan", tableName);
         }
         else
         {
@@ -52,7 +52,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
                 return new TableProvisioning(cheapProfile, existing.ToSyncPlan(), ProvisioningChange.None, PendingConfig: null);
 
             _logger.LogWarning(
-                "{Table}: parent schema changed (fingerprint {Old} -> {New}) — re-provisioning",
+                "{Table}: parent schema changed (fingerprint {Old} -> {New}) - re-provisioning",
                 tableName, existing.SchemaFingerprint, cheapFingerprint);
         }
 
@@ -78,7 +78,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
         var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
             existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.ReferencesOtherTables);
 
-        // Preserve any hand-set overrides across re-provisioning — they're reviewable data
+        // Preserve any hand-set overrides across re-provisioning - they're reviewable data
         // an operator set deliberately, not something a fresh heuristic run should erase.
         var config = SyncTableConfig.FromPlan(
             fullProfile, plan, currentFingerprint, DateTime.UtcNow,

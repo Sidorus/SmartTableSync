@@ -25,7 +25,7 @@ internal static class SyncerTestHelpers
     /// tests exercise the exact same code SyncOrchestrator will use, not a shortcut. Returns
     /// the derived SyncPlan alongside the syncer so tests can assert the chosen MergeStrategy
     /// matches what the hand-written engine encoded per table. settings defaults to plain
-    /// SyncSettings (no TimestampColumns/AllowFullRescanFor entries) — every table not
+    /// SyncSettings (no TimestampColumns/AllowFullRescanFor entries) - every table not
     /// listed resolves to the default "LastUpdate" column, today's behavior.</summary>
     public static async Task<(ITableSyncer Syncer, SyncPlan Plan)> BuildConfigurableSyncerAsync(
         SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct = default, SyncSettings? settings = null)

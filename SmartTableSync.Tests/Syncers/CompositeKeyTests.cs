@@ -50,7 +50,7 @@ public class CompositeKeyTests
     public void Parse_ValueContainingDelimiterInLastComponent_StopsSplittingAtExpectedColumnCount()
     {
         // Split with a count limit means a delimiter character inside the LAST column's
-        // value doesn't over-split — matches DocumentAsset's original Split('|', 2) behavior.
+        // value doesn't over-split - matches DocumentAsset's original Split('|', 2) behavior.
         var parts = CompositeKey.Parse("206|en|extra", ["DocumentId", "LanguageCode"]);
 
         Assert.Equal(["206", "en|extra"], parts);

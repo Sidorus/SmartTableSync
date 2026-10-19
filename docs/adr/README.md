@@ -1,16 +1,16 @@
-# SmartTableSync — Architecture Decision Records
+# SmartTableSync - Architecture Decision Records
 
 An ADR captures one significant architectural decision: the problem, the choice made, the
-alternatives rejected, and the trade-offs accepted — so a future reader (including future you)
+alternatives rejected, and the trade-offs accepted - so a future reader (including future you)
 understands *why*, not just *what*. Format: lightweight [MADR](https://adr.github.io/madr/)
 style (Status / Context / Decision / Alternatives Considered / Consequences).
 
 **Note on dates:** most of these decisions were made during earlier development and are being
 recorded retroactively here, not at the moment they were decided. Dates are approximate,
-reconstructed from commit history — treat them as "roughly when," not a precise record.
+reconstructed from commit history - treat them as "roughly when," not a precise record.
 
-**Statuses used:** `Accepted` — decided and shipped, still in force. `Proposed` — decided in
-direction but not fully executed yet. `Superseded` — replaced by a later ADR (linked).
+**Statuses used:** `Accepted` - decided and shipped, still in force. `Proposed` - decided in
+direction but not fully executed yet. `Superseded` - replaced by a later ADR (linked).
 
 ## Index
 

@@ -16,11 +16,11 @@ internal readonly record struct NoPosition;
 /// <summary>
 /// Template Method for every incremental strategy. The fixed algorithm is:
 /// <list type="number">
-/// <item>OpenWindowAsync — strategy-specific: where to start and the position to record afterwards.</item>
-/// <item>ReadPageAsync, repeatedly — strategy-specific: the next page of changed rows in primary-key
+/// <item>OpenWindowAsync - strategy-specific: where to start and the position to record afterwards.</item>
+/// <item>ReadPageAsync, repeatedly - strategy-specific: the next page of changed rows in primary-key
 /// order, so even a large backlog after an outage is applied in bounded batches.</item>
-/// <item>Apply each page — shared: delete rows flagged as deleted, then MERGE the rest.</item>
-/// <item>CommitWindowAsync — strategy-specific: record the new position, but only when no
+/// <item>Apply each page - shared: delete rows flagged as deleted, then MERGE the rest.</item>
+/// <item>CommitWindowAsync - strategy-specific: record the new position, but only when no
 /// retryable error happened, so failed rows stay inside the next window.</item>
 /// </list>
 /// A subclass only describes what is different about its strategy; paging, applying and the

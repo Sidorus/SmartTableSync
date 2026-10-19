@@ -11,7 +11,7 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 
--- ProductCatalogItem TVP type — matches dbo.ProductCatalogItem column set.
+-- ProductCatalogItem TVP type - matches dbo.ProductCatalogItem column set.
 -- Used by sp_SyncProductCatalogItemBatch to merge a full batch in one call
 -- instead of one stored procedure call per row.
 IF NOT EXISTS (SELECT 1 FROM sys.types WHERE name = 'ProductCatalogItemTableType' AND schema_id = SCHEMA_ID('dbo'))

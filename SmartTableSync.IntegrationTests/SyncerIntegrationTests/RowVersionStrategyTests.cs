@@ -15,12 +15,12 @@ using SmartTableSync.Scaffolding;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Item 2 — rowversion incremental strategy. Proves detection, the MIN_ACTIVE_ROWVERSION()
+/// Item 2 - rowversion incremental strategy. Proves detection, the MIN_ACTIVE_ROWVERSION()
 /// bootstrap, and position advancement across cycles against a real database, plus the
 /// necessary correctness fixes this feature exposed: SQL Server rejects any explicit value
 /// written into a rowversion column, so it must be excluded from the generated TVP MERGE's
 /// INSERT/UPDATE column lists, the TVP type itself, and the initial-sync bulk-copy column
-/// mapping — without those fixes, every sync of a rowversion-bearing table fails outright.
+/// mapping - without those fixes, every sync of a rowversion-bearing table fails outright.
 ///
 /// RowVersionTestTable has no hand-authored TVP/stored procedure, so this provisions it via
 /// the Auto-mode path (SyncTableProvisioner + ChildDdlProvisioner), the same construction

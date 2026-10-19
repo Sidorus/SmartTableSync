@@ -78,7 +78,7 @@ public static class SeedDataLoader
                 await using var command = new SqlCommand(
                     $"INSERT INTO [dbo].[{tableName}] ({columns}) VALUES ({valuePlaceholders})", connection);
 
-                // AddWithValue is normally avoided in this codebase (see CLAUDE.md) because
+                // AddWithValue is normally avoided in this codebase because
                 // implicit type inference can produce bad query plans on hot paths - but this
                 // loader has no ColumnProfile/SqlDbType metadata to build typed parameters
                 // from, and it only ever seeds a handful of static test rows once per run, so

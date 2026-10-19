@@ -4,7 +4,7 @@ namespace SmartTableSync.Sql;
 
 /// <summary>
 /// Safe ways to put a table or column name into SQL text, for the places a name can't be a
-/// parameter. Names come from configuration or from the parent database's catalog — the parent
+/// parameter. Names come from configuration or from the parent database's catalog - the parent
 /// schema belongs to another team, so a name is treated as untrusted text, never pasted raw.
 /// </summary>
 internal static partial class SqlIdentifier
@@ -16,12 +16,12 @@ internal static partial class SqlIdentifier
     public static string Table(string tableName) =>
         $"{Quote(SyncTableName.Schema(tableName))}.{Quote(SyncTableName.Object(tableName))}";
 
-    /// <summary>[schema].[objectName] for an object that belongs to a synced table — its
+    /// <summary>[schema].[objectName] for an object that belongs to a synced table - its
     /// procedures and table type live in the table's schema.</summary>
     public static string InTableSchema(string tableName, string objectName) =>
         $"{Quote(SyncTableName.Schema(tableName))}.{Quote(objectName)}";
 
-    /// <summary>N'text', with any quote doubled — for names inside string literals
+    /// <summary>N'text', with any quote doubled - for names inside string literals
     /// (OBJECT_ID('...'), sys.* lookups, PRINT messages).</summary>
     public static string Literal(string text) => $"N'{EnsureSingleLine(text).Replace("'", "''")}'";
 
@@ -31,8 +31,8 @@ internal static partial class SqlIdentifier
         text.Replace("\r", " ").Replace("\n", " ").Replace("*/", "* /");
 
     /// <summary>"@name" for a column's stored-procedure parameter. Parameter names can't be
-    /// bracket-quoted, so a column name that isn't a plain identifier is rejected — with a clear
-    /// error at provisioning time — instead of producing broken or injectable SQL.</summary>
+    /// bracket-quoted, so a column name that isn't a plain identifier is rejected - with a clear
+    /// error at provisioning time - instead of producing broken or injectable SQL.</summary>
     public static string Parameter(string columnName) =>
         PlainIdentifier().IsMatch(columnName)
             ? "@" + columnName
@@ -42,7 +42,7 @@ internal static partial class SqlIdentifier
                 "strategy for the table via the MergeStrategyOverride column in dbo.SyncTableConfig.");
 
     // Generated scripts are split into batches on lines containing only "GO", as text, before
-    // SQL Server parses anything — so a line break inside a name could start a new batch even
+    // SQL Server parses anything - so a line break inside a name could start a new batch even
     // inside brackets or quotes. No real table or column name needs a control character.
     private static string EnsureSingleLine(string name) =>
         name.Any(char.IsControl)

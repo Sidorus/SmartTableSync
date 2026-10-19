@@ -17,17 +17,17 @@ failing shouldn't sink an entire batch either.
 
 ## Decision
 `SyncPlanHeuristic` picks `RowByRow` when a table **either** has incoming foreign keys **or**
-its max observed row size exceeds a threshold — **else** `Tvp`. A rule keyed on FK presence
+its max observed row size exceeds a threshold - **else** `Tvp`. A rule keyed on FK presence
 alone would have picked `Tvp` for `DocumentAsset` (no FKs) and been wrong; this was caught and
 fixed before it shipped, not discovered as a production bug.
 
 ## Alternatives Considered
-- **Always TVP.** Rejected — reintroduces the exact FK-timing and oversized-row failure modes
+- **Always TVP.** Rejected - reintroduces the exact FK-timing and oversized-row failure modes
   the original hand-written `DocumentAsset`/`ProductAttributeValue` syncers already had to solve
   individually.
-- **Always row-by-row.** Rejected — throws away the batching efficiency `ProductCatalogItem`
+- **Always row-by-row.** Rejected - throws away the batching efficiency `ProductCatalogItem`
   (no FK risk, small rows) doesn't need to give up.
-- **FK presence alone as the sole rule.** Rejected — the regression case above; row size matters
+- **FK presence alone as the sole rule.** Rejected - the regression case above; row size matters
   independently of FK presence.
 
 ## Consequences
@@ -36,5 +36,5 @@ facts (FK graph, observed row size) rather than a guess, with a regression test 
 two-condition rule specifically.
 
 **Negative:** an operator who disagrees with the heuristic's choice for a specific table needs
-the override mechanism ([ADR-0011](0011-persisted-per-table-config-with-overrides.md)) — the
+the override mechanism ([ADR-0011](0011-persisted-per-table-config-with-overrides.md)) - the
 heuristic itself has no manual escape hatch built in.

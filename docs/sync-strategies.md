@@ -69,13 +69,13 @@ For tables where Change Tracking isn't allowed but a column can be added.
 1. The table has a `rowversion` column. **SQL Server sets it by itself** on every insert and
    update, to a number that is higher than any before it in that database. The application
    doesn't do anything and can't forget it.
-2. A run starts **from** the position saved last time (`0x…07D4`).
+2. A run starts **from** the position saved last time (`0x...07D4`).
 3. It captures **to** with `MIN_ACTIVE_ROWVERSION()` before reading. If a transaction is still
    open, this stays below that transaction's rows, so they are read next run instead of being
    skipped.
-4. It reads the rows with `RowVer >= 0x…07D4`, page by page in key order (keys 2 and 4), and
+4. It reads the rows with `RowVer >= 0x...07D4`, page by page in key order (keys 2 and 4), and
    merges them into the child.
-5. If the run succeeded, it saves `0x…07DB` as the new position.
+5. If the run succeeded, it saves `0x...07DB` as the new position.
 
 Good to know:
 

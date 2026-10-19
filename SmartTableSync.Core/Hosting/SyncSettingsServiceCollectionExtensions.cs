@@ -13,8 +13,8 @@ public static class SyncSettingsServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>The actual binding logic, extracted so SmartTableSync.Scaffold's CLI — which
-    /// has no DI container of its own — can resolve the identical SyncSettings (including
+    /// <summary>The actual binding logic, extracted so SmartTableSync.Scaffold's CLI - which
+    /// has no DI container of its own - can resolve the identical SyncSettings (including
     /// TimestampColumns/AllowFullRescanFor/IncrementalStrategyOverrides) directly from an
     /// IConfiguration built over environment variables, instead of re-deriving its own partial
     /// approximation of this logic that could silently drift from the runtime's.</summary>

@@ -2,11 +2,11 @@ using System.Diagnostics.Metrics;
 
 namespace SmartTableSync.Diagnostics;
 
-/// <summary>Default ISyncMetricsReporter implementation, built on System.Diagnostics.Metrics —
+/// <summary>Default ISyncMetricsReporter implementation, built on System.Diagnostics.Metrics -
 /// the .NET runtime's own vendor-neutral metrics API (built in since .NET 6, no package
 /// dependency at all). Any OpenTelemetry exporter (OTLP, Prometheus, console, or Azure
 /// Monitor's own OpenTelemetry distro) can collect these by listening on the "SmartTableSync"
-/// meter name; which exporter (if any) is wired up is entirely the host's choice, not Core's —
+/// meter name; which exporter (if any) is wired up is entirely the host's choice, not Core's -
 /// this class doesn't know or care whether anything is listening.</summary>
 public sealed class SyncMetricsReporter : ISyncMetricsReporter, IDisposable
 {

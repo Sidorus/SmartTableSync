@@ -4,7 +4,7 @@
 --
 -- Composite PK: DocumentId + LanguageCode.
 -- Contains large varbinary(max) columns (FileContent, PreviewImage,
--- PdfRendition) — rows can exceed 50 MB.  The Azure Function sends
+-- PdfRendition) - rows can exceed 50 MB.  The Azure Function sends
 -- one row at a time with CommandTimeout = 300 seconds.
 -- ============================================================
 

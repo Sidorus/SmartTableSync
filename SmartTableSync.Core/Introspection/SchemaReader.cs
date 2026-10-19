@@ -3,7 +3,7 @@ namespace SmartTableSync.Introspection;
 /// <summary>
 /// Read-only schema introspection against SQL Server system catalog views. Never touches
 /// table data except for the row-count/size sampling in ProfileTableAsync (MAX(DATALENGTH())
-/// per LOB column, and sys.dm_db_partition_stats for row count/avg size — both read-only,
+/// per LOB column, and sys.dm_db_partition_stats for row count/avg size - both read-only,
 /// no locks beyond what SQL Server itself takes for a SELECT).
 /// </summary>
 internal sealed class SchemaReader : ISchemaReader
@@ -271,7 +271,7 @@ internal sealed class SchemaReader : ISchemaReader
         if (await cmd.ExecuteScalarAsync(ct) is not null)
         {
             throw new InvalidOperationException(
-                $"{tableName}: the configured key columns ({string.Join(", ", keyColumns)}) don't identify each row — " +
+                $"{tableName}: the configured key columns ({string.Join(", ", keyColumns)}) don't identify each row - " +
                 "at least one combination of their values occurs more than once in the parent table. " +
                 "Choose columns that are unique (SmartTableSync:KeyColumns), or add a PRIMARY KEY or unique index to the table.");
         }
@@ -353,7 +353,7 @@ internal sealed class SchemaReader : ISchemaReader
 
     /// <summary>Builds one dynamic SELECT that computes MAX(DATALENGTH(col)) for every LOB
     /// column in a single table scan, rather than one query per column. Column names come
-    /// from GetColumnsAsync (i.e. sys.columns — real, existing column names), not external
+    /// from GetColumnsAsync (i.e. sys.columns - real, existing column names), not external
     /// input, but are still bracket-quoted defensively before being concatenated into SQL text.</summary>
     private static async Task<IReadOnlyDictionary<string, long>> GetMaxLobColumnSizesAsync(
         SqlConnection parent, string tableName, IReadOnlyList<string> lobColumnNames, CancellationToken ct)

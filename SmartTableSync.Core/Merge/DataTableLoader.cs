@@ -1,7 +1,7 @@
 namespace SmartTableSync.Merge;
 
 /// <summary>Drains a SqlDataReader into an in-memory DataTable, inferring columns from the
-/// reader's first row. Shared by InitialSyncRunner and IncrementalSyncRunner — both read a
+/// reader's first row. Shared by InitialSyncRunner and IncrementalSyncRunner - both read a
 /// batch of parent rows the same way, only what happens to the batch afterward differs.</summary>
 internal static class DataTableLoader
 {

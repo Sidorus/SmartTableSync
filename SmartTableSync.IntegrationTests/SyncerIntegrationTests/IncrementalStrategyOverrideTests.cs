@@ -14,7 +14,7 @@ using SmartTableSync.Orchestration;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// SmartTableSync:IncrementalStrategyOverrides — proves the per-table override actually flows
+/// SmartTableSync:IncrementalStrategyOverrides - proves the per-table override actually flows
 /// end-to-end through SyncTableProvisioner.EnsureProvisionedAsync into a working sync, not
 /// just through the pure SyncPlanHeuristic function (already covered by SyncPlanHeuristicTests).
 ///

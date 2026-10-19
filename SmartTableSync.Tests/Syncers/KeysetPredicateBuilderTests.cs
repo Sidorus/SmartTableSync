@@ -8,7 +8,7 @@ public class KeysetPredicateBuilderTests
     [Fact]
     public void Build_SingleColumn_ProducesSimpleGreaterThan()
     {
-        // ProductAttributeValue / ProductCatalogItem shape — one PK column.
+        // ProductAttributeValue / ProductCatalogItem shape - one PK column.
         var predicate = KeysetPredicateBuilder.Build(["AttributeValueId"], ["@Key0"]);
 
         Assert.Equal("[AttributeValueId] > @Key0", predicate);
@@ -68,7 +68,7 @@ public class KeysetPredicateBuilderTests
     [Fact]
     public void BuildKeySelectExpression_SingleStringColumn_MatchesProductCatalogItemsOriginal()
     {
-        // Original: "SELECT [Sku] FROM [dbo].[ProductCatalogItem]" — no CAST at all.
+        // Original: "SELECT [Sku] FROM [dbo].[ProductCatalogItem]" - no CAST at all.
         var expr = KeysetPredicateBuilder.BuildKeySelectExpression(["Sku"], _ => "nvarchar");
 
         Assert.Equal("[Sku]", expr);

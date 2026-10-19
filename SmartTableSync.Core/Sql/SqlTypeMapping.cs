@@ -1,7 +1,7 @@
 namespace SmartTableSync.Sql;
 
 /// <summary>Maps sys.types column type names (as read by SchemaReader) to SqlDbType and
-/// parses key-component strings back into the right CLR type. Pure, no I/O — this is what
+/// parses key-component strings back into the right CLR type. Pure, no I/O - this is what
 /// lets keyset pagination and parameter binding work for any table's primary key shape.</summary>
 internal static class SqlTypeMapping
 {

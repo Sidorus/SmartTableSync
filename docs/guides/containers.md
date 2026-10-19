@@ -24,7 +24,7 @@ The databases are prepared the same way whatever the host: [Manual mode](manual-
 |---|---|---|
 | How | the container keeps running and syncs every `SmartTableSync__Worker__IntervalMinutes` (default 5) | the container syncs once and exits (`--once`); the platform starts it on a cron |
 | Good for | Docker on a server, Kubernetes Deployment, Container Apps app | Kubernetes CronJob, Azure Container Apps **job**: you pay only while it runs |
-| Exit code | — | `0` when the run completed, `1` when it couldn't start (missing settings, unreachable database). A single table that fails is logged and doesn't change the exit code. |
+| Exit code | - | `0` when the run completed, `1` when it couldn't start (missing settings, unreachable database). A single table that fails is logged and doesn't change the exit code. |
 
 Both are safe to overlap: if a run is still busy when the next one starts, the new one does
 nothing, through a lock in the child database. That holds across replicas too, so running two
@@ -224,5 +224,3 @@ repository) and the tools listed in each script's README, then run them with `pw
 ```bash
 pwsh ./quickstart/deploy.ps1 -Suffix acme1 -ParentServer ... -DryRun
 ```
-
-They haven't been run on Linux as part of this project's tests yet; a `-DryRun` is a safe first try.

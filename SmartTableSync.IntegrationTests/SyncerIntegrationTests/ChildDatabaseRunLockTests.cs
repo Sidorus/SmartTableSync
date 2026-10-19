@@ -6,7 +6,7 @@ namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
 /// The database run lock against a real SQL Server: a second instance can't take it while the
-/// first holds it, and it's free again as soon as the holder releases it — even though the
+/// first holds it, and it's free again as soon as the holder releases it - even though the
 /// holder's connection goes back to the connection pool rather than being closed.
 /// Two ChildDatabaseRunLock instances stand in for two separate host processes.
 /// </summary>

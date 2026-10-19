@@ -9,7 +9,7 @@ internal static class ChangeTrackingVersions
 {
     // Prefixed so a position left behind by a different strategy (RowVersionSyncRunner stores
     // "0x..." hex in the same CustomSyncState.IncrementalPosition column) is never misread as a
-    // CT version after a table switches strategy — it parses as "no position" instead, which
+    // CT version after a table switches strategy - it parses as "no position" instead, which
     // triggers a safe full re-scan + re-baseline.
     private const string PositionPrefix = "CT:";
 
@@ -27,7 +27,7 @@ internal static class ChangeTrackingVersions
     /// CHANGE_TRACKING_CURRENT_VERSION, in one round trip (on the caller's transaction, if any,
     /// so both see the same snapshot as the read that follows). SQL Server returns NULL for the
     /// first when CT isn't enabled on the table or the caller lacks VIEW CHANGE TRACKING, and
-    /// for the second when CT isn't enabled on the database — both are configuration errors
+    /// for the second when CT isn't enabled on the database - both are configuration errors
     /// worth a clear message, not a silent fallback.</summary>
     public static async Task<(long MinValidVersion, long CurrentVersion)> GetBoundsAsync(
         SqlConnection parent, SqlTransaction? transaction, string tableName, CancellationToken ct)
@@ -44,7 +44,7 @@ internal static class ChangeTrackingVersions
         {
             throw new InvalidOperationException(
                 $"{tableName}: SQL Server Change Tracking is not enabled on this table (or its database), or the " +
-                $"runtime identity lacks VIEW CHANGE TRACKING on it — see sql/07_permissions.sql.");
+                $"runtime identity lacks VIEW CHANGE TRACKING on it - see sql/07_permissions.sql.");
         }
 
         return (reader.GetInt64(0), reader.GetInt64(1));

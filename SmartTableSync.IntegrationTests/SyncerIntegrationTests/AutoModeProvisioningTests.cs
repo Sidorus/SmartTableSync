@@ -14,9 +14,9 @@ using SmartTableSync.Orchestration;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Proves Auto mode's execution wiring — ChildDdlProvisioner actually creating the child
+/// Proves Auto mode's execution wiring - ChildDdlProvisioner actually creating the child
 /// table, TVP type, and stored procedure that SmartTableSync.Scaffold otherwise only writes
-/// to a file for a human to apply by hand — against a real, freshly "never manually
+/// to a file for a human to apply by hand - against a real, freshly "never manually
 /// provisioned" child database. SqlArtifactGenerator's generated text is already unit-tested
 /// in isolation; this is about proving the generated scripts actually execute and produce
 /// working objects, not re-proving the text is correct.
