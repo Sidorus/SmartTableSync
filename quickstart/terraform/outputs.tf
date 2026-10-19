@@ -15,7 +15,7 @@ output "function_app_hostname" {
 
 output "runtime_client_id" {
   description = "Client ID of the runtime identity; deploy.ps1 creates the smarttablesync-runtime database user from it"
-  value       = azurerm_user_assigned_identity.runtime.client_id
+  value       = one(azurerm_user_assigned_identity.runtime[*].client_id)
 }
 
 output "provisioning_client_id" {
