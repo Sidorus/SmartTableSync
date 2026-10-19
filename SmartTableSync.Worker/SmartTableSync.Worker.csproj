@@ -13,7 +13,7 @@
     <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
          (Managed Identity, Default, Workload Identity) out of the core package. Keep the same
          version as the Microsoft.Data.SqlClient reference in SmartTableSync.Core. -->
-    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.1" />
     <!-- Metrics over OTLP, only when OTEL_EXPORTER_OTLP_ENDPOINT is set (see Program.cs) -->
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />

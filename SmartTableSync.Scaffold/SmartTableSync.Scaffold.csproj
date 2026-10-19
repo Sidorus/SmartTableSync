@@ -34,7 +34,7 @@
     <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
          out of the core package; needed to connect with an Entra identity. Keep the same
          version as the Microsoft.Data.SqlClient reference in SmartTableSync.Core. -->
-    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.1" />
   </ItemGroup>
 
   <ItemGroup>
