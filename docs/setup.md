@@ -11,7 +11,7 @@ create, exactly which rights each one needs, and the steps with the scaffold too
 |---|---|
 | **Parent database** | Where the data is written by your applications. SmartTableSync only reads it. |
 | **Child database** | Where SmartTableSync keeps copies of the parent's tables, plus three tracking tables. |
-| **Function** (`SmartTableSyncFunction`) | Runs a sync every 5 minutes. Or host the engine yourself: reference the `SmartTableSync` package and call `ISyncOrchestrator.RunAsync`. |
+| **Function** (`SmartTableSyncFunction`) | An example host that runs a sync every 5 minutes; use any interval you need. Or host the engine yourself, for example on-premises: reference the `SmartTableSync` package and call `ISyncOrchestrator.RunAsync`. |
 | **Scaffold tool** (`SmartTableSync.Scaffold`, command `smarttablesync-scaffold`) | Reads the parent's schema and **writes** the SQL the child needs, for you to review and apply. It never runs anything against a database. See its [README](../SmartTableSync.Scaffold/README.md). |
 
 ### Manual or Auto mode

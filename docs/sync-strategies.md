@@ -1,6 +1,6 @@
 # How SmartTableSync finds what changed
 
-Every run (every 5 minutes by default), SmartTableSync asks the parent for the rows that changed
+Every run (as often as you schedule it; every 5 minutes in the example Function), SmartTableSync asks the parent for the rows that changed
 since the last successful run and writes them into the child. How it finds those rows depends on
 the table. There are four ways, called **incremental strategies**. Each table gets the first one
 that works for it, in this order, unless you force one with

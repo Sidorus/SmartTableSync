@@ -5,7 +5,7 @@ one run, and where each step lives in the code.
 
 ```mermaid
 flowchart TD
-    Start(["Every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
+    Start(["Every run, e.g.<br/>every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
     Busy -- Yes --> Skip["Skip this time"]
     Busy -- No --> Infra["Auto mode only: create the<br/>tracking tables if missing"]
     Infra --> Each["For each table in the list"]

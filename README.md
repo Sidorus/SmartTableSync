@@ -1,9 +1,14 @@
 # SmartTableSync
 
-A self-configuring .NET 10 engine that keeps tables synchronized between two Azure SQL databases
+A self-configuring .NET 10 engine that keeps tables synchronized from one SQL database to another
 (parent → child): give it table names, and it inspects each table's schema, picks how to detect
-changes and how to merge them, and keeps the child up to date every few minutes. It ships with an
-Azure Functions host, but the engine is a plain library usable from any .NET host.
+changes and how to merge them, and keeps the child up to date on a schedule you choose. The engine
+is a plain library usable from any .NET host; the repository includes an Azure Functions host as
+a ready-to-use example.
+
+It was built for **Azure SQL Database**, where it runs in production, but it isn't limited to
+Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instance or SQL Server
+(on-premises or in a VM), in any combination. See [where it runs](#where-it-runs).
 
 ## The problem
 
@@ -21,11 +26,20 @@ a general replacement ([ADR-0013](docs/adr/0013-position-as-general-data-sync-re
 
 ```mermaid
 flowchart LR
-    Parent[("Parent<br/>Azure SQL Database")]
-    Child[("Child<br/>Azure SQL Database")]
+    Parent[("Parent<br/>Azure SQL or SQL Server")]
+    Child[("Child<br/>Azure SQL or SQL Server")]
 
-    Parent -- "SmartTableSync<br/>(5-minute timer)" --> Child
+    Parent -- "SmartTableSync<br/>(on a schedule, e.g. every 5 minutes)" --> Child
 ```
+
+### Where it runs
+
+| | Supported |
+|---|---|
+| **Databases** | Azure SQL Database, Azure SQL Managed Instance, SQL Server on-premises or in a VM. Parent and child can be any mix, for example an on-premises parent and an Azure SQL child. The generated SQL needs SQL Server 2016 SP1 or later; the integration tests run against SQL Server 2022. |
+| **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
+| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function, a worker service, a scheduled task, a container. The included Azure Function is an example you can deploy as it is or adapt. The host only needs network access to both databases. |
+| **Schedule** | Any interval you choose: your host decides when to call `RunAsync`. The example Function runs every 5 minutes. |
 
 ## Why build it: the alternatives and their cost
 
@@ -64,11 +78,12 @@ Check your own numbers in the [Azure pricing calculator](https://azure.microsoft
 
 ## How it works
 
-Every 5 minutes, for each table in the list:
+On every run (as often as you schedule it; every 5 minutes in the example Function), for each
+table in the list:
 
 ```mermaid
 flowchart TD
-    Start(["Every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
+    Start(["Every run, e.g.<br/>every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
     Busy -- Yes --> Skip["Skip this time"]
     Busy -- No --> Strategy["How to find changes,<br/>picked once per table,<br/>first that fits:<br/>1. Change Tracking<br/>2. RowVersion<br/>3. Timestamp<br/>4. Full re-scan"]
     Strategy --> Copied{"Copied once<br/>already?"}
