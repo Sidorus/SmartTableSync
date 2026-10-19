@@ -272,6 +272,8 @@ as in the example Function, register the `SmartTableSync` meter with the exporte
 default rule that keeps only warnings from your code, or the per-table summaries won't arrive;
 that SDK doesn't collect the `SmartTableSync` meter, so the metrics still need OpenTelemetry.
 Both send to the same Application Insights tables, so the portal looks the same either way.
+Prometheus, Grafana, OTLP, every metric's meaning and how to turn monitoring off are in
+[observability](observability.md).
 
 ## Later changes
 

@@ -77,8 +77,9 @@ with the same Entra ID sign-in and roles as the API.
 
 ## 5. Other planned work
 
-- **Alerts out of the box:** example Azure Monitor alert rules for lag, failed rows and runs that
-  stop, using the existing `smarttablesync.*` metrics.
+- **Alerts and dashboards out of the box:** example Azure Monitor alert rules and a Grafana
+  dashboard for lag, failed rows and runs that stop, using the existing `smarttablesync.*`
+  metrics ([observability](observability.md) already shows the queries).
 - **More column types:** `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` and
   `image`.
 - **One parent, several children:** sync the same parent tables into more than one child database
