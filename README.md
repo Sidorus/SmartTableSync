@@ -94,10 +94,12 @@ applicable one in this order wins — or forced with `SmartTableSync:Incremental
 
 | Strategy | Used when | Deletes |
 |---|---|---|
-| `SqlChangeTracking` | A DBA enabled SQL Server Change Tracking on the table | Reported directly, every run |
-| `RowVersion` | The table has a `rowversion` column | Periodic reconciliation |
-| `Timestamp` | The table has the configured datetime column (default `LastUpdate`) | Periodic reconciliation |
-| `FullRescan` | None of the above, and the table is small (≤ 50,000 rows) or listed in `AllowFullRescanFor` | Periodic reconciliation |
+| [`SqlChangeTracking`](docs/sync-strategies.md#sqlchangetracking) | A DBA enabled SQL Server Change Tracking on the table | Reported directly, every run |
+| [`RowVersion`](docs/sync-strategies.md#rowversion) | The table has a `rowversion` column | Periodic reconciliation |
+| [`Timestamp`](docs/sync-strategies.md#timestamp) | The table has the configured datetime column (default `LastUpdate`) | Periodic reconciliation |
+| [`FullRescan`](docs/sync-strategies.md#fullrescan) | None of the above, and the table is small (≤ 50,000 rows) or listed in `AllowFullRescanFor` | Periodic reconciliation |
+
+How each one works, step by step with a diagram: [How SmartTableSync finds what changed](docs/sync-strategies.md).
 
 A large table with no usable strategy fails at provisioning with a message naming the setting to
 fix — it never silently re-scans millions of rows every five minutes.
@@ -175,9 +177,11 @@ merge procedure with the provisioning identity, logs `child DDL objects verified
 syncs. Every other run only syncs. Creating objects is left to the separate provisioning
 identity; the always-on runtime identity only reads and writes data.
 
-**Good to know:** Auto mode creates what is missing but never changes an existing child table. A
-column added to the parent later still needs a reviewed `ALTER` on the child. Tables with an
-`IDENTITY` column need one more grant in both modes. The [setup guide](docs/setup.md#auto-mode)
+**When the parent schema changes:** a **new column** is added to the child automatically, the
+table type and procedure are recreated, and the table is re-scanned once so existing rows get
+the new values. Changes that could lose data (a changed type or length, a changed primary key, a
+removed `NOT NULL` column) are never applied automatically: the table stops with an error that
+names the change until a reviewed script is applied. The [setup guide](docs/setup.md#auto-mode)
 has the details.
 
 ## Getting started
@@ -187,14 +191,16 @@ has the details.
 - **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
   database identities and the exact rights each needs, preparing parent tables, generating and
   applying the child's SQL, the Function settings, and troubleshooting.
+- **Understand how changes are found:** [how SmartTableSync finds what changed](docs/sync-strategies.md)
+  explains Change Tracking, RowVersion, Timestamp and full re-scan, each with a diagram.
 - **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
   parent's schema and writes the SQL for review; it never executes anything.
 
 In short:
 
 1. Create the runtime, parent-introspection and child-provisioning identities
-   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights,
-   apart from `ALTER` on child tables that have an `IDENTITY` column.
+   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights.
+   Child tables are created without `IDENTITY`, since their key values are copied from the parent.
 2. Optional, per table, applied by a DBA on the **parent**:
    `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
 3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
@@ -236,10 +242,56 @@ merging and the position rule — see
 Significant decisions — what was chosen, what was rejected, and why — are recorded as
 [Architecture Decision Records](docs/adr/README.md).
 
+## Known limitations
+
+What changed and which problems were fixed is in the [changelog](CHANGELOG.md). Still open:
+
+**Scope**
+- One-way only, parent → child. The child is a read-only copy; rows written directly into it
+  are overwritten or removed by the next sync.
+- Only the `dbo` schema, and every synced table needs a primary key.
+- Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
+  supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
+
+**Change detection**
+- **Timestamp** strategy: a row is only seen as changed when the application updates its datetime
+  column on every `UPDATE` (a column default fires only on `INSERT`). Rows where that column is
+  `NULL` are copied by the first sync but not picked up as changed later.
+- **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
+  and full re-scan tables get them from the delete reconciliation, by default hourly.
+
+**Schema changes**
+- Auto mode adds new parent columns by itself, but a changed column type or length, a changed
+  primary key or a removed `NOT NULL` column needs a reviewed script; until then that table
+  stops with an error. A precision or scale change that keeps the same storage size (for example
+  `decimal(10,2)` → `decimal(10,4)`) isn't detected.
+- In Auto mode, a schema change costs one full re-scan of that table.
+- In Manual mode, rows synced before a column was added get its value only when they next change.
+
+**Security and setup**
+- Auto mode's runtime identity needs schema-level grants on the child (broader than per-object
+  grants), so use a child database dedicated to the sync.
+- Child tables created **with** `IDENTITY` by an earlier version still need `ALTER` for the
+  runtime identity until they're recreated from the scaffold tool's script.
+- Before turning a child into a writable database (for example in disaster recovery), add
+  `IDENTITY` or a sequence back to its key columns: child tables are created without them.
+
+**Not yet verified**
+- The current version hasn't run on real Azure yet: the [demo](demo/README.md) is ready but
+  unrun, so Flex Consumption with .NET 10 and Managed Identity end to end are untested there.
+- Whether the run lock's connection, which stays idle during a run, survives a run longer than
+  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes).
+- Not yet published to NuGet.
+
 ## Status
 
-Version **0.3.0**. The sync engine runs in production on Azure SQL Database with a deployed
-Function App. Not yet published to NuGet.
+Version **0.4.0**; what changed is in the [changelog](CHANGELOG.md). The sync engine runs in
+production on Azure SQL Database with a deployed Function App. Not yet published to NuGet.
+
+Upgrading from 0.3.0: hosts that only call `AddSmartTableSync()` are unaffected. Code that uses
+the engine's types directly needs new `using` lines, because the public types moved namespace
+(for example `ISyncOrchestrator` is now in `SmartTableSync.Abstractions`). Existing child tables
+keep working as they are, including ones created with `IDENTITY`.
 
 0.3.0 is not drop-in compatible with 0.2.0 code that used engine types directly: the public API
 is now only what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and

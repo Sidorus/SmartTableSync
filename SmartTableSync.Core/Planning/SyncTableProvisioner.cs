@@ -27,6 +27,13 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
 
     public async Task<(TableProfile Profile, SyncPlan Plan, bool WasFreshlyProvisioned)> EnsureProvisionedAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct)
     {
+        var provisioning = await PlanAsync(parent, child, tableName, ct);
+        await SaveAsync(child, provisioning, ct);
+        return (provisioning.Profile, provisioning.Plan, provisioning.Change != ProvisioningChange.None);
+    }
+
+    public async Task<TableProvisioning> PlanAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct)
+    {
         var existing = await _configRepository.GetAsync(child, tableName, ct);
 
         if (existing is null)
@@ -41,7 +48,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
             var cheapFingerprint = SchemaFingerprint.Compute(cheapProfile);
 
             if (existing.SchemaFingerprint == cheapFingerprint)
-                return (cheapProfile, existing.ToSyncPlan(), false);
+                return new TableProvisioning(cheapProfile, existing.ToSyncPlan(), ProvisioningChange.None, PendingConfig: null);
 
             _logger.LogWarning(
                 "{Table}: parent schema changed (fingerprint {Old} -> {New}) — re-provisioning",
@@ -58,8 +65,13 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
         var strategyOverride = _settings.Value.IncrementalStrategyOverrides.TryGetValue(tableName, out var overriddenStrategy)
             ? overriddenStrategy : (IncrementalStrategy?)null;
 
+        // Null for a child table SmartTableSync creates (or will create in Auto mode): those have
+        // no IDENTITY. Only an existing child table with one needs IDENTITY_INSERT.
+        var childIdentityColumn = await _schemaReader.GetIdentityColumnAsync(child, tableName, ct);
+
         var plan = _heuristic.DerivePlan(
-            fullProfile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride);
+            fullProfile, new PlanHeuristicOptions(), timestampColumn, allowFullRescan, fullProfile.RowVersionColumn, strategyOverride,
+            childIdentityColumn);
 
         var retryableSqlErrorsOverride = SyncTableConfig.ResolveRetryableSqlErrorsOverride(
             existing?.MergeStrategyOverride, existing?.RetryableSqlErrorsOverride, fullProfile.ReferencesOtherTables);
@@ -73,9 +85,18 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
             bulkCopyTimeoutSecondsOverride: existing?.BulkCopyTimeoutSecondsOverride,
             retryableSqlErrorsOverride: retryableSqlErrorsOverride);
 
-        await _configRepository.UpsertAsync(child, config, ct);
-        _metrics.TableProvisioned(tableName);
+        var change = existing is null ? ProvisioningChange.NewTable : ProvisioningChange.SchemaChanged;
+        return new TableProvisioning(fullProfile, config.ToSyncPlan(), change, config);
+    }
 
-        return (fullProfile, config.ToSyncPlan(), true);
+    public async Task SaveAsync(SqlConnection child, TableProvisioning provisioning, CancellationToken ct)
+    {
+        if (provisioning.PendingConfig is null)
+        {
+            return;
+        }
+
+        await _configRepository.UpsertAsync(child, provisioning.PendingConfig, ct);
+        _metrics.TableProvisioned(provisioning.Profile.TableName);
     }
 }

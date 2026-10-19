@@ -24,4 +24,12 @@ internal interface ISchemaReader
     /// whether a CREATE TABLE script is needed for the child, without the "0 columns found"
     /// exception GetFingerprintInputsAsync/ProfileTableAsync throw for a missing table.</summary>
     Task<bool> TableExistsAsync(SqlConnection connection, string tableName, CancellationToken ct);
+
+    /// <summary>The table's IDENTITY column, or null when it has none or doesn't exist. Asked of
+    /// the CHILD table to decide whether copying needs IDENTITY_INSERT.</summary>
+    Task<string?> GetIdentityColumnAsync(SqlConnection connection, string tableName, CancellationToken ct);
+
+    /// <summary>The columns of a user-defined table type in dbo, in order; empty when the type
+    /// doesn't exist.</summary>
+    Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct);
 }

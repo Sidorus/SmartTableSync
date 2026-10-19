@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="800" viewBox="0 0 680 800" role="img" aria-labelledby="title desc">
+  <title id="title">Timestamp strategy</title>
+  <desc id="desc">The application sets the LastUpdate column of dbo.Customer on every change. A run reads the last sync time saved in the child (10:00), subtracts one minute, and reads rows with LastUpdate at or after 09:59 in key order: keys 2, 4 and 6. Key 6 was already synced and is read again, which is harmless. The run start on the parent clock (10:05) is saved once all rows succeeded. Deletes come from the hourly delete reconciliation.</desc>
+  <style>
+    svg { --bg:#ffffff; --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --surface:#f6f8fa; --df:#eeedfe; --ds:#534ab7; --dt:#3c3489; --cf:#e1f5ee; --cs:#0f6e56; --ctx:#085041; --wr:#bc4c00; --rf:#faece7; --rs:#993c1d; --rt:#712b13; }
+    @media (prefers-color-scheme: dark) { svg { --bg:#0d1117; --fg:#e6edf3; --muted:#9198a1; --line:#3d444d; --surface:#151b23; --df:#2a2650; --ds:#afa9ec; --dt:#cecbf6; --cf:#0b3a30; --cs:#5dcaa5; --ctx:#9fe1cb; --wr:#f0883e; --rf:#3d1e12; --rs:#f0997b; --rt:#f5c4b3; } }
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .bg { fill: var(--bg); }
+    .box { fill: var(--surface); stroke: var(--line); }
+    .data { fill: var(--df); stroke: var(--ds); }
+    .ct { fill: var(--cf); stroke: var(--cs); }
+    .del { fill: var(--rf); stroke: var(--rs); }
+    .t { fill: var(--fg); font-size: 14px; font-weight: 600; }
+    .s { fill: var(--muted); font-size: 12px; }
+    .dt { fill: var(--dt); font-size: 14px; font-weight: 600; }
+    .ds { fill: var(--dt); font-size: 12px; }
+    .ctt { fill: var(--ctx); font-size: 14px; font-weight: 600; }
+    .cts { fill: var(--ctx); font-size: 12px; font-family: Consolas, "SFMono-Regular", Menlo, monospace; }
+    .rt { fill: var(--rt); font-size: 14px; font-weight: 600; }
+    .rs { fill: var(--rt); font-size: 12px; }
+    .arr { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+    .wr { stroke: var(--wr); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+    .wl { fill: var(--wr); font-size: 12px; font-weight: 600; }
+    .rule { stroke: var(--cs); stroke-width: 0.5; }
+    .mk { stroke: var(--muted); }
+    .mkw { stroke: var(--wr); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk" d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mkw" d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="680" height="800" rx="12"/>
+
+  <rect class="box" x="220" y="30" width="240" height="50" rx="8"/>
+  <text class="t" x="340" y="49" text-anchor="middle" dominant-baseline="central">Application</text>
+  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE … SET LastUpdate = now</text>
+  <line class="wr" x1="340" y1="80" x2="340" y2="116" marker-end="url(#w)"/>
+  <text class="wl" x="352" y="98" dominant-baseline="central">the application must set LastUpdate</text>
+
+  <rect class="data" x="200" y="120" width="280" height="140" rx="10"/>
+  <text class="dt" x="340" y="140" text-anchor="middle" dominant-baseline="central">dbo.Customer</text>
+  <text class="ds" x="340" y="158" text-anchor="middle" dominant-baseline="central">Key · Name · LastUpdate</text>
+  <text class="ds" x="340" y="184" text-anchor="middle" dominant-baseline="central">1 · Anna · 09:12</text>
+  <text class="ds" x="340" y="204" text-anchor="middle" dominant-baseline="central">2 · Erik L. · 10:02</text>
+  <text class="ds" x="340" y="224" text-anchor="middle" dominant-baseline="central">4 · Lars · 10:03</text>
+  <text class="ds" x="340" y="244" text-anchor="middle" dominant-baseline="central">6 · Nils · 09:59:30</text>
+
+  <rect class="box" x="40" y="300" width="260" height="60" rx="8"/>
+  <text class="t" x="170" y="320" text-anchor="middle" dominant-baseline="central">From: last sync − 1 minute</text>
+  <text class="s" x="170" y="340" text-anchor="middle" dominant-baseline="central">10:00 saved in the child → 09:59</text>
+
+  <rect class="box" x="380" y="300" width="260" height="60" rx="8"/>
+  <text class="t" x="510" y="320" text-anchor="middle" dominant-baseline="central">To: run start, parent clock</text>
+  <text class="s" x="510" y="340" text-anchor="middle" dominant-baseline="central">GETUTCDATE() = 10:05</text>
+
+  <line class="arr" x1="340" y1="260" x2="340" y2="406" marker-end="url(#a)"/>
+  <line class="arr" x1="170" y1="360" x2="170" y2="406" marker-end="url(#a)"/>
+  <line class="arr" x1="510" y1="360" x2="510" y2="406" marker-end="url(#a)"/>
+
+  <rect class="ct" x="110" y="410" width="460" height="152" rx="10"/>
+  <text class="ctt" x="340" y="430" text-anchor="middle" dominant-baseline="central">WHERE LastUpdate &gt;= 09:59, page by page by key</text>
+  <text class="ctt" x="200" y="458" text-anchor="middle" dominant-baseline="central">Key</text>
+  <text class="ctt" x="330" y="458" text-anchor="middle" dominant-baseline="central">Name</text>
+  <text class="ctt" x="470" y="458" text-anchor="middle" dominant-baseline="central">LastUpdate</text>
+  <line class="rule" x1="130" y1="470" x2="550" y2="470"/>
+  <text class="cts" x="200" y="488" text-anchor="middle" dominant-baseline="central">2</text>
+  <text class="cts" x="330" y="488" text-anchor="middle" dominant-baseline="central">Erik L.</text>
+  <text class="cts" x="470" y="488" text-anchor="middle" dominant-baseline="central">10:02</text>
+  <text class="cts" x="200" y="508" text-anchor="middle" dominant-baseline="central">4</text>
+  <text class="cts" x="330" y="508" text-anchor="middle" dominant-baseline="central">Lars</text>
+  <text class="cts" x="470" y="508" text-anchor="middle" dominant-baseline="central">10:03</text>
+  <text class="cts" x="200" y="528" text-anchor="middle" dominant-baseline="central">6</text>
+  <text class="cts" x="330" y="528" text-anchor="middle" dominant-baseline="central">Nils</text>
+  <text class="cts" x="470" y="528" text-anchor="middle" dominant-baseline="central">09:59:30</text>
+  <text class="s" x="340" y="548" text-anchor="middle" dominant-baseline="central">6 was synced last run: read again by the overlap, harmless</text>
+
+  <line class="arr" x1="340" y1="562" x2="340" y2="596" marker-end="url(#a)"/>
+  <rect class="data" x="150" y="600" width="380" height="60" rx="8"/>
+  <text class="dt" x="340" y="620" text-anchor="middle" dominant-baseline="central">Child database</text>
+  <text class="ds" x="340" y="640" text-anchor="middle" dominant-baseline="central">upsert 2, 4, 6 · save 10:05 if all succeeded</text>
+
+  <line class="arr" x1="340" y1="660" x2="340" y2="696" marker-end="url(#a)"/>
+  <rect class="del" x="150" y="700" width="380" height="60" rx="8"/>
+  <text class="rt" x="340" y="720" text-anchor="middle" dominant-baseline="central">Delete reconciliation, every hour</text>
+  <text class="rs" x="340" y="740" text-anchor="middle" dominant-baseline="central">parent keys vs child keys → delete what is gone</text>
+</svg>

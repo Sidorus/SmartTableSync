@@ -9,12 +9,15 @@ internal interface ISyncPlanHeuristic
     /// (default "LastUpdate") column doesn't exist, rowVersionColumn is null when there is no
     /// rowversion column. The incremental strategy is the first applicable one in
     /// IncrementalStrategies.All, unless strategyOverride forces one — which must then be
-    /// applicable, or this throws.</summary>
+    /// applicable, or this throws. childIdentityColumn is the existing child table's IDENTITY
+    /// column (null when the child table doesn't exist yet or has none): only then are the
+    /// parent's key values copied with IDENTITY_INSERT.</summary>
     SyncPlan DerivePlan(
         TableProfile profile,
         PlanHeuristicOptions options,
         string? timestampColumn = null,
         bool allowFullRescan = false,
         string? rowVersionColumn = null,
-        IncrementalStrategy? strategyOverride = null);
+        IncrementalStrategy? strategyOverride = null,
+        string? childIdentityColumn = null);
 }

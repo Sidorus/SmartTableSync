@@ -150,7 +150,5 @@ merge procedures and their table types, and no DDL.
 - The Function uses a user-assigned managed identity named `smarttablesync-runtime`, the name
   the repository's grant scripts use. Azure SQL creates the database user from the identity's
   display name, so it must be unique in your Microsoft Entra tenant.
-- The demo tables have no `IDENTITY` columns: copying identity values (bulk copy with
-  `KeepIdentity`) needs `ALTER` on the child table, which the runtime identity doesn't have.
 - Terraform state stays on your machine in `demo/terraform/` and is git-ignored. Keep it until
   you've run `-Destroy`.

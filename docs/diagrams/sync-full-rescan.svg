@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="650" viewBox="0 0 680 650" role="img" aria-labelledby="title desc">
+  <title id="title">FullRescan strategy</title>
+  <desc id="desc">dbo.Customer has no change column, so a full re-scan is allowed only for small tables (50,000 rows or fewer) or tables listed in AllowFullRescanFor. Every run reads the whole table page by page in key order and merges every row into the child. There is no position to save. Deletes come from the hourly delete reconciliation.</desc>
+  <style>
+    svg { --bg:#ffffff; --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --surface:#f6f8fa; --df:#eeedfe; --ds:#534ab7; --dt:#3c3489; --cf:#e1f5ee; --cs:#0f6e56; --ctx:#085041; --rf:#faece7; --rs:#993c1d; --rt:#712b13; }
+    @media (prefers-color-scheme: dark) { svg { --bg:#0d1117; --fg:#e6edf3; --muted:#9198a1; --line:#3d444d; --surface:#151b23; --df:#2a2650; --ds:#afa9ec; --dt:#cecbf6; --cf:#0b3a30; --cs:#5dcaa5; --ctx:#9fe1cb; --rf:#3d1e12; --rs:#f0997b; --rt:#f5c4b3; } }
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .bg { fill: var(--bg); }
+    .box { fill: var(--surface); stroke: var(--line); }
+    .data { fill: var(--df); stroke: var(--ds); }
+    .ct { fill: var(--cf); stroke: var(--cs); }
+    .del { fill: var(--rf); stroke: var(--rs); }
+    .t { fill: var(--fg); font-size: 14px; font-weight: 600; }
+    .s { fill: var(--muted); font-size: 12px; }
+    .dt { fill: var(--dt); font-size: 14px; font-weight: 600; }
+    .ds { fill: var(--dt); font-size: 12px; }
+    .ctt { fill: var(--ctx); font-size: 14px; font-weight: 600; }
+    .cts { fill: var(--ctx); font-size: 12px; font-family: Consolas, "SFMono-Regular", Menlo, monospace; }
+    .rt { fill: var(--rt); font-size: 14px; font-weight: 600; }
+    .rs { fill: var(--rt); font-size: 12px; }
+    .arr { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+    .rule { stroke: var(--cs); stroke-width: 0.5; }
+    .mk { stroke: var(--muted); }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk" d="M2 1L8 5L2 9" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="680" height="650" rx="12"/>
+
+  <rect class="data" x="200" y="30" width="280" height="120" rx="10"/>
+  <text class="dt" x="340" y="50" text-anchor="middle" dominant-baseline="central">dbo.Customer</text>
+  <text class="ds" x="340" y="68" text-anchor="middle" dominant-baseline="central">no column that shows what changed</text>
+  <text class="ds" x="340" y="94" text-anchor="middle" dominant-baseline="central">1 · Anna</text>
+  <text class="ds" x="340" y="112" text-anchor="middle" dominant-baseline="central">2 · Erik L.</text>
+  <text class="ds" x="340" y="130" text-anchor="middle" dominant-baseline="central">4 · Lars</text>
+
+  <line class="arr" x1="340" y1="150" x2="340" y2="186" marker-end="url(#a)"/>
+  <rect class="box" x="150" y="190" width="380" height="60" rx="8"/>
+  <text class="t" x="340" y="210" text-anchor="middle" dominant-baseline="central">Allowed only for small tables</text>
+  <text class="s" x="340" y="230" text-anchor="middle" dominant-baseline="central">≤ 50,000 rows, or listed in AllowFullRescanFor</text>
+
+  <line class="arr" x1="340" y1="250" x2="340" y2="286" marker-end="url(#a)"/>
+  <rect class="ct" x="110" y="290" width="460" height="130" rx="10"/>
+  <text class="ctt" x="340" y="310" text-anchor="middle" dominant-baseline="central">Every run: the whole table, page by page by key</text>
+  <text class="ctt" x="270" y="338" text-anchor="middle" dominant-baseline="central">Key</text>
+  <text class="ctt" x="410" y="338" text-anchor="middle" dominant-baseline="central">Name</text>
+  <line class="rule" x1="130" y1="350" x2="550" y2="350"/>
+  <text class="cts" x="270" y="368" text-anchor="middle" dominant-baseline="central">1</text>
+  <text class="cts" x="410" y="368" text-anchor="middle" dominant-baseline="central">Anna</text>
+  <text class="cts" x="270" y="386" text-anchor="middle" dominant-baseline="central">2</text>
+  <text class="cts" x="410" y="386" text-anchor="middle" dominant-baseline="central">Erik L.</text>
+  <text class="cts" x="270" y="404" text-anchor="middle" dominant-baseline="central">4</text>
+  <text class="cts" x="410" y="404" text-anchor="middle" dominant-baseline="central">Lars</text>
+
+  <line class="arr" x1="340" y1="420" x2="340" y2="456" marker-end="url(#a)"/>
+  <rect class="data" x="150" y="460" width="380" height="60" rx="8"/>
+  <text class="dt" x="340" y="480" text-anchor="middle" dominant-baseline="central">Child database</text>
+  <text class="ds" x="340" y="500" text-anchor="middle" dominant-baseline="central">merge every row · no position to save</text>
+
+  <line class="arr" x1="340" y1="520" x2="340" y2="556" marker-end="url(#a)"/>
+  <rect class="del" x="150" y="560" width="380" height="60" rx="8"/>
+  <text class="rt" x="340" y="580" text-anchor="middle" dominant-baseline="central">Delete reconciliation, every hour</text>
+  <text class="rs" x="340" y="600" text-anchor="middle" dominant-baseline="central">parent keys vs child keys → delete what is gone</text>
+</svg>
