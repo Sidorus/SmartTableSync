@@ -7,6 +7,27 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Tables in schemas other than `dbo`.** Name them `schema.Table` in `SmartTableSync:TableList`,
+  the per-table settings and the scaffold tool (a plain `Table` still means `dbo.Table`). The
+  child keeps the parent's schema; the table's procedures and table type are created in that
+  schema, so tables with the same name in two schemas don't collide. The tracking tables stay in
+  `dbo`. See [ADR-0020](docs/adr/0020-tables-in-schemas-other-than-dbo.md).
+
+### Changed
+
+- The scaffold tool prefixes the files of a non-dbo table with the schema
+  (`sales.sp_SyncOrderBatch.sql`); file names for dbo tables are unchanged.
+- A table name with more than one dot, or longer than 100 characters, is rejected at startup with
+  a clear message. Names that contain a dot were never meant to work and are now read as
+  `schema.Table`.
+
+### Fixed
+
+- Measuring the largest value of `(max)` columns while profiling a table queried it without a
+  schema, so it depended on the identity's default schema.
+
 ## [0.4.0] - 2026-10-18
 
 ### Fixed

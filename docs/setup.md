@@ -153,6 +153,14 @@ For each table it prints the plan it derived, the same plan the engine will deri
 Review them, then apply them to the **child** as the provisioning identity, in this order:
 tables, table types, procedures.
 
+**Tables in another schema.** Name them `schema.Table`, here and in `SmartTableSync:TableList`:
+`smarttablesync-scaffold sales.Order`. The child gets the same schema: the table script creates
+it if it's missing, and the table type and procedure are created in it too
+(`[sales].[OrderTableType]`, `[sales].[sp_SyncOrderBatch]`). Their files start with the schema
+(`sales.Order.sql`, `sales.OrderTableType.sql`, `sales.sp_SyncOrderBatch.sql`), so tables with
+the same name in two schemas don't overwrite each other's scripts. Grant on them in step 5 with
+their schema, for example `GRANT EXECUTE ON [sales].[sp_SyncOrderBatch] TO [smarttablesync-runtime]`.
+
 ### 5. Grant the runtime identity access to the child objects
 
 Now that the tables, types and procedures exist, grant the runtime identity's **child** rights
@@ -260,6 +268,17 @@ In Auto mode the engine does steps 3 and 4 itself, so adding a table is a settin
 
 To add a table later: grant the runtime and introspection identities read access to it on the
 **parent** (step 1), then add it to `SmartTableSync:TableList`.
+
+For a table in a schema other than `dbo` (`sales.Order`), first create that schema in the
+**child** and give the runtime identity the same schema-level grant there, as an administrator:
+
+```sql
+CREATE SCHEMA [sales];
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::[sales] TO [smarttablesync-runtime];
+```
+
+Auto mode would create a missing schema itself, but the runtime identity can't use its tables
+until that grant exists.
 
 ### When the parent schema changes
 

@@ -35,6 +35,7 @@ direction but not fully executed yet. `Superseded` — replaced by a later ADR (
 | [0017](0017-strategy-registry-and-template-method-runners.md) | Strategy registry, template-method runners, and a minimal public API | Accepted | 2026-10-17 |
 | [0018](0018-child-tables-without-identity.md) | Create child tables without IDENTITY, so the runtime identity needs no ALTER | Accepted | 2026-10-18 |
 | [0019](0019-auto-mode-schema-evolution.md) | Auto mode evolves the child schema for added columns, and nothing riskier | Accepted | 2026-10-18 |
+| [0020](0020-tables-in-schemas-other-than-dbo.md) | Sync tables in schemas other than dbo, keeping the schema in the child | Accepted | 2026-10-19 |
 
 See also: the top-level [README](../../README.md) for architecture and getting-started
 instructions.

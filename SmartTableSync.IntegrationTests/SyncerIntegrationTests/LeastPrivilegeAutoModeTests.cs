@@ -133,7 +133,7 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         // Assert
         Assert.Empty(errors);
         await AssertChildMatchesParentAsync(parent, child, table);
-        var typeColumns = await new SmartTableSync.Introspection.SchemaReader().GetTableTypeColumnsAsync(child, $"{table}TableType", CancellationToken.None);
+        var typeColumns = await new SmartTableSync.Introspection.SchemaReader().GetTableTypeColumnsAsync(child, table, $"{table}TableType", CancellationToken.None);
         Assert.Equal(["Id", "Name", "LastUpdate", "Category", "Price"], typeColumns.Select(c => c.Name));
     }
 
@@ -162,20 +162,100 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         Assert.Equal(100, childName.MaxLength);
     }
 
+    [Fact]
+    public async Task AutoMode_SameTableNameInTwoSchemas_SyncsEachIntoItsOwnSchema()
+    {
+        // Arrange - [dbo].[Order] and [sales].[Order] with different rows. The documented step for
+        // a schema other than dbo in Auto mode: an administrator creates it in the child and gives
+        // the runtime identity the same schema-level grant it has on dbo.
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+
+        await ExecuteAsync(parent, "CREATE SCHEMA [sales]");
+        await CreateParentTableAsync(parent, "Order");
+        await CreateParentTableAsync(parent, "sales.Order");
+        await ExecuteAsync(parent, "UPDATE [sales].[Order] SET [Name] = N'Sales item' WHERE [Id] <= 10; DELETE FROM [sales].[Order] WHERE [Id] > 40");
+
+        await ExecuteAsync(child, "CREATE SCHEMA [sales]");
+        await ExecuteAsync(child, "GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::[sales] TO [smarttablesync-runtime]");
+
+        // Act
+        var errors = await RunAutoModeAsync("Order", "sales.Order");
+
+        // Assert - each child table matches its own parent table, and they differ from each other
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, "Order", "sales.Order");
+        Assert.NotEqual(
+            await SyncerTestHelpers.TableFingerprintAsync(child, "Order"),
+            await SyncerTestHelpers.TableFingerprintAsync(child, "sales.Order"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.procedures WHERE name = 'sp_SyncOrderBatch' AND schema_id = SCHEMA_ID('sales')"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.table_types WHERE name = 'OrderTableType' AND schema_id = SCHEMA_ID('sales')"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM [dbo].[CustomSyncState] WHERE [TableName] = N'sales.Order'"));
+
+        // Arrange - a change in the sales table only
+        await ExecuteAsync(parent, "UPDATE [sales].[Order] SET [Name] = N'Changed', [LastUpdate] = GETUTCDATE() WHERE [Id] = 1");
+        await ExecuteAsync(parent, "INSERT INTO [sales].[Order] ([Id], [Name], [LastUpdate]) VALUES (1000, N'New', GETUTCDATE())");
+
+        // Act
+        errors = await RunAutoModeAsync("Order", "sales.Order");
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, "Order", "sales.Order");
+    }
+
+    [Fact]
+    public async Task ProvisioningIdentity_CanCreateAMissingChildSchema()
+    {
+        // The generated CREATE TABLE script creates the table's schema when the child lacks it;
+        // db_ddladmin, the provisioning identity's only right, must be enough for that.
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await child.OpenAsync();
+
+        var profile = new SmartTableSync.Introspection.TableProfile(
+            TableName: "archive.Note",
+            Columns: [new("Id", "int", 4, false), new("Text", "nvarchar", 200, true)],
+            PrimaryKeyColumns: ["Id"],
+            IdentityColumn: null,
+            IndexedLobColumns: [],
+            ReferencesOtherTables: false,
+            RowCount: 0,
+            AvgRowSizeBytes: 0,
+            MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+        await MsSqlTestFixture.RunGeneratedScriptAsync(
+            _identities.ChildConnectionString(ChildProvisioning),
+            new SmartTableSync.Scaffolding.SqlArtifactGenerator().GenerateCreateTableScript(profile),
+            "archive.Note as the provisioning identity");
+
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.tables WHERE name = 'Note' AND schema_id = SCHEMA_ID('archive')"));
+    }
+
     // A new parent table with 50 rows, and the documented step for adding a table: read access
     // for the runtime identity on it in the parent. The rows were last changed an hour ago, outside
     // the Timestamp strategy's one-minute look-back, so no incremental pass reads them again.
     private static async Task CreateParentTableAsync(SqlConnection parent, string table)
     {
+        var quoted = SmartTableSync.Sql.SqlIdentifier.Table(table);
+        var constraint = $"DF_{SmartTableSync.Sql.SyncTableName.Schema(table)}_{SmartTableSync.Sql.SyncTableName.Object(table)}_LastUpdate";
+
         await ExecuteAsync(parent, $"""
-            CREATE TABLE [dbo].[{table}] (
+            CREATE TABLE {quoted} (
                 [Id] INT NOT NULL PRIMARY KEY,
                 [Name] NVARCHAR(50) NOT NULL,
-                [LastUpdate] DATETIME NOT NULL CONSTRAINT [DF_{table}_LastUpdate] DEFAULT (GETUTCDATE()));
-            INSERT INTO [dbo].[{table}] ([Id], [Name], [LastUpdate])
+                [LastUpdate] DATETIME NOT NULL CONSTRAINT [{constraint}] DEFAULT (GETUTCDATE()));
+            INSERT INTO {quoted} ([Id], [Name], [LastUpdate])
             SELECT TOP (50) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'Item', DATEADD(hour, -1, GETUTCDATE()) FROM sys.all_columns;
-            GRANT SELECT, VIEW DEFINITION ON [dbo].[{table}] TO [smarttablesync-runtime];
+            GRANT SELECT, VIEW DEFINITION ON {quoted} TO [smarttablesync-runtime];
             """);
+    }
+
+    private static async Task<int> ScalarAsync(SqlConnection connection, string sql)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        return (int)(await command.ExecuteScalarAsync())!;
     }
 
     private Task<IReadOnlyList<string>> RunAutoModeAsync(params string[] tables) =>

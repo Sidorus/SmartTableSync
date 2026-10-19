@@ -301,7 +301,7 @@ public class SqlArtifactGeneratorTests
     // --- Names from the parent schema are untrusted: nothing in a name may change the script ---
 
     private static TableProfile HostileNamesProfile() => new(
-        TableName: "Orders]; DROP TABLE [dbo].[SyncTableConfig]; --",
+        TableName: "Orders]; DROP TABLE [SyncTableConfig]; --",
         Columns:
         [
             new ColumnProfile("Id", "int", 4, false),
@@ -327,10 +327,77 @@ public class SqlArtifactGeneratorTests
             _generator.GenerateMergeProcedureScript(profile, plan));
 
         // Every ']' inside a name is doubled, so the name can't close its bracket and start a statement.
-        Assert.Contains("[Orders]]; DROP TABLE [dbo]].[SyncTableConfig]]; --]", scripts);
+        Assert.Contains("[Orders]]; DROP TABLE [SyncTableConfig]]; --]", scripts);
         Assert.Contains("[Note]] NVARCHAR(10)); DROP TABLE [dbo]].[CustomSyncState]]; --]", scripts);
         Assert.DoesNotContain("[Orders]; DROP TABLE", scripts);
         Assert.DoesNotContain("[Note] NVARCHAR(10)); DROP TABLE", scripts);
+    }
+
+    // --- A table outside dbo: the child keeps the schema, and the table's objects live in it ---
+
+    [Fact]
+    public void GeneratedDdl_NonDboTable_CreatesTheSchemaAndPutsEveryObjectInIt()
+    {
+        var profile = ProductCatalogItemProfile() with { TableName = "sales.ProductCatalogItem" };
+        var plan = new SyncPlan(profile.TableName, MergeStrategy.Tvp, 200, SqlBulkCopyOptions.Default, 120, [], "ProductCatalogItemTableType");
+
+        var table = _generator.GenerateCreateTableScript(profile);
+        var type = _generator.GenerateTvpUdtScript(profile, "ProductCatalogItemTableType");
+        var procedure = _generator.GenerateMergeProcedureScript(profile, plan);
+
+        Assert.Contains("IF SCHEMA_ID(N'sales') IS NULL", table);
+        Assert.Contains("CREATE TABLE [sales].[ProductCatalogItem](", table);
+        Assert.Contains("CONSTRAINT [PK_ProductCatalogItem] PRIMARY KEY", table);
+        Assert.Contains("schema_id = SCHEMA_ID(N'sales')", type);
+        Assert.Contains("CREATE TYPE [sales].[ProductCatalogItemTableType] AS TABLE", type);
+        Assert.Contains("CREATE OR ALTER PROCEDURE [sales].[sp_SyncProductCatalogItemBatch]", procedure);
+        Assert.Contains("@Rows [sales].[ProductCatalogItemTableType] READONLY", procedure);
+        Assert.Contains("MERGE [sales].[ProductCatalogItem] WITH (HOLDLOCK)", procedure);
+        Assert.DoesNotContain("[dbo]", table + type + procedure);
+    }
+
+    [Fact]
+    public void GenerateCreateTableScript_DboTable_DoesNotCreateASchema()
+    {
+        var script = _generator.GenerateCreateTableScript(ProductCatalogItemProfile());
+
+        Assert.DoesNotContain("CREATE SCHEMA", script);
+        Assert.Contains("CREATE TABLE [dbo].[ProductCatalogItem](", script);
+    }
+
+    [Fact]
+    public void ProcedureNames_LiveInTheTablesSchema()
+    {
+        Assert.Equal("[dbo].[sp_SyncOrderBatch]", SqlArtifactGenerator.TvpProcedureName("Order"));
+        Assert.Equal("[sales].[sp_SyncOrderBatch]", SqlArtifactGenerator.TvpProcedureName("sales.Order"));
+        Assert.Equal("[sales].[sp_SyncOrder]", SqlArtifactGenerator.RowByRowProcedureName("sales.Order"));
+    }
+
+    [Fact]
+    public void GenerateChangeTrackingSetupScript_NonDboTable_UsesTheSchema()
+    {
+        var profile = ProductCatalogItemProfile() with { TableName = "sales.ProductCatalogItem" };
+
+        var script = _generator.GenerateChangeTrackingSetupScript(profile);
+
+        Assert.Contains("ALTER TABLE [sales].[ProductCatalogItem] ENABLE CHANGE_TRACKING", script);
+        Assert.Contains("GRANT VIEW CHANGE TRACKING ON [sales].[ProductCatalogItem]", script);
+    }
+
+    [Fact]
+    public void GeneratedDdl_EscapesSchemaName_InEveryPlaceItAppears()
+    {
+        var profile = HostileNamesProfile() with { TableName = "sales]; DROP TABLE x; --.Orders" };
+        var plan = new SyncPlan(profile.TableName, MergeStrategy.Tvp, 100, SqlBulkCopyOptions.Default, 120, [], "OrdersTableType");
+
+        var scripts = string.Join("\n",
+            _generator.GenerateCreateTableScript(profile),
+            _generator.GenerateTvpUdtScript(profile, "OrdersTableType"),
+            _generator.GenerateMergeProcedureScript(profile, plan));
+
+        Assert.Contains("[sales]]; DROP TABLE x; --].[Orders]", scripts);
+        Assert.Contains("QUOTENAME(N'sales]; DROP TABLE x; --')", scripts);
+        Assert.DoesNotContain("[sales]; DROP TABLE", scripts);
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using SmartTableSync.Strategies.Timestamp;
 using SmartTableSync.Introspection;
 using SmartTableSync.Hosting;
 using SmartTableSync.Scaffolding;
+using SmartTableSync.Sql;
 
 // Manual, on-demand tool — never run by the timer-triggered Function. Reads schema
 // (read-only) and writes reviewable .sql files; never executes anything against a
@@ -97,10 +98,12 @@ if (args.Contains("--rowversion-setup"))
 
     var failedRowVersionTables = new List<string>();
 
-    foreach (var tableName in rowVersionTableNames)
+    foreach (var requestedName in rowVersionTableNames)
     {
+        var tableName = requestedName;
         try
         {
+            tableName = SyncTableName.Normalize(requestedName);
             var profile = await rowVersionSchemaReader.ProfileTableAsync(rowVersionParent, tableName, CancellationToken.None);
             var path = Path.Combine(outputDir, $"{tableName}_RowVersionSetup.sql");
             await File.WriteAllTextAsync(path, rowVersionGenerator.GenerateRowVersionSetupScript(profile, columnName));
@@ -155,10 +158,12 @@ if (args.Contains("--change-tracking-setup"))
 
     var failedChangeTrackingTables = new List<string>();
 
-    foreach (var tableName in changeTrackingTableNames)
+    foreach (var requestedName in changeTrackingTableNames)
     {
+        var tableName = requestedName;
         try
         {
+            tableName = SyncTableName.Normalize(requestedName);
             // Catalog metadata only (columns + PK) — enough for the script, no row sampling.
             var profile = await changeTrackingSchemaReader.GetFingerprintInputsAsync(changeTrackingParent, tableName, CancellationToken.None);
             var path = Path.Combine(outputDir, $"{tableName}_ChangeTrackingSetup.sql");
@@ -213,12 +218,21 @@ await child.OpenAsync();
 
 var failedTables = new List<string>();
 
-foreach (var tableName in tableNames)
+foreach (var requestedName in tableNames)
 {
-    Console.WriteLine($"=== {tableName} ===");
+    Console.WriteLine($"=== {requestedName} ===");
+    var tableName = requestedName;
 
     try
     {
+        // "dbo.Order" -> "Order", "sales.Order" kept: the same spelling the engine uses.
+        tableName = SyncTableName.Normalize(requestedName);
+
+        // A table outside dbo gets its scripts prefixed with the schema, so dbo.Order and
+        // sales.Order written to the same folder don't overwrite each other.
+        var schema = SyncTableName.Schema(tableName);
+        var filePrefix = schema == SyncTableName.DefaultSchema ? string.Empty : $"{schema}.";
+
         var profile = await schemaReader.ProfileTableAsync(parent, tableName, CancellationToken.None);
 
         var timestampColumn = TimestampColumnResolver.Resolve(profile, syncSettings.TimestampColumns);
@@ -241,7 +255,7 @@ foreach (var tableName in tableNames)
 
         if (childIdentityColumn is not null)
         {
-            Console.WriteLine($"  child column {childIdentityColumn} is an IDENTITY column: the runtime identity needs ALTER on dbo.{tableName} " +
+            Console.WriteLine($"  child column {childIdentityColumn} is an IDENTITY column: the runtime identity needs ALTER on {schema}.{SyncTableName.Object(tableName)} " +
                 "(see sql/07_permissions.sql), or recreate the child table without IDENTITY");
         }
 
@@ -285,21 +299,22 @@ foreach (var tableName in tableNames)
             // A table type can't be altered: when the existing one no longer matches, the script
             // drops it and its procedure first.
             var typeColumns = childExists
-                ? await schemaReader.GetTableTypeColumnsAsync(child, plan.TvpTypeName!, CancellationToken.None)
+                ? await schemaReader.GetTableTypeColumnsAsync(child, tableName, plan.TvpTypeName!, CancellationToken.None)
                 : [];
             var typeIsOutdated = typeColumns.Count > 0 && !ChildSchemaComparer.TableTypeMatches(profile, typeColumns);
             var udtScript = (typeIsOutdated ? generator.GenerateDropTvpTypeScript(tableName, plan.TvpTypeName!) : "") +
                 generator.GenerateTvpUdtScript(profile, plan.TvpTypeName!);
 
-            var udtPath = Path.Combine(outputDir, $"{plan.TvpTypeName}.sql");
+            var udtPath = Path.Combine(outputDir, $"{filePrefix}{plan.TvpTypeName}.sql");
             await File.WriteAllTextAsync(udtPath, udtScript);
             Console.WriteLine(typeIsOutdated
                 ? $"  wrote {udtPath} (the existing table type is out of date: drops and recreates it; apply the procedure script after it)"
                 : $"  wrote {udtPath}");
         }
 
-        var spName = plan.MergeStrategy == MergeStrategy.Tvp ? $"sp_Sync{tableName}Batch" : $"sp_Sync{tableName}";
-        var spPath = Path.Combine(outputDir, $"{spName}.sql");
+        var tableObject = SyncTableName.Object(tableName);
+        var spName = plan.MergeStrategy == MergeStrategy.Tvp ? $"sp_Sync{tableObject}Batch" : $"sp_Sync{tableObject}";
+        var spPath = Path.Combine(outputDir, $"{filePrefix}{spName}.sql");
         await File.WriteAllTextAsync(spPath, generator.GenerateMergeProcedureScript(profile, plan));
         Console.WriteLine($"  wrote {spPath}");
     }
@@ -310,7 +325,7 @@ foreach (var tableName in tableNames)
         // column on a large table with no AllowFullRescanFor opt-in) - surfaced here instead
         // of silently generating artifacts for a configuration the runtime would refuse.
         Console.Error.WriteLine($"  FAILED: {ex.Message}");
-        failedTables.Add(tableName);
+        failedTables.Add(requestedName);
     }
 }
 

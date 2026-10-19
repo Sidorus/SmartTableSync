@@ -34,6 +34,23 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void TableNames_AreNormalized_SoDboAndUnqualifiedMeanTheSameTable()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:TableList"] = "dbo.Customer, sales.Order",
+            ["SmartTableSync:AllowFullRescanFor"] = "dbo.Customer",
+            ["SmartTableSync:TimestampColumns:dbo.Customer"] = "ModifiedAt",
+            ["SmartTableSync:IncrementalStrategyOverrides:sales.Order"] = "FullRescan",
+        });
+
+        Assert.Equal(["Customer", "sales.Order"], settings.Tables);
+        Assert.Equal(["Customer"], settings.AllowFullRescanFor);
+        Assert.Equal("ModifiedAt", settings.TimestampColumns["Customer"]);
+        Assert.Equal(IncrementalStrategy.FullRescan, settings.IncrementalStrategyOverrides["sales.Order"]);
+    }
+
+    [Fact]
     public void ChangeTrackingColumns_Missing_IsEmpty()
     {
         var settings = Bind([]);

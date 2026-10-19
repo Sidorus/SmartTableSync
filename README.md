@@ -160,7 +160,7 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `SmartTableSync:TableList` | — (required) | Comma-separated tables to sync |
+| `SmartTableSync:TableList` | — (required) | Comma-separated tables to sync: `Customer` for a table in `dbo`, `sales.Order` for any other schema |
 | `SmartTableSync:Mode` | `Manual` | `Auto` lets the engine create child tables/types/procedures itself |
 | `SmartTableSync:TimestampColumns:<Table>` | `LastUpdate` | Datetime column for the Timestamp strategy (old name `ChangeTrackingColumns` still read) |
 | `SmartTableSync:AllowFullRescanFor` | — | Large tables allowed to re-scan every run |
@@ -199,7 +199,9 @@ ALTER ROLE db_ddladmin ADD MEMBER [smarttablesync-child-provisioning];       -- 
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-runtime];   -- syncs data, no DDL
 ```
 
-The parent needs the same read rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
+For tables in another schema, create that schema in the child and give the runtime identity the
+same grant on it (`ON SCHEMA::sales`) before adding the tables. The parent needs the same read
+rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
 
 **What happens:** each run makes sure the tracking tables exist. When a table is new, or its
 parent schema changed, the engine creates the missing child table, its table type and its
@@ -283,7 +285,8 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Scope**
 - One-way only, parent → child. The child is a read-only copy; rows written directly into it
   are overwritten or removed by the next sync.
-- Only the `dbo` schema, and every synced table needs a primary key.
+- Every synced table needs a primary key. Tables can be in any schema (`sales.Order`); the child
+  keeps the parent's schema, so a parent table can't be copied into a different schema.
 - Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
   supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
 

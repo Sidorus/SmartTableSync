@@ -29,7 +29,8 @@ internal interface ISchemaReader
     /// the CHILD table to decide whether copying needs IDENTITY_INSERT.</summary>
     Task<string?> GetIdentityColumnAsync(SqlConnection connection, string tableName, CancellationToken ct);
 
-    /// <summary>The columns of a user-defined table type in dbo, in order; empty when the type
-    /// doesn't exist.</summary>
-    Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct);
+    /// <summary>The columns of a synced table's user-defined table type, which lives in the
+    /// table's schema, in order; empty when the type doesn't exist.</summary>
+    Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(
+        SqlConnection connection, string tableName, string typeName, CancellationToken ct);
 }

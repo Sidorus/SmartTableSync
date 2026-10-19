@@ -56,21 +56,26 @@ internal sealed class SchemaReader : ISchemaReader
     public async Task<IReadOnlyList<string>> FindDataSyncIncompatibleTablesAsync(SqlConnection parent, CancellationToken ct)
     {
         const string sql = """
-            SELECT DISTINCT t.name AS TableName
+            SELECT DISTINCT SCHEMA_NAME(t.schema_id) AS SchemaName, t.name AS TableName
             FROM   sys.tables t
             JOIN   sys.indexes i        ON i.object_id = t.object_id AND i.index_id > 0
             JOIN   sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
             JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
             WHERE  c.max_length = -1
-            ORDER  BY t.name
+            ORDER  BY SchemaName, TableName
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
+        // Same spelling as SmartTableSync:TableList: unqualified for dbo, "schema.Table" otherwise.
         var tables = new List<string>();
         while (await reader.ReadAsync(ct))
-            tables.Add(reader.GetString(0));
+        {
+            var schema = reader.GetString(0);
+            var table = reader.GetString(1);
+            tables.Add(schema == SyncTableName.DefaultSchema ? table : $"{schema}.{table}");
+        }
 
         return tables;
     }
@@ -79,7 +84,7 @@ internal sealed class SchemaReader : ISchemaReader
     {
         await using var cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(@TableName) IS NULL THEN 0 ELSE 1 END", connection)
         { CommandTimeout = 30 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is int intResult && intResult == 1;
     }
@@ -93,24 +98,26 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
     }
 
-    public async Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct)
+    public async Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(
+        SqlConnection connection, string tableName, string typeName, CancellationToken ct)
     {
         const string sql = """
             SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable
             FROM   sys.table_types tt
             JOIN   sys.columns c ON c.object_id = tt.type_table_object_id
             JOIN   sys.types t   ON c.user_type_id = t.user_type_id
-            WHERE  tt.name = @TypeName AND tt.schema_id = SCHEMA_ID('dbo')
+            WHERE  tt.name = @TypeName AND tt.schema_id = SCHEMA_ID(@SchemaName)
             ORDER  BY c.column_id
             """;
 
         await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
         cmd.AddParam("@TypeName", SqlDbType.NVarChar, typeName, 128);
+        cmd.AddParam("@SchemaName", SqlDbType.NVarChar, SyncTableName.Schema(tableName), 128);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<ColumnProfile>();
@@ -137,7 +144,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<ColumnProfile>();
@@ -169,7 +176,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var keyColumns = new List<string>();
@@ -188,7 +195,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is bool boolResult && boolResult;
     }
@@ -206,7 +213,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<string>();
@@ -225,7 +232,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is bool boolResult && boolResult;
     }
@@ -244,7 +251,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         if (!await reader.ReadAsync(ct) || await reader.IsDBNullAsync(0, ct))
@@ -262,7 +269,7 @@ internal sealed class SchemaReader : ISchemaReader
     {
         var selectList = string.Join(", ", lobColumnNames.Select(col => $"MAX(DATALENGTH({SqlIdentifier.Quote(col)})) AS {SqlIdentifier.Quote(col)}"));
         // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
-        var sql = $"SELECT {selectList} FROM {SqlIdentifier.Quote(tableName)}";
+        var sql = $"SELECT {selectList} FROM {SqlIdentifier.Table(tableName)}";
 
         // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- see above
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 120 };

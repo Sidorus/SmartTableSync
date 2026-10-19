@@ -42,6 +42,10 @@ dotnet tool install --global SmartTableSync.Scaffold --add-source ./nupkg
 Every command takes `--output <dir>`; the default is `sql/generated/` under the current
 directory.
 
+Name a table outside `dbo` as `schema.Table` (`sales.Order`). Its scripts create the schema in the
+child when it's missing and put the table type and procedure in it; their file names start with
+the schema (`sales.OrderTableType.sql`, `sales.sp_SyncOrderBatch.sql`).
+
 For each table, the per-table command prints the plan it derived, which is the same plan the
 sync engine derives at runtime:
 

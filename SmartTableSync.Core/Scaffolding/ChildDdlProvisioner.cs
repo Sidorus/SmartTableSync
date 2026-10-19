@@ -36,7 +36,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
 
             // A table type can't be altered: one that no longer matches the table is dropped
             // (with its procedure) and created again below.
-            var typeColumns = await _schemaReader.GetTableTypeColumnsAsync(childProvisioning, plan.TvpTypeName, ct);
+            var typeColumns = await _schemaReader.GetTableTypeColumnsAsync(childProvisioning, profile.TableName, plan.TvpTypeName, ct);
             if (typeColumns.Count > 0 && !ChildSchemaComparer.TableTypeMatches(profile, typeColumns))
             {
                 _logger.LogWarning("{Table}: table type {Type} no longer matches the table — recreating it", profile.TableName, plan.TvpTypeName);

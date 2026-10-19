@@ -50,7 +50,7 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             : [];
 
         var tvpTypeName = mergeStrategy == MergeStrategy.Tvp
-            ? $"{profile.TableName}TableType"
+            ? SyncTableName.TableTypeName(profile.TableName)
             : null;
 
         // An explicit FullRescan override is itself the operator's consent to re-scan every run.

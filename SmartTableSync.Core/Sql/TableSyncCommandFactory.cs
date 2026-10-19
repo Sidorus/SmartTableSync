@@ -21,7 +21,7 @@ internal sealed class TableSyncCommandFactory
     {
         _profile = profile;
         _plan = plan;
-        _table = $"[dbo].{SqlIdentifier.Quote(profile.TableName)}";
+        _table = SqlIdentifier.Table(profile.TableName);
     }
 
     /// <summary>Every row, page by page — the initial copy and the FullRescan strategy.</summary>

@@ -28,13 +28,13 @@ internal sealed record SyncTableConfig(
     ///
     /// TvpTypeName follows the RESOLVED merge strategy: the stored name is null unless the
     /// heuristic itself chose Tvp, so a MergeStrategyOverride of Tvp falls back to the same
-    /// "{TableName}TableType" convention. Without that, the TVP type name would be empty and
+    /// "{Table}TableType" convention. Without that, the TVP type name would be empty and
     /// every batch (and, in Auto mode, the generated CREATE TYPE) would fail.</summary>
     public SyncPlan ToSyncPlan()
     {
         var resolvedMergeStrategy = MergeStrategyOverride ?? MergeStrategy;
         var resolvedTvpTypeName = resolvedMergeStrategy == MergeStrategy.Tvp
-            ? TvpTypeName ?? $"{TableName}TableType"
+            ? TvpTypeName ?? SyncTableName.TableTypeName(TableName)
             : null;
 
         return new SyncPlan(

@@ -20,8 +20,10 @@ public static class SyncSettingsServiceCollectionExtensions
     /// approximation of this logic that could silently drift from the runtime's.</summary>
     public static void Bind(SyncSettings options, IConfiguration configuration)
     {
+        // Table names are normalized once, here ("dbo.Order" -> "Order", "sales.Order" kept), so
+        // every per-table lookup and every tracking row uses one spelling per table.
         var raw = configuration["SmartTableSync:TableList"] ?? string.Empty;
-        options.Tables = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        options.Tables = SplitTableNames(raw);
 
         // Missing or unparseable -> Manual, today's only behavior - so existing
         // deployments that predate this setting keep working unchanged.
@@ -34,11 +36,11 @@ public static class SyncSettingsServiceCollectionExtensions
         options.TimestampColumns = configuration.GetSection("SmartTableSync:ChangeTrackingColumns").GetChildren()
             .Concat(configuration.GetSection("SmartTableSync:TimestampColumns").GetChildren())
             .Where(c => !string.IsNullOrWhiteSpace(c.Value))
-            .GroupBy(c => c.Key, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(c => SyncTableName.Normalize(c.Key), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Last().Value!, StringComparer.OrdinalIgnoreCase);
 
         var rawAllowFullRescanFor = configuration["SmartTableSync:AllowFullRescanFor"] ?? string.Empty;
-        options.AllowFullRescanFor = rawAllowFullRescanFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        options.AllowFullRescanFor = SplitTableNames(rawAllowFullRescanFor);
 
         // Invalid enum values are dropped rather than throwing at startup - the same
         // "unparseable falls back to the safe default" philosophy as Mode above,
@@ -47,7 +49,8 @@ public static class SyncSettingsServiceCollectionExtensions
         options.IncrementalStrategyOverrides = configuration.GetSection("SmartTableSync:IncrementalStrategyOverrides")
             .GetChildren()
             .Where(c => Enum.TryParse<IncrementalStrategy>(c.Value, ignoreCase: true, out _))
-            .ToDictionary(c => c.Key, c => Enum.Parse<IncrementalStrategy>(c.Value!, ignoreCase: true), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(c => SyncTableName.Normalize(c.Key), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => Enum.Parse<IncrementalStrategy>(g.Last().Value!, ignoreCase: true), StringComparer.OrdinalIgnoreCase);
 
         // Whole hours, so it's easy to enter as one App Setting. Missing, unparseable or
         // negative keeps the 24-hour default; 0 explicitly disables the periodic run.
@@ -68,6 +71,11 @@ public static class SyncSettingsServiceCollectionExtensions
                 ? attempts
                 : 5;
     }
+
+    private static string[] SplitTableNames(string commaSeparated) =>
+        commaSeparated.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(SyncTableName.Normalize)
+            .ToArray();
 
     private static bool TryParseNonNegativeInt(string? value, out int result) =>
         int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result);
