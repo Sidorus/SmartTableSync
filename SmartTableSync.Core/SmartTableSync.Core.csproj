@@ -2,8 +2,10 @@
 
   <PropertyGroup>
     <PackageId>SmartTableSync</PackageId>
-    <Version>0.4.0</Version>
-    <PackageReleaseNotes>0.4.0: Managed Identity sign-in works with SqlClient 7; the documented least-privilege grants are complete and tested; child tables are created without IDENTITY, so the runtime identity needs no DDL rights; Auto mode adds new parent columns and re-scans once. Breaking: public types moved namespace (for example ISyncOrchestrator is in SmartTableSync.Abstractions). Full list: https://github.com/Sidorus/SmartTableSync/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <!-- Local default only. A release takes its version from the git tag (v0.5.0 -> 0.5.0);
+         see .github/workflows/publish.yml and docs/releasing.md. -->
+    <Version>0.0.0-dev</Version>
+    <PackageReleaseNotes>What changed in each version: https://github.com/Sidorus/SmartTableSync/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <Authors>Ruslan Sidoriako</Authors>
     <Description>A self-configuring sync engine for SQL tables Azure SQL Data Sync can't handle - nvarchar(max)/varbinary(max) indexed keys, rows over Data Sync's 24 MB batch limit. Give it a table name; it introspects the schema, derives a sync plan, and generates reviewable SQL.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

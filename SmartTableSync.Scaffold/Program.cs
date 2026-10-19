@@ -19,10 +19,13 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
         SmartTableSync.Scaffold - generates reviewable SQL for one or more tables.
 
         Usage:
-          dotnet run -- <TableName> [<TableName> ...] [--output <dir>]
-          dotnet run -- --infrastructure [--output <dir>]
-          dotnet run -- --rowversion-setup <TableName> [<TableName> ...] [--column <Name>] [--output <dir>]
-          dotnet run -- --change-tracking-setup <TableName> [<TableName> ...] [--retention-days <N>] [--output <dir>]
+          smarttablesync-scaffold <TableName> [<TableName> ...] [--output <dir>]
+          smarttablesync-scaffold --infrastructure [--output <dir>]
+          smarttablesync-scaffold --rowversion-setup <TableName> [<TableName> ...] [--column <Name>] [--output <dir>]
+          smarttablesync-scaffold --change-tracking-setup <TableName> [<TableName> ...] [--retention-days <N>] [--output <dir>]
+
+        From the repository instead of the installed tool, use
+        "dotnet run --project SmartTableSync.Scaffold --" in place of "smarttablesync-scaffold".
 
         Environment variables required (per-table generation - --infrastructure needs none):
           ParentIntrospectionConnectionString   (read-only: VIEW DEFINITION + SELECT on parent)
