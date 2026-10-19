@@ -41,6 +41,30 @@ variable "table_list" {
   description = "Comma-separated tables to sync (SmartTableSync:TableList)"
 }
 
+# Your own connection strings. When given, they become the Function's app settings exactly as
+# they are, and no managed identities are created. deploy.ps1 passes them as TF_VAR_* environment
+# variables, never in a file.
+variable "parent_connection_string" {
+  type        = string
+  description = "Parent connection string for the Function; leave out to use a managed identity"
+  default     = null
+  sensitive   = true
+}
+
+variable "child_connection_string" {
+  type        = string
+  description = "Child connection string for the Function; leave out to use a managed identity"
+  default     = null
+  sensitive   = true
+}
+
+variable "child_provisioning_connection_string" {
+  type        = string
+  description = "Auto mode with your own connection strings: the child connection string that may create objects; the child connection string when left out"
+  default     = null
+  sensitive   = true
+}
+
 variable "mode" {
   type        = string
   description = "SmartTableSync:Mode: Auto (the Function creates the child's objects) or Manual (deploy.ps1 applies the scaffold tool's scripts)"
