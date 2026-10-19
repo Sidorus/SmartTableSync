@@ -172,6 +172,9 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 
 Settings are validated at startup: an empty or duplicated table list stops the host from starting.
 
+Every setting, with what it accepts, what happens on a wrong value, examples and a complete
+configuration: [configuration reference](docs/configuration.md).
+
 ## Manual or Auto mode
 
 The child database needs a table, a table type and a merge procedure for every synced table.
