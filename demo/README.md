@@ -234,7 +234,17 @@ Things that look wrong but aren't:
 | A deleted `Customer` or `Document` row is still in the child | Those strategies find deletes by comparing keys, which runs on a fresh Function instance's first sync and then hourly. `Product` deletes arrive on the next run |
 | A row you changed in `sqldb-child` was overwritten | The child is a read-only copy: every sync makes it match the parent again |
 
-Logs and the `smarttablesync.*` metrics are in the demo's Application Insights resource.
+**Logs and metrics** are in the demo's Application Insights resource (`appi-smarttablesync-<suffix>`):
+open it in the Azure portal, then **Logs**, and run
+
+```kusto
+traces | where message has "synced," or severityLevel >= 2 | order by timestamp desc
+```
+
+to see what each run did per table, for example *"Product: 12 synced, 1 deleted, 0 errors,
+0.8s (incremental)"*. The `smarttablesync.*` metrics (rows synced, deleted and failed, duration,
+lag) are in `customMetrics`; the [setup guide](../docs/setup.md#logs-and-metrics) has more
+queries. New data takes a few minutes to appear.
 
 ## Where the demo's settings are
 

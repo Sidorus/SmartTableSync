@@ -241,7 +241,37 @@ SELECT TableName, LastSyncDate, IncrementalPosition FROM dbo.CustomSyncState;   
 SELECT TOP (20) * FROM dbo.SyncBatchLog ORDER BY LogId DESC;                     -- recent batches
 ```
 
-Logs and the `smarttablesync.*` metrics go to Application Insights.
+### Logs and metrics
+
+When the Function App is connected to Application Insights, the example Function sends its logs,
+traces and the SmartTableSync metrics there through OpenTelemetry (`Program.cs`). Azure provides
+the connection through the `APPLICATIONINSIGHTS_CONNECTION_STRING` setting; without it nothing is
+exported and the sync runs as usual. In the Application Insights resource, open **Logs**:
+
+```kusto
+// What each run did, per table: "Product: 12 synced, 1 deleted, 0 errors, 0.8s (incremental)"
+traces
+| where message has "synced," or severityLevel >= 2
+| project timestamp, severityLevel, message
+| order by timestamp desc
+
+// The SmartTableSync metrics: rows_synced, rows_errored, rows_deleted, sync_duration_seconds,
+// sync_lag_minutes, full_rescans, table_provisioned
+customMetrics
+| where name startswith "smarttablesync."
+| summarize sum(valueSum) by name, bin(timestamp, 15m)
+```
+
+`severityLevel` 2 is a warning and 3 an error; a failing table always shows up there. The
+metrics can also be charted and alerted on under **Metrics**.
+
+**In your own host** the choice is yours: the engine only writes through `ILogger` and
+`System.Diagnostics.Metrics`, and has no reference to any monitoring product. With OpenTelemetry,
+as in the example Function, register the `SmartTableSync` meter with the exporter you use
+(Azure Monitor, OTLP, Prometheus, ...). With the older Application Insights SDK, remove its
+default rule that keeps only warnings from your code, or the per-table summaries won't arrive;
+that SDK doesn't collect the `SmartTableSync` meter, so the metrics still need OpenTelemetry.
+Both send to the same Application Insights tables, so the portal looks the same either way.
 
 ## Later changes
 

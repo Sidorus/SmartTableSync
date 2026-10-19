@@ -249,7 +249,9 @@ To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet
 [examples](docs/setup.md#hosting-the-engine-yourself). `ISyncRunLock`,
 `IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
-OpenTelemetry exporter can collect them.
+OpenTelemetry exporter can collect them; a host has to register that meter with its exporter.
+The example Function does that and sends its logs and metrics to Application Insights through
+OpenTelemetry ([where to find them](docs/setup.md#logs-and-metrics)).
 
 To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
 Directory ...` in the connection string), the host also needs the
