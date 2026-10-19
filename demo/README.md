@@ -158,7 +158,70 @@ When it's done you see a table with one row per demo table and `Match` = `True`,
 strategy SmartTableSync picked for each one, and the commands for the next steps.
 
 If a step fails, the script stops and shows the error. Fix the cause and run the same command
-again: every step can be repeated safely.
+again: every step can be repeated safely. [How the script works](#how-the-script-works) explains
+what each step does on a first run and on a later one.
+
+## How the script works
+
+`run-demo.ps1` has four modes, picked by its switches:
+
+| Command | What it does |
+|---|---|
+| `./demo/run-demo.ps1 -Suffix rs01` | **Setup**: the six steps below. Creates what's missing, brings the rest up to date |
+| `./demo/run-demo.ps1 -Suffix rs01 -Changes` | Changes rows in the parent (`sql/04_parent_changes.sql`), triggers a sync and compares |
+| `./demo/run-demo.ps1 -Suffix rs01 -SyncNow` | Only triggers a sync and compares, for changes you made yourself |
+| `./demo/run-demo.ps1 -Suffix rs01 -Destroy` | Removes every Azure resource of the demo |
+
+### Before anything happens
+
+1. **Checks the tools**: `az`, `terraform`, `dotnet`, `func` and `sqlcmd` must be installed, and
+   `sqlcmd` must be go-sqlcmd (the older ODBC one can't sign in with your Azure account). A
+   missing tool stops the script with an install hint.
+2. **Reads your Azure sign-in** (`az account show`): the subscription and the account. Nothing
+   in the script or the repository names a subscription; it's always the one you're signed in to.
+3. **Pins Terraform to that subscription** (`ARM_SUBSCRIPTION_ID`) and makes your account the
+   SQL admin unless you pass `-SqlAdminLogin`.
+4. **Detects your public IP** for the SQL firewall, unless you pass `-ClientIp`.
+5. **Shows all of that and asks** *"Create the demo resources in this subscription?"*. Anything
+   but `y` stops here, before any change.
+
+### The six steps, first run and re-run
+
+Every step checks what already exists, so running the setup again repairs or updates the demo
+instead of starting over. Nothing that holds data is recreated.
+
+| Step | First run | Later runs |
+|---|---|---|
+| **1. Azure resources** (Terraform, `terraform/`) | Creates the resource group, SQL server, both databases, the runtime managed identity, the Function App with its storage, and monitoring. Shows its plan and waits for `yes`. | Compares Azure with the configuration and changes only differences, usually **"No changes"** or a small in-place update (for example the firewall rule after your IP changed). Still asks for `yes`. |
+| **2. Parent tables** (`sql/01_parent_schema.sql`, `sql/02_parent_grants.sql`) | Creates `Product`, `Customer`, `Document` and fills them with demo rows; gives the runtime identity read access. | Creates only missing tables and fills only **empty** ones, so rows you changed stay as they are. Grants are applied again, which changes nothing. |
+| **3. Change Tracking on `Product`** (scaffold tool, `generated/parent/`) | Generates and applies the script that enables Change Tracking on the database and the table. | The script sees it's already on and skips it. |
+| **4. Child objects** (scaffold tool, `generated/child/`) | Generates the tracking tables, the three child tables, their table types and merge procedures, and applies them; then the runtime identity's child rights (`sql/03_child_grants.sql`). | Empties `generated/child/` and lets the scaffold tool compare each existing child table with the parent: no `CREATE TABLE`, only what's needed (`<Table>_AddColumns.sql` for new parent columns, `<Table>_AlterColumns.sql` for a wrong precision or scale), plus table types and procedures, which are recreated when they no longer match. A table fixed by `_AlterColumns.sql` is copied again on the next sync. |
+| **5. Publish the Function** (`SmartTableSyncFunction`) | Builds the Function from your local source and uploads it. | Uploads the current local code to the same Function App: a new deployment, not a new app. |
+| **6. Sync and compare** | Starts the Function once, instead of waiting for its 5-minute timer, and compares row counts and checksums of all three tables in both databases until they match (`sql/05_table_fingerprints.sql`). Then shows what SmartTableSync recorded (`sql/06_child_sync_status.sql`). | The same; tables that didn't change report `0 synced`. |
+
+The generated SQL lands in `demo/generated/` (git-ignored), so you can read exactly what was
+applied. Terraform keeps its state in `demo/terraform/` on your machine; keep it until you've
+run `-Destroy`, because it's how Terraform knows what it created.
+
+### Who does what
+
+| Part | Signs in as | Rights |
+|---|---|---|
+| The script's SQL steps and the scaffold tool | **you**, through your Azure CLI sign-in | admin of the demo's SQL server |
+| Terraform | **you**, through your Azure CLI sign-in | creates resources in the subscription |
+| The Function (every sync) | its **managed identity** `smarttablesync-runtime` | read on the parent tables; read and write data on the child, no DDL |
+
+### When to say no
+
+Terraform shows its plan before every change. If it ever says a database or the SQL server
+**"must be replaced"** or will be **destroyed**, type `no` and look at why: that would delete
+data. Nothing in the current setup causes it; only `-Destroy` removes resources on purpose.
+
+### Safe to repeat, safe to stop
+
+- Run the setup as often as you like; a failed run can simply be run again.
+- If you stop the script halfway (Ctrl+C), run it again: it continues from what exists.
+- `-Changes` adds new rows each time; `-SyncNow` changes nothing in the parent.
 
 ## Watch changes arrive
 
