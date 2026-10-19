@@ -696,6 +696,11 @@ else {
     $provisioningTarget = $script:childTarget
 }
 
+# Syncing a database into itself can't work, and is almost always a copy-paste slip in the child's name
+if ($script:parentTarget.Server -eq $script:childTarget.Server -and $script:parentTarget.Database -eq $script:childTarget.Database) {
+    throw "The parent and the child are the same database ($($script:parentTarget.Server)/$($script:parentTarget.Database)). Check the child's database name."
+}
+
 $tableNames = @($Tables.Split(',') | Where-Object { $_.Trim() } | ForEach-Object { Get-TableName $_ })
 if (-not $tableNames) { throw 'List at least one table in -Tables.' }
 $duplicates = @($tableNames | Group-Object Setting | Where-Object Count -gt 1 | ForEach-Object Name)
