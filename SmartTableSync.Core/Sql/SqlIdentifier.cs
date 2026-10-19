@@ -12,8 +12,14 @@ internal static partial class SqlIdentifier
     /// <summary>[name], with any ']' doubled.</summary>
     public static string Quote(string identifier) => $"[{EnsureSingleLine(identifier).Replace("]", "]]")}]";
 
-    /// <summary>[dbo].[name] — every synced table lives in the dbo schema.</summary>
-    public static string DboTable(string tableName) => $"[dbo].{Quote(tableName)}";
+    /// <summary>[schema].[name] for a synced table ("Order" is [dbo].[Order]; see SyncTableName).</summary>
+    public static string Table(string tableName) =>
+        $"{Quote(SyncTableName.Schema(tableName))}.{Quote(SyncTableName.Object(tableName))}";
+
+    /// <summary>[schema].[objectName] for an object that belongs to a synced table — its
+    /// procedures and table type live in the table's schema.</summary>
+    public static string InTableSchema(string tableName, string objectName) =>
+        $"{Quote(SyncTableName.Schema(tableName))}.{Quote(objectName)}";
 
     /// <summary>N'text', with any quote doubled — for names inside string literals
     /// (OBJECT_ID('...'), sys.* lookups, PRINT messages).</summary>

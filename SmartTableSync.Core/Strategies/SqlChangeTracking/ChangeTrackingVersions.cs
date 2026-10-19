@@ -35,7 +35,7 @@ internal static class ChangeTrackingVersions
         await using var cmd = new SqlCommand(
             "SELECT CHANGE_TRACKING_MIN_VALID_VERSION(OBJECT_ID(@TableName)), CHANGE_TRACKING_CURRENT_VERSION()",
             parent, transaction) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         await reader.ReadAsync(ct);

@@ -11,6 +11,16 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
         IncrementalStrategy? strategyOverride = null,
         string? childIdentityColumn = null)
     {
+        // Every runner matches, pages and resumes by the key, so a table without one can't be
+        // synced; say how to give it one instead of failing later in the first page query.
+        if (profile.PrimaryKeyColumns.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"{profile.TableName}: the table has no PRIMARY KEY and no unique index whose key columns are all NOT NULL " +
+                "(and that isn't filtered or disabled), so there is no key to match rows by. Add one, or name the columns " +
+                $"that identify a row in SmartTableSync:KeyColumns:{profile.TableName} (for example \"ColA,ColB\").");
+        }
+
         // RowByRow when the table references another table (its row can arrive before the
         // referenced row does, and fail the FK check) or when rows are large enough that one
         // failure shouldn't fail a whole batch. Either reason alone is enough.
@@ -50,7 +60,7 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             : [];
 
         var tvpTypeName = mergeStrategy == MergeStrategy.Tvp
-            ? $"{profile.TableName}TableType"
+            ? SyncTableName.TableTypeName(profile.TableName)
             : null;
 
         // An explicit FullRescan override is itself the operator's consent to re-scan every run.

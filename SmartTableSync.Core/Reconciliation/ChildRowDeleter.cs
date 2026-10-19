@@ -26,7 +26,7 @@ internal sealed class ChildRowDeleter
         }
 
         // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- identifiers quoted by SqlIdentifier, key values are parameters
-        cmd.CommandText = $"DELETE FROM [dbo].{SqlIdentifier.Quote(_profile.TableName)} WHERE {string.Join(" AND ", whereClauses)}";
+        cmd.CommandText = $"DELETE FROM {SqlIdentifier.Table(_profile.TableName)} WHERE {string.Join(" AND ", whereClauses)}";
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

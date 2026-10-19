@@ -36,6 +36,14 @@ public sealed class SyncSettings
     public IReadOnlyDictionary<string, IncrementalStrategy> IncrementalStrategyOverrides { get; set; } =
         new Dictionary<string, IncrementalStrategy>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Per-table key columns, in key order, for a table that has neither a PRIMARY KEY
+    /// nor a unique index whose key columns are all NOT NULL. The columns must be NOT NULL and
+    /// unique together; uniqueness is checked against the parent's data whenever the table is
+    /// (re)provisioned. A table with a PRIMARY KEY can't be given one (it fails, rather than
+    /// being ignored); one with only a unique index uses these columns instead of the index's.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> KeyColumns { get; set; } =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>How often SqlChangeTracking tables run the full key-set delete reconciliation.
     /// CT already reports deletes every cycle, and ChangeTrackingSyncRunner reconciles right
     /// after any fallback re-scan, so this is only a safety net for a failed child delete or a

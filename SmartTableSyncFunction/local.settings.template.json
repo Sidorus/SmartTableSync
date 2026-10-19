@@ -23,6 +23,8 @@
 
     "_SmartTableSync:IncrementalStrategyOverrides_readme": "Per-table override of the auto-derived incremental strategy (Timestamp/FullRescan/RowVersion/SqlChangeTracking). Without this, a table with SQL Server Change Tracking enabled uses SqlChangeTracking, and a detected rowversion column wins over a configured/default datetime column. The override is validated against the table's actual schema at provisioning time - e.g. forcing RowVersion on a table with no rowversion column throws. Example: \"SmartTableSync:IncrementalStrategyOverrides:SomeTable\": \"Timestamp\".",
 
+    "_SmartTableSync:KeyColumns_readme": "Per-table key columns, comma-separated in key order, for a table with no PRIMARY KEY and no unique index whose key columns are all NOT NULL. The columns must be NOT NULL and unique together; duplicates are checked against the parent's data when the table is set up. The child table gets them as its PRIMARY KEY. Change Tracking still needs a real PRIMARY KEY. Example: \"SmartTableSync:KeyColumns:sales.Ledger\": \"Region,Code\".",
+
     "_SmartTableSync:ReconcileIntervalHours_readme": "How often (whole hours, default 1) tables on every strategy except SqlChangeTracking compare parent and child keys to remove deleted rows - their only source of deletes, so 0 is not allowed.",
     "SmartTableSync:ReconcileIntervalHours": "1",
 

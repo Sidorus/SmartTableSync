@@ -46,4 +46,9 @@ internal sealed record TableProfile(
     /// parameter to this public record would be a source-breaking change for every caller
     /// that constructs it.</summary>
     public bool IsChangeTrackingEnabled { get; init; }
+
+    /// <summary>Where PrimaryKeyColumns came from: the PRIMARY KEY constraint (the default), or,
+    /// for a table without one, a unique index or the configured key columns (SyncKeyResolver).
+    /// PrimaryKeyColumns is the sync key either way, and the child table's PRIMARY KEY.</summary>
+    public SyncKeySource KeySource { get; init; } = SyncKeySource.PrimaryKey;
 }

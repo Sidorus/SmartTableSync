@@ -143,4 +143,26 @@ public class SchemaFingerprintTests
 
         Assert.NotEqual(SchemaFingerprint.Compute(withoutIdentity), SchemaFingerprint.Compute(withIdentity));
     }
+
+    [Theory]
+    [InlineData("UniqueIndex")]
+    [InlineData("Configured")]
+    public void Compute_KeyNotFromPrimaryKey_ProducesDifferentHash(string keySourceName)
+    {
+        // The same columns becoming a real PRIMARY KEY must re-provision the table: Change
+        // Tracking becomes possible, and a configured key no longer applies.
+        var primaryKey = CreateProfile();
+        var otherSource = primaryKey with { KeySource = Enum.Parse<SyncKeySource>(keySourceName) };
+
+        Assert.NotEqual(SchemaFingerprint.Compute(primaryKey), SchemaFingerprint.Compute(otherSource));
+    }
+
+    [Fact]
+    public void Compute_UniqueIndexAndConfiguredKey_ProduceDifferentHashes()
+    {
+        var uniqueIndex = CreateProfile() with { KeySource = SyncKeySource.UniqueIndex };
+        var configured = CreateProfile() with { KeySource = SyncKeySource.Configured };
+
+        Assert.NotEqual(SchemaFingerprint.Compute(uniqueIndex), SchemaFingerprint.Compute(configured));
+    }
 }

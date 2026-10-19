@@ -14,12 +14,15 @@ internal sealed class SqlChangeTrackingStrategy : IIncrementalStrategy
         },
         IsOwnPosition: position => ChangeTrackingVersions.ParsePosition(position) is not null);
 
-    // SQL Server refuses to enable Change Tracking without a PRIMARY KEY; the key check is a guard.
+    // SQL Server refuses to enable Change Tracking without a PRIMARY KEY, and reports changes by
+    // its columns; a key taken from a unique index or configuration can't stand in for it.
     public string? WhyNotApplicable(StrategyCandidate candidate) =>
-        candidate.Profile.IsChangeTrackingEnabled && candidate.Profile.PrimaryKeyColumns.Count > 0
-            ? null
-            : "SQL Server Change Tracking is not enabled on this table — a DBA must run ALTER TABLE ... ENABLE " +
-              "CHANGE_TRACKING first (see SmartTableSync.Scaffold --change-tracking-setup).";
+        !candidate.Profile.IsChangeTrackingEnabled
+            ? "SQL Server Change Tracking is not enabled on this table — a DBA must run ALTER TABLE ... ENABLE " +
+              "CHANGE_TRACKING first (see SmartTableSync.Scaffold --change-tracking-setup)."
+            : candidate.Profile.KeySource != SyncKeySource.PrimaryKey || candidate.Profile.PrimaryKeyColumns.Count == 0
+                ? "SQL Server Change Tracking needs a PRIMARY KEY constraint, and this table has none."
+                : null;
 
     public string? IncrementalColumn(StrategyCandidate candidate) => null;
 

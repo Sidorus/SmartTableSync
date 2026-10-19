@@ -36,7 +36,7 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
 
             // A table type can't be altered: one that no longer matches the table is dropped
             // (with its procedure) and created again below.
-            var typeColumns = await _schemaReader.GetTableTypeColumnsAsync(childProvisioning, plan.TvpTypeName, ct);
+            var typeColumns = await _schemaReader.GetTableTypeColumnsAsync(childProvisioning, profile.TableName, plan.TvpTypeName, ct);
             if (typeColumns.Count > 0 && !ChildSchemaComparer.TableTypeMatches(profile, typeColumns))
             {
                 _logger.LogWarning("{Table}: table type {Type} no longer matches the table — recreating it", profile.TableName, plan.TvpTypeName);
@@ -61,7 +61,9 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
     // Adds new parent columns; anything that could lose or break data is left to a person.
     private async Task EvolveChildTableAsync(SqlConnection childProvisioning, TableProfile profile, CancellationToken ct)
     {
-        var childProfile = await _schemaReader.GetFingerprintInputsAsync(childProvisioning, profile.TableName, ct);
+        // The child's key is always its PRIMARY KEY (created from the parent's sync key), so no
+        // configured key columns.
+        var childProfile = await _schemaReader.GetFingerprintInputsAsync(childProvisioning, profile.TableName, configuredKeyColumns: null, ct);
         var diff = ChildSchemaComparer.Compare(profile, childProfile);
 
         if (diff.Problems.Count > 0)

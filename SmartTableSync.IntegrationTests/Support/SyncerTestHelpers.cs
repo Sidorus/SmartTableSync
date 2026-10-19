@@ -82,7 +82,7 @@ internal static class SyncerTestHelpers
     public static async Task<(int Rows, int? Checksum)> TableFingerprintAsync(SqlConnection connection, string tableName)
     {
         await using var cmd = new SqlCommand(
-            $"SELECT COUNT(*), CHECKSUM_AGG(BINARY_CHECKSUM(*)) FROM [dbo].[{tableName}]", connection);
+            $"SELECT COUNT(*), CHECKSUM_AGG(BINARY_CHECKSUM(*)) FROM {SmartTableSync.Sql.SqlIdentifier.Table(tableName)}", connection);
         await using var reader = await cmd.ExecuteReaderAsync();
         await reader.ReadAsync();
         return (reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetInt32(1));

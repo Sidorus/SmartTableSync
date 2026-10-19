@@ -2,14 +2,19 @@ namespace SmartTableSync.Introspection;
 
 internal interface ISchemaReader
 {
-    /// <summary>Cheap, catalog-metadata-only profile: columns/types + primary key order +
-    /// identity column. Safe to run on every cold start to check for schema drift.</summary>
-    Task<TableProfile> GetFingerprintInputsAsync(SqlConnection parent, string tableName, CancellationToken ct);
+    /// <summary>Cheap, catalog-metadata-only profile: columns/types + sync key order +
+    /// identity column. Safe to run on every cold start to check for schema drift.
+    /// configuredKeyColumns (SmartTableSync:KeyColumns) is the key of a parent table without a
+    /// PRIMARY KEY (SyncKeyResolver); null when reading a child table.</summary>
+    Task<TableProfile> GetFingerprintInputsAsync(
+        SqlConnection parent, string tableName, IReadOnlyList<string>? configuredKeyColumns, CancellationToken ct);
 
     /// <summary>Full profile — everything GetFingerprintInputsAsync returns, plus indexed
     /// LOB-key detection, incoming-FK detection, and row count/size sampling. Only run
-    /// when (re)provisioning a table, not on every invocation.</summary>
-    Task<TableProfile> ProfileTableAsync(SqlConnection parent, string tableName, CancellationToken ct);
+    /// when (re)provisioning a table, not on every invocation. A configured key is checked for
+    /// duplicate values here, so once per provisioning.</summary>
+    Task<TableProfile> ProfileTableAsync(
+        SqlConnection parent, string tableName, IReadOnlyList<string>? configuredKeyColumns, CancellationToken ct);
 
     /// <summary>Stretch goal: scans every table in the parent database (not just the
     /// configured ones) and returns the names of tables with an indexed nvarchar(max)/
@@ -29,7 +34,8 @@ internal interface ISchemaReader
     /// the CHILD table to decide whether copying needs IDENTITY_INSERT.</summary>
     Task<string?> GetIdentityColumnAsync(SqlConnection connection, string tableName, CancellationToken ct);
 
-    /// <summary>The columns of a user-defined table type in dbo, in order; empty when the type
-    /// doesn't exist.</summary>
-    Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct);
+    /// <summary>The columns of a synced table's user-defined table type, which lives in the
+    /// table's schema, in order; empty when the type doesn't exist.</summary>
+    Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(
+        SqlConnection connection, string tableName, string typeName, CancellationToken ct);
 }

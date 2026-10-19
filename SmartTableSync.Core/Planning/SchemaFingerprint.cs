@@ -5,8 +5,8 @@ namespace SmartTableSync.Planning;
 
 /// <summary>
 /// Pure hash of the parts of a TableProfile that determine sync behavior: column
-/// name/type/length/nullability, primary key columns (in order — order matters for
-/// composite keys), identity column, and whether SQL Server Change Tracking is enabled on
+/// name/type/length/nullability, sync key columns (in order — order matters for
+/// composite keys) and where they come from, identity column, and whether SQL Server Change Tracking is enabled on
 /// the table (it selects the incremental strategy). Deliberately excludes row count/size/FK data,
 /// which change constantly without requiring re-provisioning.
 ///
@@ -40,6 +40,12 @@ internal static class SchemaFingerprint
         // upgrade), while a DBA enabling or disabling CT does trigger one.
         if (profile.IsChangeTrackingEnabled)
             sb.Append("|ChangeTracking:on");
+
+        // Same rule for a key that doesn't come from a PRIMARY KEY: tables with one keep their
+        // fingerprint, and a table that gains a PRIMARY KEY over the same columns is re-provisioned
+        // (Change Tracking becomes possible).
+        if (profile.KeySource != SyncKeySource.PrimaryKey)
+            sb.Append("|KeySource:").Append(profile.KeySource);
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(hash);

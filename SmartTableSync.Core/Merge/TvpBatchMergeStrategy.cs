@@ -29,7 +29,7 @@ internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
 
         sp.Parameters.Add(new SqlParameter("@Rows", SqlDbType.Structured)
         {
-            TypeName = SqlIdentifier.DboTable(_plan.TvpTypeName!),
+            TypeName = SqlIdentifier.InTableSchema(_profile.TableName, _plan.TvpTypeName!),
             Value = TvpShapedRows(batch)
         });
 

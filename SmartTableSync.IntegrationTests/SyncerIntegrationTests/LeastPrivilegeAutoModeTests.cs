@@ -133,7 +133,7 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         // Assert
         Assert.Empty(errors);
         await AssertChildMatchesParentAsync(parent, child, table);
-        var typeColumns = await new SmartTableSync.Introspection.SchemaReader().GetTableTypeColumnsAsync(child, $"{table}TableType", CancellationToken.None);
+        var typeColumns = await new SmartTableSync.Introspection.SchemaReader().GetTableTypeColumnsAsync(child, table, $"{table}TableType", CancellationToken.None);
         Assert.Equal(["Id", "Name", "LastUpdate", "Category", "Price"], typeColumns.Select(c => c.Name));
     }
 
@@ -162,23 +162,256 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         Assert.Equal(100, childName.MaxLength);
     }
 
+    [Fact]
+    public async Task AutoMode_SameTableNameInTwoSchemas_SyncsEachIntoItsOwnSchema()
+    {
+        // Arrange - [dbo].[Order] and [sales].[Order] with different rows. The documented step for
+        // a schema other than dbo in Auto mode: an administrator creates it in the child and gives
+        // the runtime identity the same schema-level grant it has on dbo.
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+
+        await ExecuteAsync(parent, "CREATE SCHEMA [sales]");
+        await CreateParentTableAsync(parent, "Order");
+        await CreateParentTableAsync(parent, "sales.Order");
+        await ExecuteAsync(parent, "UPDATE [sales].[Order] SET [Name] = N'Sales item' WHERE [Id] <= 10; DELETE FROM [sales].[Order] WHERE [Id] > 40");
+
+        await ExecuteAsync(child, "CREATE SCHEMA [sales]");
+        await ExecuteAsync(child, "GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::[sales] TO [smarttablesync-runtime]");
+
+        // Act
+        var errors = await RunAutoModeAsync("Order", "sales.Order");
+
+        // Assert - each child table matches its own parent table, and they differ from each other
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, "Order", "sales.Order");
+        Assert.NotEqual(
+            await SyncerTestHelpers.TableFingerprintAsync(child, "Order"),
+            await SyncerTestHelpers.TableFingerprintAsync(child, "sales.Order"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.procedures WHERE name = 'sp_SyncOrderBatch' AND schema_id = SCHEMA_ID('sales')"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.table_types WHERE name = 'OrderTableType' AND schema_id = SCHEMA_ID('sales')"));
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM [dbo].[CustomSyncState] WHERE [TableName] = N'sales.Order'"));
+
+        // Arrange - a change in the sales table only
+        await ExecuteAsync(parent, "UPDATE [sales].[Order] SET [Name] = N'Changed', [LastUpdate] = GETUTCDATE() WHERE [Id] = 1");
+        await ExecuteAsync(parent, "INSERT INTO [sales].[Order] ([Id], [Name], [LastUpdate]) VALUES (1000, N'New', GETUTCDATE())");
+
+        // Act
+        errors = await RunAutoModeAsync("Order", "sales.Order");
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, "Order", "sales.Order");
+    }
+
+    [Fact]
+    public async Task AutoMode_TableWithoutPrimaryKey_SyncsByItsBestUniqueIndex()
+    {
+        // Arrange - a heap whose unique indexes compete: one on a nullable column, a filtered one,
+        // a disabled one, and two usable ones; the one with fewer key columns must win. Its key
+        // order (Region, Code) differs from the column order.
+        const string table = "RegionalCode";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreateParentHeapAsync(parent, table);
+        await ExecuteAsync(parent, $"""
+            CREATE UNIQUE INDEX [UX_{table}_Nullable] ON [dbo].[{table}] ([Note]);
+            CREATE UNIQUE INDEX [UX_{table}_Filtered] ON [dbo].[{table}] ([Seq]) WHERE [Seq] > 0;
+            CREATE UNIQUE INDEX [UX_{table}_Disabled] ON [dbo].[{table}] ([Seq]);
+            ALTER INDEX [UX_{table}_Disabled] ON [dbo].[{table}] DISABLE;
+            CREATE UNIQUE INDEX [UX_{table}_Wide] ON [dbo].[{table}] ([Region], [Code], [Seq]);
+            CREATE UNIQUE INDEX [UX_{table}_Best] ON [dbo].[{table}] ([Region], [Code]) INCLUDE ([Name]);
+            """);
+
+        // Act
+        var errors = await RunAutoModeAsync(table);
+
+        // Assert - the child got that index's columns as its PRIMARY KEY, and the rows
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+        Assert.Equal(["Region", "Code"], await ChildPrimaryKeyAsync(child, table));
+
+        // Act - an update, an insert and a delete, matched and reconciled by that key
+        await ChangeParentRowsAsync(parent, table);
+        errors = await RunAutoModeAsync(table);
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+    }
+
+    [Fact]
+    public async Task AutoMode_TableWithConfiguredKeyColumns_SyncsByThem()
+    {
+        // Arrange - a heap with no unique index at all; the key is named in the settings
+        const string table = "ConfiguredKeyCode";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreateParentHeapAsync(parent, table);
+        var keyColumns = new Dictionary<string, IReadOnlyList<string>> { [table] = ["Region", "Code"] };
+
+        // Act
+        var errors = await RunAutoModeAsync(keyColumns, table);
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+        Assert.Equal(["Region", "Code"], await ChildPrimaryKeyAsync(child, table));
+
+        // Act
+        await ChangeParentRowsAsync(parent, table);
+        errors = await RunAutoModeAsync(keyColumns, table);
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+    }
+
+    [Fact]
+    public async Task AutoMode_ConfiguredKeyColumnsWithDuplicateValues_FailsTheTableBeforeCreatingIt()
+    {
+        // Arrange - Region alone repeats in the data
+        const string table = "DuplicateKeyCode";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreateParentHeapAsync(parent, table);
+
+        // Act
+        var errors = await RunAutoModeAsync(new Dictionary<string, IReadOnlyList<string>> { [table] = ["Region"] }, table);
+
+        // Assert - a clear message, and nothing created in the child
+        Assert.Contains(errors, e => e.Contains("don't identify each row", StringComparison.Ordinal));
+        Assert.Equal(0, await ScalarAsync(child, $"SELECT COUNT(*) FROM sys.tables WHERE name = '{table}'"));
+    }
+
+    [Fact]
+    public async Task AutoMode_TableWithoutAnyKey_FailsNamingTheKeyColumnsSetting()
+    {
+        // Arrange
+        const string table = "KeylessCode";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreateParentHeapAsync(parent, table);
+
+        // Act
+        var errors = await RunAutoModeAsync(table);
+
+        // Assert
+        Assert.Contains(errors, e => e.Contains($"SmartTableSync:KeyColumns:{table}", StringComparison.Ordinal));
+        Assert.Equal(0, await ScalarAsync(child, $"SELECT COUNT(*) FROM sys.tables WHERE name = '{table}'"));
+    }
+
+    [Fact]
+    public async Task ProvisioningIdentity_CanCreateAMissingChildSchema()
+    {
+        // The generated CREATE TABLE script creates the table's schema when the child lacks it;
+        // db_ddladmin, the provisioning identity's only right, must be enough for that.
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await child.OpenAsync();
+
+        var profile = new SmartTableSync.Introspection.TableProfile(
+            TableName: "archive.Note",
+            Columns: [new("Id", "int", 4, false), new("Text", "nvarchar", 200, true)],
+            PrimaryKeyColumns: ["Id"],
+            IdentityColumn: null,
+            IndexedLobColumns: [],
+            ReferencesOtherTables: false,
+            RowCount: 0,
+            AvgRowSizeBytes: 0,
+            MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+        await MsSqlTestFixture.RunGeneratedScriptAsync(
+            _identities.ChildConnectionString(ChildProvisioning),
+            new SmartTableSync.Scaffolding.SqlArtifactGenerator().GenerateCreateTableScript(profile),
+            "archive.Note as the provisioning identity");
+
+        Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.tables WHERE name = 'Note' AND schema_id = SCHEMA_ID('archive')"));
+    }
+
     // A new parent table with 50 rows, and the documented step for adding a table: read access
     // for the runtime identity on it in the parent. The rows were last changed an hour ago, outside
     // the Timestamp strategy's one-minute look-back, so no incremental pass reads them again.
     private static async Task CreateParentTableAsync(SqlConnection parent, string table)
     {
+        var quoted = SmartTableSync.Sql.SqlIdentifier.Table(table);
+        var constraint = $"DF_{SmartTableSync.Sql.SyncTableName.Schema(table)}_{SmartTableSync.Sql.SyncTableName.Object(table)}_LastUpdate";
+
         await ExecuteAsync(parent, $"""
-            CREATE TABLE [dbo].[{table}] (
+            CREATE TABLE {quoted} (
                 [Id] INT NOT NULL PRIMARY KEY,
                 [Name] NVARCHAR(50) NOT NULL,
-                [LastUpdate] DATETIME NOT NULL CONSTRAINT [DF_{table}_LastUpdate] DEFAULT (GETUTCDATE()));
-            INSERT INTO [dbo].[{table}] ([Id], [Name], [LastUpdate])
+                [LastUpdate] DATETIME NOT NULL CONSTRAINT [{constraint}] DEFAULT (GETUTCDATE()));
+            INSERT INTO {quoted} ([Id], [Name], [LastUpdate])
             SELECT TOP (50) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'Item', DATEADD(hour, -1, GETUTCDATE()) FROM sys.all_columns;
+            GRANT SELECT, VIEW DEFINITION ON {quoted} TO [smarttablesync-runtime];
+            """);
+    }
+
+    // A parent heap (no PRIMARY KEY, no index) with 50 rows, granted like CreateParentTableAsync.
+    // (Region, Code) is unique, Region alone isn't; Seq and the nullable Note are unique too.
+    private static async Task CreateParentHeapAsync(SqlConnection parent, string table)
+    {
+        await ExecuteAsync(parent, $"""
+            CREATE TABLE [dbo].[{table}] (
+                [Seq] INT NOT NULL,
+                [Code] NVARCHAR(20) NOT NULL,
+                [Region] CHAR(2) NOT NULL,
+                [Name] NVARCHAR(50) NOT NULL,
+                [Note] NVARCHAR(50) NULL,
+                [LastUpdate] DATETIME NOT NULL);
+            INSERT INTO [dbo].[{table}] ([Seq], [Code], [Region], [Name], [Note], [LastUpdate])
+            SELECT n, CONCAT(N'C', n), CHOOSE(n % 3 + 1, 'NO', 'SE', 'FI'), N'Item', CONCAT(N'Note ', n), DATEADD(hour, -1, GETUTCDATE())
+            FROM (SELECT TOP (50) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_columns) AS numbers;
             GRANT SELECT, VIEW DEFINITION ON [dbo].[{table}] TO [smarttablesync-runtime];
             """);
     }
 
+    private static Task ChangeParentRowsAsync(SqlConnection parent, string table) => ExecuteAsync(parent, $"""
+        UPDATE [dbo].[{table}] SET [Name] = N'Changed', [LastUpdate] = GETUTCDATE() WHERE [Seq] = 1;
+        INSERT INTO [dbo].[{table}] ([Seq], [Code], [Region], [Name], [Note], [LastUpdate])
+        VALUES (1000, N'C1000', 'SE', N'New', NULL, GETUTCDATE());
+        DELETE FROM [dbo].[{table}] WHERE [Seq] = 2;
+        """);
+
+    private static async Task<IReadOnlyList<string>> ChildPrimaryKeyAsync(SqlConnection child, string table)
+    {
+        await using var command = new SqlCommand($"""
+            SELECT c.name
+            FROM   sys.key_constraints kc
+            JOIN   sys.index_columns ic ON ic.object_id = kc.parent_object_id AND ic.index_id = kc.unique_index_id
+            JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE  kc.parent_object_id = OBJECT_ID(N'[dbo].[{table}]') AND kc.type = 'PK'
+            ORDER  BY ic.key_ordinal
+            """, child);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        var columns = new List<string>();
+        while (await reader.ReadAsync())
+            columns.Add(reader.GetString(0));
+
+        return columns;
+    }
+
+    private static async Task<int> ScalarAsync(SqlConnection connection, string sql)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        return (int)(await command.ExecuteScalarAsync())!;
+    }
+
     private Task<IReadOnlyList<string>> RunAutoModeAsync(params string[] tables) =>
+        RunAutoModeAsync(new Dictionary<string, IReadOnlyList<string>>(), tables);
+
+    private Task<IReadOnlyList<string>> RunAutoModeAsync(IReadOnlyDictionary<string, IReadOnlyList<string>> keyColumns, params string[] tables) =>
         SyncerTestHelpers.RunOrchestratorAsync(
             new Dictionary<string, string?>
             {
@@ -186,7 +419,7 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
                 ["ChildDbConnectionString"] = _identities.ChildConnectionString(Runtime),
                 ["ChildProvisioningConnectionString"] = _identities.ChildConnectionString(ChildProvisioning),
             },
-            new SyncSettings { Tables = tables.Length > 0 ? tables : _tables, Mode = SyncMode.Auto });
+            new SyncSettings { Tables = tables.Length > 0 ? tables : _tables, Mode = SyncMode.Auto, KeyColumns = keyColumns });
 
     private static async Task AssertChildMatchesParentAsync(SqlConnection parent, SqlConnection child, params string[] tables)
     {

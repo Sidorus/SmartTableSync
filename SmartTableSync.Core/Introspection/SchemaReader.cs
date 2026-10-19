@@ -8,17 +8,32 @@ namespace SmartTableSync.Introspection;
 /// </summary>
 internal sealed class SchemaReader : ISchemaReader
 {
-    public async Task<TableProfile> GetFingerprintInputsAsync(SqlConnection parent, string tableName, CancellationToken ct)
+    /// <summary>A profile without configured key columns: for a child table, or a parent table
+    /// that has a PRIMARY KEY or a usable unique index.</summary>
+    public Task<TableProfile> GetFingerprintInputsAsync(SqlConnection connection, string tableName, CancellationToken ct) =>
+        GetFingerprintInputsAsync(connection, tableName, configuredKeyColumns: null, ct);
+
+    public async Task<TableProfile> GetFingerprintInputsAsync(
+        SqlConnection parent, string tableName, IReadOnlyList<string>? configuredKeyColumns, CancellationToken ct)
     {
         var columns = await GetColumnsAsync(parent, tableName, ct);
         var primaryKeyColumns = await GetPrimaryKeyColumnsAsync(parent, tableName, ct);
+
+        // The unique-index query runs only for a table that has neither a PRIMARY KEY nor a
+        // configured key, so a table with a PRIMARY KEY costs no extra query.
+        var uniqueIndexColumns = primaryKeyColumns.Count == 0 && configuredKeyColumns is not { Count: > 0 }
+            ? await GetUniqueIndexKeyColumnsAsync(parent, tableName, ct)
+            : [];
+        var (keyColumns, keySource) = SyncKeyResolver.Resolve(
+            tableName, columns, primaryKeyColumns, configuredKeyColumns, uniqueIndexColumns);
+
         var identityColumn = await GetIdentityColumnAsync(parent, tableName, ct);
         var isChangeTrackingEnabled = await GetIsChangeTrackingEnabledAsync(parent, tableName, ct);
 
         return new TableProfile(
             TableName: tableName,
             Columns: columns,
-            PrimaryKeyColumns: primaryKeyColumns,
+            PrimaryKeyColumns: keyColumns,
             IdentityColumn: identityColumn,
             IndexedLobColumns: [],
             ReferencesOtherTables: false,
@@ -27,12 +42,23 @@ internal sealed class SchemaReader : ISchemaReader
             MaxLobColumnSizeBytes: new Dictionary<string, long>())
         {
             IsChangeTrackingEnabled = isChangeTrackingEnabled,
+            KeySource = keySource,
         };
     }
 
-    public async Task<TableProfile> ProfileTableAsync(SqlConnection parent, string tableName, CancellationToken ct)
+    /// <summary>A full profile without configured key columns.</summary>
+    public Task<TableProfile> ProfileTableAsync(SqlConnection parent, string tableName, CancellationToken ct) =>
+        ProfileTableAsync(parent, tableName, configuredKeyColumns: null, ct);
+
+    public async Task<TableProfile> ProfileTableAsync(
+        SqlConnection parent, string tableName, IReadOnlyList<string>? configuredKeyColumns, CancellationToken ct)
     {
-        var cheap = await GetFingerprintInputsAsync(parent, tableName, ct);
+        var cheap = await GetFingerprintInputsAsync(parent, tableName, configuredKeyColumns, ct);
+
+        // A PRIMARY KEY or unique index guarantees unique values; configured columns are only a
+        // claim, checked against the data whenever the table is (re)provisioned.
+        if (cheap.KeySource == SyncKeySource.Configured)
+            await EnsureKeyIsUniqueAsync(parent, tableName, cheap.PrimaryKeyColumns, ct);
 
         var indexedLobColumns = await GetIndexedLobColumnsAsync(parent, tableName, ct);
         var referencesOtherTables = await GetReferencesOtherTablesAsync(parent, tableName, ct);
@@ -56,21 +82,26 @@ internal sealed class SchemaReader : ISchemaReader
     public async Task<IReadOnlyList<string>> FindDataSyncIncompatibleTablesAsync(SqlConnection parent, CancellationToken ct)
     {
         const string sql = """
-            SELECT DISTINCT t.name AS TableName
+            SELECT DISTINCT SCHEMA_NAME(t.schema_id) AS SchemaName, t.name AS TableName
             FROM   sys.tables t
             JOIN   sys.indexes i        ON i.object_id = t.object_id AND i.index_id > 0
             JOIN   sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
             JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
             WHERE  c.max_length = -1
-            ORDER  BY t.name
+            ORDER  BY SchemaName, TableName
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
+        // Same spelling as SmartTableSync:TableList: unqualified for dbo, "schema.Table" otherwise.
         var tables = new List<string>();
         while (await reader.ReadAsync(ct))
-            tables.Add(reader.GetString(0));
+        {
+            var schema = reader.GetString(0);
+            var table = reader.GetString(1);
+            tables.Add(schema == SyncTableName.DefaultSchema ? table : $"{schema}.{table}");
+        }
 
         return tables;
     }
@@ -79,7 +110,7 @@ internal sealed class SchemaReader : ISchemaReader
     {
         await using var cmd = new SqlCommand("SELECT CASE WHEN OBJECT_ID(@TableName) IS NULL THEN 0 ELSE 1 END", connection)
         { CommandTimeout = 30 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is int intResult && intResult == 1;
     }
@@ -93,24 +124,26 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
     }
 
-    public async Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(SqlConnection connection, string typeName, CancellationToken ct)
+    public async Task<IReadOnlyList<ColumnProfile>> GetTableTypeColumnsAsync(
+        SqlConnection connection, string tableName, string typeName, CancellationToken ct)
     {
         const string sql = """
             SELECT c.name AS ColumnName, t.name AS SqlTypeName, c.max_length AS MaxLength, c.is_nullable AS IsNullable
             FROM   sys.table_types tt
             JOIN   sys.columns c ON c.object_id = tt.type_table_object_id
             JOIN   sys.types t   ON c.user_type_id = t.user_type_id
-            WHERE  tt.name = @TypeName AND tt.schema_id = SCHEMA_ID('dbo')
+            WHERE  tt.name = @TypeName AND tt.schema_id = SCHEMA_ID(@SchemaName)
             ORDER  BY c.column_id
             """;
 
         await using var cmd = new SqlCommand(sql, connection) { CommandTimeout = 60 };
         cmd.AddParam("@TypeName", SqlDbType.NVarChar, typeName, 128);
+        cmd.AddParam("@SchemaName", SqlDbType.NVarChar, SyncTableName.Schema(tableName), 128);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<ColumnProfile>();
@@ -137,7 +170,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<ColumnProfile>();
@@ -169,7 +202,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var keyColumns = new List<string>();
@@ -177,6 +210,65 @@ internal sealed class SchemaReader : ISchemaReader
             keyColumns.Add(reader.GetString(0));
 
         return keyColumns;
+    }
+
+    /// <summary>The key columns of the unique index that stands in for a missing PRIMARY KEY:
+    /// enabled, unfiltered, every key column NOT NULL and not rowversion (its values can't be
+    /// copied), fewest key columns first, then lowest index_id so the choice is stable. Included
+    /// columns (key_ordinal 0) don't count. Empty when no index qualifies.</summary>
+    private static async Task<IReadOnlyList<string>> GetUniqueIndexKeyColumnsAsync(SqlConnection parent, string tableName, CancellationToken ct)
+    {
+        const string sql = """
+            WITH Candidate AS (
+                SELECT TOP (1) i.object_id, i.index_id
+                FROM   sys.indexes i
+                JOIN   sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal > 0
+                JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                WHERE  i.object_id = OBJECT_ID(@TableName)
+                  AND  i.is_unique = 1
+                  AND  i.has_filter = 0
+                  AND  i.is_disabled = 0
+                  AND  i.is_hypothetical = 0
+                GROUP  BY i.object_id, i.index_id
+                HAVING MAX(CASE WHEN c.is_nullable = 1 OR c.system_type_id = 189 OR c.max_length = -1 THEN 1 ELSE 0 END) = 0
+                ORDER  BY COUNT(*), i.index_id
+            )
+            SELECT c.name AS ColumnName
+            FROM   Candidate k
+            JOIN   sys.index_columns ic ON ic.object_id = k.object_id AND ic.index_id = k.index_id AND ic.key_ordinal > 0
+            JOIN   sys.columns c        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            ORDER  BY ic.key_ordinal
+            """;
+
+        await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        var keyColumns = new List<string>();
+        while (await reader.ReadAsync(ct))
+            keyColumns.Add(reader.GetString(0));
+
+        return keyColumns;
+    }
+
+    /// <summary>Fails when any combination of the configured key columns' values occurs more
+    /// than once. One grouped scan of the table; no values are read back or logged.</summary>
+    private static async Task EnsureKeyIsUniqueAsync(
+        SqlConnection parent, string tableName, IReadOnlyList<string> keyColumns, CancellationToken ct)
+    {
+        var groupBy = string.Join(", ", keyColumns.Select(SqlIdentifier.Quote));
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
+        var sql = $"SELECT TOP (1) 1 FROM {SqlIdentifier.Table(tableName)} GROUP BY {groupBy} HAVING COUNT(*) > 1";
+
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- see above
+        await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 300 };
+        if (await cmd.ExecuteScalarAsync(ct) is not null)
+        {
+            throw new InvalidOperationException(
+                $"{tableName}: the configured key columns ({string.Join(", ", keyColumns)}) don't identify each row — " +
+                "at least one combination of their values occurs more than once in the parent table. " +
+                "Choose columns that are unique (SmartTableSync:KeyColumns), or add a PRIMARY KEY or unique index to the table.");
+        }
     }
 
     private static async Task<bool> GetIsChangeTrackingEnabledAsync(SqlConnection parent, string tableName, CancellationToken ct)
@@ -188,7 +280,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is bool boolResult && boolResult;
     }
@@ -206,7 +298,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         var columns = new List<string>();
@@ -225,7 +317,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is bool boolResult && boolResult;
     }
@@ -244,7 +336,7 @@ internal sealed class SchemaReader : ISchemaReader
             """;
 
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 60 };
-        cmd.AddParam("@TableName", SqlDbType.NVarChar, tableName, 256);
+        cmd.AddParam("@TableName", SqlDbType.NVarChar, SqlIdentifier.Table(tableName), 256);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
 
         if (!await reader.ReadAsync(ct) || await reader.IsDBNullAsync(0, ct))
@@ -262,7 +354,7 @@ internal sealed class SchemaReader : ISchemaReader
     {
         var selectList = string.Join(", ", lobColumnNames.Select(col => $"MAX(DATALENGTH({SqlIdentifier.Quote(col)})) AS {SqlIdentifier.Quote(col)}"));
         // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- only identifiers, all quoted by SqlIdentifier
-        var sql = $"SELECT {selectList} FROM {SqlIdentifier.Quote(tableName)}";
+        var sql = $"SELECT {selectList} FROM {SqlIdentifier.Table(tableName)}";
 
         // nosemgrep: csharp.lang.security.sqli.csharp-sqli.csharp-sqli -- see above
         await using var cmd = new SqlCommand(sql, parent) { CommandTimeout = 120 };

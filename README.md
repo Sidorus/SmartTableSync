@@ -160,11 +160,12 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `SmartTableSync:TableList` | — (required) | Comma-separated tables to sync |
+| `SmartTableSync:TableList` | — (required) | Comma-separated tables to sync: `Customer` for a table in `dbo`, `sales.Order` for any other schema |
 | `SmartTableSync:Mode` | `Manual` | `Auto` lets the engine create child tables/types/procedures itself |
 | `SmartTableSync:TimestampColumns:<Table>` | `LastUpdate` | Datetime column for the Timestamp strategy (old name `ChangeTrackingColumns` still read) |
 | `SmartTableSync:AllowFullRescanFor` | — | Large tables allowed to re-scan every run |
 | `SmartTableSync:IncrementalStrategyOverrides:<Table>` | — | Force `Timestamp`, `RowVersion`, `FullRescan` or `SqlChangeTracking` |
+| `SmartTableSync:KeyColumns:<Table>` | — | Key columns (`"ColA,ColB"`) for a table without a primary key; without it, a unique index with `NOT NULL` key columns is used |
 | `SmartTableSync:ReconcileIntervalHours` | `1` | Delete-reconciliation interval for non Change Tracking tables |
 | `SmartTableSync:ChangeTrackingReconcileIntervalHours` | `24` | Same for Change Tracking tables (`0` = only after a fallback re-scan) |
 | `SmartTableSync:ConnectionOpenAttempts` | `5` | Attempts to open a connection on transient errors (1–60) |
@@ -199,7 +200,9 @@ ALTER ROLE db_ddladmin ADD MEMBER [smarttablesync-child-provisioning];       -- 
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-runtime];   -- syncs data, no DDL
 ```
 
-The parent needs the same read rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
+For tables in another schema, create that schema in the child and give the runtime identity the
+same grant on it (`ON SCHEMA::sales`) before adding the tables. The parent needs the same read
+rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
 
 **What happens:** each run makes sure the tracking tables exist. When a table is new, or its
 parent schema changed, the engine creates the missing child table, its table type and its
@@ -283,7 +286,17 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Scope**
 - One-way only, parent → child. The child is a read-only copy; rows written directly into it
   are overwritten or removed by the next sync.
-- Only the `dbo` schema, and every synced table needs a primary key.
+- Every synced table needs a key: its primary key; without one, the columns named in
+  `SmartTableSync:KeyColumns:<Table>` (`NOT NULL`, unique together), or else a unique index whose
+  key columns are all `NOT NULL` (not filtered, not disabled). Configured columns are checked for
+  duplicates only when the table is set up or its schema changes; duplicates that appear later
+  aren't caught: the child keeps one row per key value, and a batch that holds both rows can
+  fail. Change Tracking still needs a real primary key
+  ([setup](docs/setup.md#tables-without-a-primary-key)). A table with no unique columns at all
+  (duplicate rows possible) can't be synced yet; a whole-table copy for it is
+  [planned](docs/roadmap.md).
+- Tables can be in any schema (`sales.Order`); the child keeps the parent's schema, so a parent
+  table can't be copied into a different schema.
 - Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
   supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
 
@@ -295,7 +308,12 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
   local time in a time zone behind UTC makes changes look older than they are and they are missed.
 - **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
   and full re-scan tables get them from the delete reconciliation: by default at most once an
-  hour per host process, and also on the first run after the host starts.
+  hour per host process, and also on the first run after the host starts. On a host that scales
+  to zero, that means a full key comparison of those tables on most cold starts.
+- A row that can't be written into the child for any reason other than a foreign-key timing
+  error is logged and skipped. It is corrected only when it changes again in the parent (a full
+  re-scan table: on the next run), so watch the error logs or the `smarttablesync.rows_errored`
+  metric.
 - A table's strategy is picked when it is set up. Changing `IncrementalStrategyOverrides`,
   `TimestampColumns` or `AllowFullRescanFor` later has no effect until the parent table's schema
   changes or you [reset its plan](docs/how-it-works.md#changing-a-tables-strategy-later).
@@ -321,13 +339,20 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 - The current version hasn't run on real Azure yet: the [demo](demo/README.md) is ready but
   unrun, so Flex Consumption with .NET 10 and Managed Identity end to end are untested there.
 - Whether the run lock's connection, which stays idle during a run, survives a run longer than
-  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes).
+  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes). If
+  it doesn't, two runs could overlap: the data stays correct, because every write is an
+  idempotent `MERGE`, but the work is done twice.
+- The Hangfire and Quartz.NET hosting examples in the setup guide haven't been compiled in a
+  real host.
+
+What's planned next, including an API and a web page to control the sync, is in the
+[roadmap](docs/roadmap.md).
 
 ## Status
 
 Version **0.4.0**. The sync engine runs in production on Azure SQL Database with a deployed
 Function App. Not yet published to NuGet. What changed in each version, and what to check when
-upgrading, is in the [changelog](CHANGELOG.md).
+upgrading, is in the [changelog](CHANGELOG.md); what comes next, in the [roadmap](docs/roadmap.md).
 
 ## License
 
