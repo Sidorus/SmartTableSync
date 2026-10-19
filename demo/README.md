@@ -54,35 +54,89 @@ tells it which one to use.
 | `Customer` | 1,000 | `rowversion` column | `RowVersion` | TVP batches |
 | `Document` | 40 | `LastUpdate` column, composite key, three rows of 1.5 MB | `Timestamp` | row by row (large rows) |
 
-## Prerequisites
+## Run it, step by step
 
-- An Azure subscription where you can create resource groups and assign roles (Owner, or
-  Contributor plus User Access Administrator): Terraform gives the Function's identity a role on
-  its storage account
-- A Microsoft Entra account that becomes the SQL server's admin: the account you are signed in
-  with in Azure CLI. Pass that same account's name as `-SqlAdminLogin`
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in:
-  `az login`, then `az account set --subscription <id>`
-- [Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or later
-- [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) (`winget install sqlcmd`).
-  The older ODBC `sqlcmd` that ships with SQL Server can't sign in with your Azure CLI identity;
-  the script checks which one it finds.
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) and
-  [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
-- PowerShell 7.2 or later
+### Step 1. Check what you need
 
-## Run it
+- **An Azure subscription** where your account can create resource groups and assign roles:
+  Owner, or Contributor plus User Access Administrator. (Terraform gives the Function's identity
+  a role on its storage account.)
+- **These tools**, installed:
+  - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+  - [Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or later
+  - [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) (`winget install sqlcmd`).
+    The older ODBC `sqlcmd` that ships with SQL Server can't sign in with your Azure account; the
+    script checks which one it finds.
+  - [.NET 10 SDK](https://dotnet.microsoft.com/download)
+  - [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
+  - PowerShell 7.2 or later (`pwsh`)
 
-From the repository root:
+### Step 2. Sign in to Azure and choose the subscription
+
+The demo has no settings file for the subscription or the account: it uses whatever you're
+signed in with in Azure CLI.
 
 ```powershell
-./demo/run-demo.ps1 -Suffix abc12 -SqlAdminLogin you@contoso.com
+az login
 ```
 
-`-Suffix` makes the global names unique (3-8 lowercase letters or digits). The script shows
-the subscription it's about to use and asks before creating anything; Terraform then shows its
-plan and asks again. Optional: `-Location` (default `swedencentral`) and `-ClientIp` (your
-public IP for the SQL firewall; detected when not given).
+```powershell
+az account list --output table
+```
+
+```powershell
+az account set --subscription "<subscription name or id from the list>"
+```
+
+Check the result: this shows the subscription and the account the demo will use.
+
+```powershell
+az account show --query "{subscription:name, id:id, account:user.name}" --output table
+```
+
+That account becomes the **admin of the demo's SQL server**, and every SQL script the demo runs
+uses it, with no passwords.
+
+### Step 3. Choose a suffix
+
+Azure needs globally unique names for the SQL server and the Function App, so the demo adds a
+suffix of your choice to them: **3-8 lowercase letters or digits**, for example your initials
+and a number (`rs01`). Use the same suffix for every later command of this demo.
+
+### Step 4. Run the script
+
+From the repository root, with your suffix in place of `rs01`:
+
+```powershell
+./demo/run-demo.ps1 -Suffix rs01
+```
+
+The script asks twice before it creates anything:
+
+1. It shows what it will use and asks *"Create the demo resources in this subscription?"*.
+   Type `y` if the subscription and account are right. Anything else cancels, and you can go
+   back to step 2.
+
+   ```text
+   Subscription : <your subscription> (<id>)
+   Signed in as : <your account>
+   SQL admin    : <your account>
+   Region       : swedencentral
+   Client IP    : <your public IP> (allowed through the SQL firewall)
+   ```
+
+2. Terraform shows the resources it will create and asks *"Do you want to perform these
+   actions?"*. Type `yes`.
+
+Optional parameters, all with sensible defaults:
+
+| Parameter | Default | Change it when |
+|---|---|---|
+| `-Location` | `swedencentral` | you want another Azure region, for example `-Location westeurope` |
+| `-SqlAdminLogin` | the account you're signed in with | rarely: it must be that same account, because Terraform takes the admin's identity from your sign-in |
+| `-ClientIp` | detected | your public IP can't be detected, or the SQL firewall should allow another IP |
+
+### Step 5. Wait for it to finish
 
 It takes about 10-15 minutes and runs six steps:
 
@@ -100,14 +154,21 @@ It takes about 10-15 minutes and runs six steps:
    (`sql/05_table_fingerprints.sql`) until they match. Then it shows what SmartTableSync
    decided and recorded (`sql/06_child_sync_status.sql`).
 
+When it's done you see a table with one row per demo table and `Match` = `True`, then the
+strategy SmartTableSync picked for each one, and the commands for the next steps.
+
+If a step fails, the script stops and shows the error. Fix the cause and run the same command
+again: every step can be repeated safely.
+
 ## Watch changes arrive
 
 ```powershell
-./demo/run-demo.ps1 -Suffix abc12 -SqlAdminLogin you@contoso.com -Changes
+./demo/run-demo.ps1 -Suffix rs01 -Changes
 ```
 
 This inserts, updates and deletes rows in all three parent tables (`sql/04_parent_changes.sql`),
-triggers a sync and compares again. You can run it as often as you like.
+triggers a sync and compares again. You can run it as often as you like. To make your own
+changes instead, see [Change data yourself and check](#change-data-yourself-and-check).
 
 Inserts and updates arrive on the next run for every table. **Deletes** show the difference
 between the strategies:
@@ -118,9 +179,119 @@ between the strategies:
   fresh Function instance's first sync and then every hour (`SmartTableSync:ReconcileIntervalHours`).
   Until then the script reports those two tables as not matching yet.
 
-To look around yourself, connect with SSMS or Azure Data Studio to the server name from
-`terraform -chdir=demo/terraform output sql_server_fqdn`, using Microsoft Entra authentication.
-Logs and the `smarttablesync.*` metrics are in the Application Insights resource.
+## Change data yourself and check
+
+You can change the parent tables by hand and watch the changes reach the child.
+
+**1. Connect to the databases.** Get the server name:
+
+```powershell
+terraform -chdir=demo/terraform output -raw sql_server_fqdn
+```
+
+Connect to it with SSMS, Azure Data Studio or VS Code's SQL extension, using **Microsoft Entra**
+authentication (in SSMS: *Microsoft Entra MFA*) with the same account you ran the demo with. That
+account is the server's admin, and the SQL firewall already allows your IP. You'll see two
+databases: `sqldb-parent` (change data here) and `sqldb-child` (the copy, don't change it).
+
+**2. Change rows in `sqldb-parent`.** Some examples, one per table:
+
+```sql
+-- Product (Change Tracking): any insert, update or delete is picked up
+UPDATE dbo.Product SET Price = 99.95 WHERE ProductId = 1;
+
+-- Customer (RowVersion): any insert or update is picked up; RowVer changes by itself
+UPDATE dbo.Customer SET City = N'Stockholm' WHERE CustomerId = 1;
+
+-- Document (Timestamp): an update is picked up ONLY if LastUpdate moves too, in UTC
+UPDATE dbo.Document SET Title = N'Edited by hand', LastUpdate = GETUTCDATE()
+WHERE DocumentId = 1 AND LanguageCode = N'en';
+```
+
+**3. Sync.** Wait for the Function's timer (at most 5 minutes), or sync right away:
+
+```powershell
+./demo/run-demo.ps1 -Suffix rs01 -SyncNow
+```
+
+It triggers one sync, compares row counts and checksums of all three tables in both databases
+until they match, and shows what SmartTableSync recorded.
+
+**4. Check.** In `sqldb-child`, query the same rows and see the new values:
+
+```sql
+SELECT Price FROM dbo.Product WHERE ProductId = 1;
+SELECT City FROM dbo.Customer WHERE CustomerId = 1;
+SELECT Title, LastUpdate FROM dbo.Document WHERE DocumentId = 1 AND LanguageCode = N'en';
+SELECT TableName, LastSyncDate, IncrementalPosition FROM dbo.CustomSyncState;   -- where each table got to
+```
+
+Things that look wrong but aren't:
+
+| What you see | Why |
+|---|---|
+| A `Document` update doesn't arrive | It didn't change `LastUpdate`. The Timestamp strategy only sees rows whose `LastUpdate` moved |
+| A deleted `Customer` or `Document` row is still in the child | Those strategies find deletes by comparing keys, which runs on a fresh Function instance's first sync and then hourly. `Product` deletes arrive on the next run |
+| A row you changed in `sqldb-child` was overwritten | The child is a read-only copy: every sync makes it match the parent again |
+
+**Logs and metrics** are in the demo's Application Insights resource (`appi-smarttablesync-<suffix>`):
+open it in the Azure portal, then **Logs**, and run
+
+```kusto
+traces | where message has "synced," or severityLevel >= 2 | order by timestamp desc
+```
+
+to see what each run did per table, for example *"Product: 12 synced, 1 deleted, 0 errors,
+0.8s (incremental)"*. The `smarttablesync.*` metrics (rows synced, deleted and failed, duration,
+lag) are in `customMetrics`; the [setup guide](../docs/setup.md#logs-and-metrics) has more
+queries. New data takes a few minutes to appear.
+
+## Where the demo's settings are
+
+The demo sets no strategy anywhere. SmartTableSync picks each table's strategy itself, from the
+table's shape:
+
+| Table | Picks | Because of | Set up in |
+|---|---|---|---|
+| `Product` | `SqlChangeTracking` | Change Tracking is enabled on it | step 3 of the script (the scaffold tool's `--change-tracking-setup Product` script) |
+| `Customer` | `RowVersion` | it has a `rowversion` column | `sql/01_parent_schema.sql` |
+| `Document` | `Timestamp` | it has a `LastUpdate` column | `sql/01_parent_schema.sql` |
+
+The Function's settings are in `terraform/functions.tf` (`app_settings`). Terraform writes them
+to the Function App when it creates it:
+
+| Setting | Value in the demo |
+|---|---|
+| `ParentDbConnectionString`, `ChildDbConnectionString` | built by Terraform, see below |
+| `SmartTableSync__TableList` | `Product,Customer,Document` (the `table_list` variable in `terraform/variables.tf`) |
+| `SmartTableSync__Mode` | `Manual`: the child's objects come from the scaffold tool's scripts |
+
+On Linux a setting name can't contain `:`, so `SmartTableSync:TableList` is written
+`SmartTableSync__TableList`. To try another setting, add it to `app_settings` and run the setup
+command again: it repeats every step safely, and Terraform changes only the Function's settings. For example, to force `Customer`
+onto the Timestamp strategy: `SmartTableSync__IncrementalStrategyOverrides__Customer = "Timestamp"`.
+Because `Customer` is already set up, that takes effect only after you
+[reset its plan](../docs/how-it-works.md#changing-a-tables-strategy-later). Every setting is
+listed in the README's [Configuration](../README.md#configuration) section, and what the sync
+decided per table is in the child's `dbo.SyncTableConfig`.
+
+## How the Function connects to the databases
+
+No password or connection string is typed anywhere:
+
+1. **Terraform builds the connection strings** from the resources it creates (`terraform/functions.tf`):
+   the SQL server's name, the database name, `Authentication=Active Directory Managed Identity`,
+   and `User Id=` the client ID of the `smarttablesync-runtime` identity. It stores them in the
+   Function App's settings.
+2. **SmartTableSync reads them** by name from the host's configuration (`ParentDbConnectionString`,
+   `ChildDbConnectionString`) and opens a new connection per table on every run.
+3. **Signing in:** SqlClient asks the Function's managed identity for a token and signs in to
+   Azure SQL with it. Azure SQL maps the token to the database user `[smarttablesync-runtime]`,
+   which the demo's grant scripts created (`sql/02_parent_grants.sql`, `sql/03_child_grants.sql`).
+   So the Function has exactly those rights.
+
+The script itself, the SQL steps and the scaffold tool connect as **you**, through your Azure CLI
+sign-in (`Authentication=Active Directory Default`); you're the server's admin.
 
 ## From the demo to your own tables
 
@@ -141,9 +312,13 @@ merge procedures and their table types, and no DDL.
 
 ## Remove it
 
+With the same suffix as the setup:
+
 ```powershell
-./demo/run-demo.ps1 -Suffix abc12 -SqlAdminLogin you@contoso.com -Destroy
+./demo/run-demo.ps1 -Suffix rs01 -Destroy
 ```
+
+Terraform lists what it will delete and asks you to type `yes`.
 
 ## Notes
 

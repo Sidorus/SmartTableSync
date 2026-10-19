@@ -227,6 +227,8 @@ has the details.
   applying the child's SQL, the settings, hosting in your own app, and troubleshooting.
 - **Understand how changes are found:** [how SmartTableSync finds what changed](docs/sync-strategies.md)
   explains Change Tracking, RowVersion, Timestamp and full re-scan, each with a diagram.
+- **Monitor it:** [observability](docs/observability.md) lists every metric and shows
+  Application Insights, Prometheus and Grafana, OTLP, and how to turn monitoring off.
 - **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
   parent's schema and writes the SQL for review; it never executes anything.
 
@@ -249,7 +251,10 @@ To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet
 [examples](docs/setup.md#hosting-the-engine-yourself). `ISyncRunLock`,
 `IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
-OpenTelemetry exporter can collect them.
+OpenTelemetry exporter can collect them; a host has to register that meter with its exporter.
+The example Function does that and sends its logs and metrics to Application Insights through
+OpenTelemetry ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
+use Prometheus, Grafana or OTLP instead or turn it off, is in [observability](docs/observability.md).
 
 To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
 Directory ...` in the connection string), the host also needs the

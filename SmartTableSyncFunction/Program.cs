@@ -1,26 +1,35 @@
-using Microsoft.Azure.Functions.Worker;
+using Azure.Monitor.OpenTelemetry.Exporter;
+using Microsoft.Azure.Functions.Worker.OpenTelemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using SmartTableSync.Diagnostics;
 using SmartTableSync.Hosting;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices(services =>
     {
-        // Wires the Function's own logs/traces/requests into Application Insights — the
-        // Functions host's built-in diagnostics pipeline, unrelated to the sync engine's own
-        // metrics below.
-        services.AddApplicationInsightsTelemetryWorkerService();
-        services.ConfigureFunctionsApplicationInsights();
-
         // Registers the sync engine, including its default ISyncMetricsReporter
-        // (SmartTableSync.Diagnostics.SyncMetricsReporter) — emits via
-        // System.Diagnostics.Metrics under the "SmartTableSync" meter name, so it's
-        // collectible by whatever OpenTelemetry exporter this host wants (Azure Monitor's
-        // OpenTelemetry distro, OTLP, Prometheus, ...), not tied to any one vendor. Wire up
-        // an exporter here if you want these metrics collected; add your own
-        // ISyncMetricsReporter registration after this call to replace them entirely.
+        // (SmartTableSync.Diagnostics.SyncMetricsReporter), which emits through
+        // System.Diagnostics.Metrics under the "SmartTableSync" meter, so any OpenTelemetry
+        // exporter can collect it. Add your own ISyncMetricsReporter registration after this
+        // call to replace it.
         services.AddSmartTableSync();
+
+        // The Function's logs (Information and above, so each table's "N synced, N deleted"
+        // line too), its traces, and the SmartTableSync metrics go to Application Insights
+        // through OpenTelemetry. Azure sets APPLICATIONINSIGHTS_CONNECTION_STRING when the
+        // Function App is connected to Application Insights; without it (for example when
+        // running locally) nothing is exported and the Function runs as usual.
+        var telemetry = services.AddOpenTelemetry().UseFunctionsWorkerDefaults();
+        telemetry.WithMetrics(metrics => metrics.AddMeter(SyncMetricsReporter.MeterName));
+
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
+        {
+            telemetry.UseAzureMonitorExporter();
+        }
     })
     .Build();
 

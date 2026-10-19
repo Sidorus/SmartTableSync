@@ -36,6 +36,12 @@ All notable changes to SmartTableSync. The format follows
 
 - Measuring the largest value of `(max)` columns while profiling a table queried it without a
   schema, so it depended on the identity's default schema.
+- The example Function sent only warnings and errors to Application Insights, and no
+  `smarttablesync.*` metrics at all: the Application Insights SDK keeps only warnings from the
+  worker by default, and no exporter was registered for the `SmartTableSync` meter. It now uses
+  OpenTelemetry with the Azure Monitor exporter, as Microsoft's isolated worker guide recommends,
+  so each table's per-run summary and the metrics arrive too. See
+  [logs and metrics](docs/setup.md#logs-and-metrics).
 
 ## [0.4.0] - 2026-10-18
 

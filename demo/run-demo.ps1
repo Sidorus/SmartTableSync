@@ -1,4 +1,3 @@
-#Requires -Version 7.2
 <#
 .SYNOPSIS
     Deploys the SmartTableSync demo to your Azure subscription and shows a parent database
@@ -15,17 +14,32 @@
       4. Publishes the Function from source, triggers one sync and compares both databases.
 
     -Changes   inserts, updates and deletes rows in the parent, syncs again and compares.
+    -SyncNow   only triggers a sync and compares, for changes you made yourself.
     -Destroy   removes every Azure resource the demo created.
 
-    Everything SQL-side runs as you (Microsoft Entra, through your Azure CLI sign-in). The
-    Function itself only ever uses its managed identity.
+    Uses the Azure subscription and account you are signed in with in Azure CLI (az login,
+    az account set). It shows both and asks before creating anything. Everything SQL-side runs
+    as you (Microsoft Entra, through that sign-in); the Function itself only ever uses its
+    managed identity.
 
 .EXAMPLE
-    ./run-demo.ps1 -Suffix abc12 -SqlAdminLogin you@contoso.com
+    ./run-demo.ps1 -Suffix rs01
+    Full setup. "rs01" is your own choice: 3-8 lowercase letters or digits.
 
 .EXAMPLE
-    ./run-demo.ps1 -Suffix abc12 -SqlAdminLogin you@contoso.com -Changes
+    ./run-demo.ps1 -Suffix rs01 -Changes
+    Changes rows in the parent, syncs and compares again. Use the same suffix as the setup.
+
+.EXAMPLE
+    ./run-demo.ps1 -Suffix rs01 -SyncNow
+    Syncs right away after you changed parent rows yourself, instead of waiting for the timer.
+
+.EXAMPLE
+    ./run-demo.ps1 -Suffix rs01 -Destroy
+    Removes everything the demo created.
 #>
+
+#Requires -Version 7.2
 [CmdletBinding(DefaultParameterSetName = 'Setup')]
 param(
     # Short unique suffix for globally unique Azure names: 3-8 lowercase letters or digits
@@ -33,8 +47,8 @@ param(
     [ValidatePattern('^[a-z0-9]{3,8}$')]
     [string] $Suffix,
 
-    # Your Microsoft Entra sign-in name; becomes the SQL server's Entra admin
-    [Parameter(Mandatory)]
+    # The SQL server's Microsoft Entra admin. Defaults to the account you're signed in with in
+    # Azure CLI, which is also the identity Terraform makes the admin, so normally leave it out.
     [string] $SqlAdminLogin,
 
     [string] $Location = 'swedencentral',
@@ -44,6 +58,9 @@ param(
 
     [Parameter(ParameterSetName = 'Changes')]
     [switch] $Changes,
+
+    [Parameter(ParameterSetName = 'SyncNow')]
+    [switch] $SyncNow,
 
     [Parameter(ParameterSetName = 'Destroy')]
     [switch] $Destroy,
@@ -186,7 +203,7 @@ function Wait-ForSync {
     if ($pending.Count -gt 0) {
         Write-Host ('Not every table matches yet. Deletes in Customer (RowVersion) and Document (Timestamp) ' +
             'arrive at the next delete reconciliation, which runs on a fresh instance''s first sync and then hourly. ' +
-            'Run with -Changes again later, or check the logs in Application Insights.') -ForegroundColor Yellow
+            'Run with -SyncNow later to compare again, or check the logs in Application Insights.') -ForegroundColor Yellow
     }
 }
 
@@ -217,6 +234,11 @@ if (-not $Destroy) {
 $account = az account show --query '{name:name, id:id, user:user.name}' --output json | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'Not signed in. Run "az login" and "az account set --subscription <id>" first.' }
 
+# Terraform deploys into exactly the subscription shown below, whatever its provider version
+# would pick by itself, and the SQL admin is the signed-in account unless given explicitly.
+$env:ARM_SUBSCRIPTION_ID = $account.id
+if (-not $SqlAdminLogin) { $SqlAdminLogin = $account.user }
+
 if (-not $ClientIp) {
     $ClientIp = (Invoke-RestMethod -Uri 'https://api.ipify.org').Trim()
 }
@@ -244,11 +266,24 @@ if ($Changes) {
     return
 }
 
+# --- Sync now ---------------------------------------------------------------------------
+
+if ($SyncNow) {
+    $script:demo = Get-DemoOutputs
+
+    Write-Step 'Triggering a sync and waiting for the child to catch up'
+    Start-Sync
+    Wait-ForSync
+    Show-SyncStatus
+    return
+}
+
 # --- Full setup -------------------------------------------------------------------------
 
 Write-Host ''
 Write-Host "Subscription : $($account.name) ($($account.id))"
 Write-Host "Signed in as : $($account.user)"
+Write-Host "SQL admin    : $SqlAdminLogin"
 Write-Host "Region       : $Location"
 Write-Host "Client IP    : $ClientIp (allowed through the SQL firewall)"
 $answer = Read-Host 'Create the demo resources in this subscription? Terraform shows its plan next. (y/N)'
@@ -302,4 +337,6 @@ Wait-ForSync
 Show-SyncStatus
 
 Write-Host ''
-Write-Host 'Done. Next: ./run-demo.ps1 ... -Changes to sync inserts, updates and deletes; ./run-demo.ps1 ... -Destroy to remove everything.' -ForegroundColor Green
+Write-Host 'Done. Next:' -ForegroundColor Green
+Write-Host "  ./demo/run-demo.ps1 -Suffix $Suffix -Changes    # sync inserts, updates and deletes" -ForegroundColor Green
+Write-Host "  ./demo/run-demo.ps1 -Suffix $Suffix -Destroy    # remove everything" -ForegroundColor Green
