@@ -311,12 +311,17 @@ function Get-Deployment {
     if (-not ($outputs.PSObject.Properties.Name -contains 'function_app_name')) {
         throw "Nothing is deployed for suffix '$Suffix'. Run the setup first."
     }
+    # Terraform leaves out an output whose value is null, for example the identity client IDs
+    # when the Function uses your own connection strings
+    function Get-Output([string] $name) {
+        if ($outputs.PSObject.Properties.Name -contains $name) { $outputs.$name.value }
+    }
     [pscustomobject]@{
-        ResourceGroup         = $outputs.resource_group_name.value
-        FunctionApp           = $outputs.function_app_name.value
-        FunctionHost          = $outputs.function_app_hostname.value
-        RuntimeClientId       = $outputs.runtime_client_id.value
-        ProvisioningClientId  = $outputs.provisioning_client_id.value
+        ResourceGroup        = Get-Output 'resource_group_name'
+        FunctionApp          = Get-Output 'function_app_name'
+        FunctionHost         = Get-Output 'function_app_hostname'
+        RuntimeClientId      = Get-Output 'runtime_client_id'
+        ProvisioningClientId = Get-Output 'provisioning_client_id'
     }
 }
 
