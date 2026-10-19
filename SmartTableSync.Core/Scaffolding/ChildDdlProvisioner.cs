@@ -61,7 +61,9 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
     // Adds new parent columns; anything that could lose or break data is left to a person.
     private async Task EvolveChildTableAsync(SqlConnection childProvisioning, TableProfile profile, CancellationToken ct)
     {
-        var childProfile = await _schemaReader.GetFingerprintInputsAsync(childProvisioning, profile.TableName, ct);
+        // The child's key is always its PRIMARY KEY (created from the parent's sync key), so no
+        // configured key columns.
+        var childProfile = await _schemaReader.GetFingerprintInputsAsync(childProvisioning, profile.TableName, configuredKeyColumns: null, ct);
         var diff = ChildSchemaComparer.Compare(profile, childProfile);
 
         if (diff.Problems.Count > 0)

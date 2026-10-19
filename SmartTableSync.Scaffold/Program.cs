@@ -33,7 +33,8 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 
         Per-table generation also reads the same SmartTableSync:* settings the runtime does
         (SmartTableSync__TimestampColumns__<Table>, SmartTableSync__AllowFullRescanFor,
-        SmartTableSync__IncrementalStrategyOverrides__<Table>) from environment variables, so
+        SmartTableSync__IncrementalStrategyOverrides__<Table>, SmartTableSync__KeyColumns__<Table>)
+        from environment variables, so
         generated artifacts match what SyncTableProvisioner will actually derive at runtime for
         the same settings — set them the same way you would for the Function host.
 
@@ -233,7 +234,10 @@ foreach (var requestedName in tableNames)
         var schema = SyncTableName.Schema(tableName);
         var filePrefix = schema == SyncTableName.DefaultSchema ? string.Empty : $"{schema}.";
 
-        var profile = await schemaReader.ProfileTableAsync(parent, tableName, CancellationToken.None);
+        // A table without a PRIMARY KEY is keyed like the runtime keys it: a unique index, or
+        // SmartTableSync__KeyColumns__<Table> (checked for duplicates here too).
+        var profile = await schemaReader.ProfileTableAsync(
+            parent, tableName, syncSettings.KeyColumns.GetValueOrDefault(tableName), CancellationToken.None);
 
         var timestampColumn = TimestampColumnResolver.Resolve(profile, syncSettings.TimestampColumns);
         var allowFullRescan = syncSettings.AllowFullRescanFor.Contains(tableName, StringComparer.OrdinalIgnoreCase);

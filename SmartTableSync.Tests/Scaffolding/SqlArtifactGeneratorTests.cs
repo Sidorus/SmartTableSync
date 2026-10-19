@@ -51,6 +51,31 @@ public class SqlArtifactGeneratorTests
         Assert.DoesNotContain("IDENTITY", script);
     }
 
+    [Theory]
+    [InlineData("UniqueIndex")]
+    [InlineData("Configured")]
+    public void GenerateCreateTableScript_KeyNotFromPrimaryKey_BecomesTheChildPrimaryKey(string keySourceName)
+    {
+        var profile = ProductAttributeValueProfile() with { PrimaryKeyColumns = ["AttributeId", "Slug"], KeySource = Enum.Parse<SyncKeySource>(keySourceName) };
+
+        var script = _generator.GenerateCreateTableScript(profile);
+
+        Assert.Contains("CONSTRAINT [PK_ProductAttributeValue] PRIMARY KEY CLUSTERED", script);
+        Assert.Contains("\t[AttributeId] ASC,\n\t[Slug] ASC", script.Replace("\r\n", "\n"));
+    }
+
+    [Theory]
+    [InlineData("UniqueIndex")]
+    [InlineData("Configured")]
+    public void GenerateChangeTrackingSetupScript_KeyNotFromPrimaryKey_Throws(string keySourceName)
+    {
+        var profile = ProductAttributeValueProfile() with { KeySource = Enum.Parse<SyncKeySource>(keySourceName) };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _generator.GenerateChangeTrackingSetupScript(profile));
+
+        Assert.Contains("requires a PRIMARY KEY constraint", ex.Message);
+    }
+
     [Fact]
     public void GenerateCreateTableScript_MaxLengthColumn_UsesMaxKeyword()
     {

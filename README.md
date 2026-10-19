@@ -165,6 +165,7 @@ see [`local.settings.template.json`](SmartTableSyncFunction/local.settings.templ
 | `SmartTableSync:TimestampColumns:<Table>` | `LastUpdate` | Datetime column for the Timestamp strategy (old name `ChangeTrackingColumns` still read) |
 | `SmartTableSync:AllowFullRescanFor` | — | Large tables allowed to re-scan every run |
 | `SmartTableSync:IncrementalStrategyOverrides:<Table>` | — | Force `Timestamp`, `RowVersion`, `FullRescan` or `SqlChangeTracking` |
+| `SmartTableSync:KeyColumns:<Table>` | — | Key columns (`"ColA,ColB"`) for a table without a primary key; without it, a unique index with `NOT NULL` key columns is used |
 | `SmartTableSync:ReconcileIntervalHours` | `1` | Delete-reconciliation interval for non Change Tracking tables |
 | `SmartTableSync:ChangeTrackingReconcileIntervalHours` | `24` | Same for Change Tracking tables (`0` = only after a fallback re-scan) |
 | `SmartTableSync:ConnectionOpenAttempts` | `5` | Attempts to open a connection on transient errors (1–60) |
@@ -285,8 +286,15 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Scope**
 - One-way only, parent → child. The child is a read-only copy; rows written directly into it
   are overwritten or removed by the next sync.
-- Every synced table needs a primary key. Tables can be in any schema (`sales.Order`); the child
-  keeps the parent's schema, so a parent table can't be copied into a different schema.
+- Every synced table needs a key: its primary key; without one, the columns named in
+  `SmartTableSync:KeyColumns:<Table>` (`NOT NULL`, unique together), or else a unique index whose
+  key columns are all `NOT NULL` (not filtered, not disabled). Configured columns are checked for
+  duplicates only when the table is set up or its schema changes; duplicates that appear later
+  aren't caught: the child keeps one row per key value, and a batch that holds both rows can
+  fail. Change Tracking still needs a real primary key
+  ([setup](docs/setup.md#tables-without-a-primary-key)).
+- Tables can be in any schema (`sales.Order`); the child keeps the parent's schema, so a parent
+  table can't be copied into a different schema.
 - Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
   supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
 

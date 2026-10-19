@@ -125,6 +125,37 @@ smarttablesync-scaffold --rowversion-setup Customer          # adds a rowversion
 The Change Tracking script grants `VIEW CHANGE TRACKING` to `smarttablesync-runtime`. If your
 runtime identity has another name, change it in the script before applying.
 
+#### Tables without a primary key
+
+Rows are matched, paged and deleted by a key, and the child table gets that key as its
+`PRIMARY KEY`. The key is chosen like this:
+
+1. The table's **primary key**, when it has one.
+2. Otherwise the **columns you name**, in key order, in `SmartTableSync:KeyColumns:<Table>`, for
+   example `SmartTableSync:KeyColumns:sales.Ledger` = `Region,Code`. The columns must exist, be
+   `NOT NULL` and not be `(max)` or `rowversion` columns. When the table is set up (and again
+   whenever its schema changes), SmartTableSync checks the parent's data with a
+   `GROUP BY ... HAVING COUNT(*) > 1` and stops the table with a clear message if any combination
+   of values repeats. That check scans the table once; it isn't repeated on every run, so
+   duplicates added later aren't caught.
+3. Otherwise a **unique index** whose key columns are all `NOT NULL`, that isn't filtered and
+   isn't disabled. With several, the one with the fewest key columns wins, then the oldest
+   (lowest `index_id`). Included columns don't count. No setting is needed.
+
+A table with none of these stops with a message naming the setting. Setting `KeyColumns` for a
+table that has a primary key is an error too, rather than being ignored.
+
+**Change Tracking** needs a real primary key: SQL Server won't enable it without one, and the
+Change Tracking script refuses such a table. Tables keyed by a unique index or by `KeyColumns`
+use RowVersion, Timestamp or a full re-scan. If you add a primary key to the parent later (and
+remove the table's `KeyColumns` setting, if it has one), the next run notices the schema change
+and picks the strategy again; Change Tracking becomes possible.
+
+The key is part of the schema check, so changing `KeyColumns` (or the index it came from) makes
+the next run set the table up again. The child's primary key then no longer matches: Auto mode
+stops the table with `primary key changed`, and the scaffold tool prints `NEEDS A MANUAL CHANGE`
+until you change the child table's key yourself.
+
 ### 3. Create the tracking tables in the child
 
 ```bash
@@ -185,7 +216,7 @@ App settings (on Linux, write `:` as `__`, for example `SmartTableSync__TableLis
 | `ChildDbConnectionString` | runtime identity → child |
 | `SmartTableSync:TableList` | `Product,Customer,Document` |
 | `SmartTableSync:Mode` | `Manual` |
-| `SmartTableSync:TimestampColumns:<Table>`, `AllowFullRescanFor`, `IncrementalStrategyOverrides:<Table>`, `ReconcileIntervalHours`, `ChangeTrackingReconcileIntervalHours`, `ConnectionOpenAttempts` | optional, see [`local.settings.template.json`](../SmartTableSyncFunction/local.settings.template.json) |
+| `SmartTableSync:TimestampColumns:<Table>`, `AllowFullRescanFor`, `IncrementalStrategyOverrides:<Table>`, `KeyColumns:<Table>`, `ReconcileIntervalHours`, `ChangeTrackingReconcileIntervalHours`, `ConnectionOpenAttempts` | optional, see [`local.settings.template.json`](../SmartTableSyncFunction/local.settings.template.json) |
 
 A managed identity connection string looks like:
 

@@ -287,6 +287,43 @@ public class SyncPlanHeuristicTests
     }
 
     [Fact]
+    public void DerivePlan_NoKey_ThrowsNamingTheKeyColumnsSetting()
+    {
+        var profile = CreateProfile(tableName: "sales.Ledger") with { PrimaryKeyColumns = [] };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate"));
+
+        Assert.Contains("sales.Ledger", ex.Message);
+        Assert.Contains("no PRIMARY KEY and no unique index", ex.Message);
+        Assert.Contains("SmartTableSync:KeyColumns:sales.Ledger", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("UniqueIndex")]
+    [InlineData("Configured")]
+    public void DerivePlan_KeyNotFromPrimaryKey_SyncsWithTheOtherStrategies(string keySourceName)
+    {
+        var profile = CreateProfile() with { KeySource = Enum.Parse<SyncKeySource>(keySourceName) };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.RowVersion, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_ChangeTrackingOverride_KeyFromUniqueIndex_Throws()
+    {
+        // SQL Server can't enable Change Tracking without a PRIMARY KEY, so a key borrowed from a
+        // unique index never qualifies, even with the flag set.
+        var profile = CreateProfile() with { KeySource = SyncKeySource.UniqueIndex, IsChangeTrackingEnabled = true };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            _heuristic.DerivePlan(profile, DefaultOptions, strategyOverride: IncrementalStrategy.SqlChangeTracking));
+
+        Assert.Contains("needs a PRIMARY KEY", ex.Message);
+    }
+
+    [Fact]
     public void DerivePlan_ChangeTrackingEnabled_ChoosesSqlChangeTrackingWithNoColumn()
     {
         var profile = CreateProfile() with { IsChangeTrackingEnabled = true };

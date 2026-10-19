@@ -51,6 +51,27 @@ public class SyncSettingsServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void KeyColumns_BindsCommaSeparatedListsPerTable_WithNormalizedTableNames()
+    {
+        var settings = Bind(new Dictionary<string, string?>
+        {
+            ["SmartTableSync:KeyColumns:dbo.Ledger"] = " Region , Code ",
+            ["SmartTableSync:KeyColumns:sales.Order"] = "OrderNo",
+            ["SmartTableSync:KeyColumns:Blank"] = " ",
+        });
+
+        Assert.Equal(["Region", "Code"], settings.KeyColumns["ledger"]);
+        Assert.Equal(["OrderNo"], settings.KeyColumns["sales.Order"]);
+        Assert.False(settings.KeyColumns.ContainsKey("Blank"));
+    }
+
+    [Fact]
+    public void KeyColumns_Missing_IsEmpty()
+    {
+        Assert.Empty(Bind([]).KeyColumns);
+    }
+
+    [Fact]
     public void ChangeTrackingColumns_Missing_IsEmpty()
     {
         var settings = Bind([]);

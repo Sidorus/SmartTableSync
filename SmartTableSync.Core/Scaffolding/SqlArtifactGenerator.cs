@@ -275,7 +275,8 @@ internal sealed class SqlArtifactGenerator : ISqlArtifactGenerator
     public string GenerateChangeTrackingSetupScript(
         TableProfile profile, int retentionDays = 2, string runtimePrincipal = "smarttablesync-runtime")
     {
-        if (profile.PrimaryKeyColumns.Count == 0)
+        // A key from a unique index or SmartTableSync:KeyColumns is enough to sync by, not for SQL Server.
+        if (profile.PrimaryKeyColumns.Count == 0 || profile.KeySource != SyncKeySource.PrimaryKey)
         {
             throw new InvalidOperationException(
                 $"{profile.TableName}: SQL Server Change Tracking requires a PRIMARY KEY constraint, and this table has none.");

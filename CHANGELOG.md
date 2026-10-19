@@ -14,6 +14,13 @@ All notable changes to SmartTableSync. The format follows
   child keeps the parent's schema; the table's procedures and table type are created in that
   schema, so tables with the same name in two schemas don't collide. The tracking tables stay in
   `dbo`. See [ADR-0020](docs/adr/0020-tables-in-schemas-other-than-dbo.md).
+- **Tables without a primary key.** Such a table is keyed by its best unique index (all key
+  columns `NOT NULL`, not filtered, not disabled; fewest columns, then lowest `index_id`), or by
+  the columns in the new `SmartTableSync:KeyColumns:<Table>` setting (`"ColA,ColB"`), which are
+  checked for duplicate values whenever the table is set up. The child table gets that key as its
+  primary key. Change Tracking still requires a real primary key. Tables with a primary key are
+  unaffected (same key, same schema fingerprint). See
+  [ADR-0021](docs/adr/0021-key-fallback-for-tables-without-a-primary-key.md).
 
 ### Changed
 
@@ -22,6 +29,8 @@ All notable changes to SmartTableSync. The format follows
 - A table name with more than one dot, or longer than 100 characters, is rejected at startup with
   a clear message. Names that contain a dot were never meant to work and are now read as
   `schema.Table`.
+- A table with no usable key at all now stops when it is set up, with a message naming
+  `SmartTableSync:KeyColumns:<Table>`, instead of failing later in its first page query.
 
 ### Fixed
 

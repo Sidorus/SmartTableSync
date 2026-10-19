@@ -52,6 +52,17 @@ public static class SyncSettingsServiceCollectionExtensions
             .GroupBy(c => SyncTableName.Normalize(c.Key), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => Enum.Parse<IncrementalStrategy>(g.Last().Value!, ignoreCase: true), StringComparer.OrdinalIgnoreCase);
 
+        // "ColA,ColB" in key order. Whether the columns exist, are NOT NULL and are unique is
+        // checked when the table is provisioned (SyncKeyResolver, SchemaReader), where the
+        // message can name the table's actual columns.
+        options.KeyColumns = configuration.GetSection("SmartTableSync:KeyColumns").GetChildren()
+            .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+            .GroupBy(c => SyncTableName.Normalize(c.Key), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)g.Last().Value!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.OrdinalIgnoreCase);
+
         // Whole hours, so it's easy to enter as one App Setting. Missing, unparseable or
         // negative keeps the 24-hour default; 0 explicitly disables the periodic run.
         options.ChangeTrackingReconcileInterval =

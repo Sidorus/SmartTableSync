@@ -35,6 +35,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
     public async Task<TableProvisioning> PlanAsync(SqlConnection parent, SqlConnection child, string tableName, CancellationToken ct)
     {
         var existing = await _configRepository.GetAsync(child, tableName, ct);
+        var configuredKeyColumns = _settings.Value.KeyColumns.GetValueOrDefault(tableName);
 
         if (existing is null)
         {
@@ -44,7 +45,7 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
         {
             // Routine path: a cheap, catalog-metadata-only drift check. The expensive row/size
             // sampling in ProfileTableAsync only runs when the table must be (re)provisioned.
-            var cheapProfile = await _schemaReader.GetFingerprintInputsAsync(parent, tableName, ct);
+            var cheapProfile = await _schemaReader.GetFingerprintInputsAsync(parent, tableName, configuredKeyColumns, ct);
             var cheapFingerprint = SchemaFingerprint.Compute(cheapProfile);
 
             if (existing.SchemaFingerprint == cheapFingerprint)
@@ -56,8 +57,9 @@ internal sealed class SyncTableProvisioner : ISyncTableProvisioner
         }
 
         // The full profile includes everything the fingerprint reads, so it hashes the same as
-        // the cheap one; a first-seen table needs only this one read.
-        var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, ct);
+        // the cheap one; a first-seen table needs only this one read. It also checks a configured
+        // key for duplicates, so that check runs once per provisioning, not every run.
+        var fullProfile = await _schemaReader.ProfileTableAsync(parent, tableName, configuredKeyColumns, ct);
         var currentFingerprint = SchemaFingerprint.Compute(fullProfile);
 
         var timestampColumn = TimestampColumnResolver.Resolve(fullProfile, _settings.Value.TimestampColumns);

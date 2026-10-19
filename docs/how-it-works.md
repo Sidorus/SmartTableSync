@@ -48,9 +48,11 @@ flowchart TD
 1. **Previous sync still running.** Only one sync may work on a child database at a time, even
    with several host instances. A run that finds another one busy does nothing.
 2. **New table, or did the schema change.** The parent table's schema (columns and their types,
-   primary key, identity column, and whether Change Tracking is on) is compared with what was
-   seen last time. Usually nothing changed, and the saved plan is used as it is. Settings are not
-   part of this check; see [changing a table's strategy later](#changing-a-tables-strategy-later).
+   key, identity column, and whether Change Tracking is on) is compared with what was seen last
+   time. The key is the primary key, or for a table without one a unique index or the columns in
+   `SmartTableSync:KeyColumns:<Table>` ([setup](setup.md#tables-without-a-primary-key)). Usually
+   nothing changed, and the saved plan is used as it is. Other settings are not part of this
+   check; see [changing a table's strategy later](#changing-a-tables-strategy-later).
 3. **Pick how to find changes.** Only for a new table or a changed schema. The four checks run in
    this order and the first match wins. "Small" means 50,000 rows or fewer, counted at this
    moment. To choose a strategy yourself, set `SmartTableSync:IncrementalStrategyOverrides:<Table>`;
