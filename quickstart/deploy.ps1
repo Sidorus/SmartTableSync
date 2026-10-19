@@ -10,9 +10,11 @@
          Auto mode the provisioning identity), the Function App with its storage, and
          Application Insights. Your databases and servers are never created or changed by Terraform.
       3. Parent: creates the smarttablesync-runtime database user and grants it read access to
-         the listed tables only. -EnableChangeTracking also turns Change Tracking on for them.
-      4. Child: Auto mode creates the database users and grants, and the Function creates the
-         tables itself. Manual mode applies the scaffold tool's scripts, then grants.
+         the listed tables only (not with your own connection strings). -EnableChangeTracking
+         also turns Change Tracking on for them.
+      4. Child: Auto mode creates the database users and grants (not with your own connection
+         strings), and the Function creates the tables itself. Manual mode applies the scaffold
+         tool's scripts, then grants.
       5. Publishes the Function from source, starts the first sync and waits for it.
 
     Every SQL script it runs is written to quickstart/generated/<suffix>/ first, so you can read
@@ -22,12 +24,22 @@
     -SyncNow   starts a sync right away and waits for it, instead of waiting for the timer.
     -Destroy   removes the Azure resources and prints the SQL to remove the database users.
 
+    Two ways to give the databases:
+      -ParentServer/-ParentDatabase/-ChildDatabase  the Function signs in with new managed
+          identities; this script creates their database users and grants, running SQL as you
+          (Microsoft Entra), so your account must be able to create users in both databases.
+      -ParentConnectionString/-ChildConnectionString  your own connection strings: saved as the
+          Function's app settings exactly as given, and used by this script for its checks. No
+          identities, users or grants are created; their logins must already have the rights.
+
     Uses the subscription and account you're signed in with in Azure CLI (az login,
-    az account set). SQL runs as you (Microsoft Entra), so your account needs to be able to
-    create users in both databases, and your IP must be allowed through their firewalls.
+    az account set) for the Azure resources. Your IP must be allowed through the SQL firewalls.
 
 .EXAMPLE
     ./quickstart/deploy.ps1 -Suffix acme1 -ParentServer myserver.database.windows.net -ParentDatabase SalesDb -ChildDatabase SalesCopy -Tables "Product,Customer,sales.Order"
+
+.EXAMPLE
+    ./quickstart/deploy.ps1 -Suffix acme1 -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB -Tables "Product,Customer"
 
 .EXAMPLE
     ./quickstart/deploy.ps1 -Suffix acme1 -SyncNow
@@ -44,13 +56,15 @@ param(
     [ValidatePattern('^[a-z0-9]{3,8}$')]
     [string] $Suffix,
 
+    # Either the server and database names (the Function then signs in with new managed
+    # identities) ...
     # Parent server host name, e.g. myserver.database.windows.net
-    [Parameter(Mandatory, ParameterSetName = 'Setup')]
-    [Parameter(Mandatory, ParameterSetName = 'DryRun')]
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
     [string] $ParentServer,
 
-    [Parameter(Mandatory, ParameterSetName = 'Setup')]
-    [Parameter(Mandatory, ParameterSetName = 'DryRun')]
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
     [string] $ParentDatabase,
 
     # Child server; the parent's server when left out
@@ -58,9 +72,27 @@ param(
     [Parameter(ParameterSetName = 'DryRun')]
     [string] $ChildServer,
 
-    [Parameter(Mandatory, ParameterSetName = 'Setup')]
-    [Parameter(Mandatory, ParameterSetName = 'DryRun')]
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
     [string] $ChildDatabase,
+
+    # ... or your own connection strings: saved as the Function's app settings exactly as given,
+    # and used by this script too. No identities, database users or grants are created.
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
+    [Parameter(ParameterSetName = 'SyncNow')]
+    [string] $ParentConnectionString,
+
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
+    [Parameter(ParameterSetName = 'SyncNow')]
+    [string] $ChildConnectionString,
+
+    # Auto mode with your own connection strings: a child connection string that may create
+    # tables; ChildConnectionString when left out
+    [Parameter(ParameterSetName = 'Setup')]
+    [Parameter(ParameterSetName = 'DryRun')]
+    [string] $ChildProvisioningConnectionString,
 
     # Comma-separated: Customer for dbo.Customer, sales.Order for another schema
     [Parameter(Mandatory, ParameterSetName = 'Setup')]
@@ -165,37 +197,97 @@ function Get-TableName([string] $name) {
     }
 }
 
-function Get-AdminConnectionString([string] $server, [string] $database) {
-    "Server=tcp:$server,1433;Database=$database;Authentication=Active Directory Default;Encrypt=True;Connect Timeout=60"
+# A database this script connects to: as you (Azure CLI sign-in), or with a given connection string
+function New-SqlTarget([string] $server, [string] $database) {
+    [pscustomobject]@{
+        Server           = $server
+        Database         = $database
+        ConnectionString = "Server=tcp:$server,1433;Database=$database;Authentication=Active Directory Default;Encrypt=True;Connect Timeout=60"
+        SignIn           = @('--authentication-method', 'ActiveDirectoryDefault')
+        Password         = $null
+    }
 }
 
-# Runs a SQL file or query as the signed-in Azure CLI user. A paused serverless database refuses
-# the first connection while it resumes, so failures are retried a few times.
+function ConvertFrom-ConnectionString([string] $connectionString, [string] $name) {
+    $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+    # set_ConnectionString, not .ConnectionString =: PowerShell treats the builder as a dictionary
+    # and would add a key named "ConnectionString" instead of parsing the string
+    try { $builder.set_ConnectionString($connectionString) } catch { throw "$name isn't a valid connection string: $($_.Exception.Message)" }
+    function Get-Value([string[]] $keys) {
+        foreach ($key in $keys) { if ($builder.ContainsKey($key)) { return [string] $builder[$key] } }
+    }
+
+    $server = Get-Value 'Server', 'Data Source', 'Address', 'Addr', 'Network Address'
+    $database = Get-Value 'Database', 'Initial Catalog'
+    if (-not $server -or -not $database) { throw "$name needs both a server (Server=...) and a database (Database=...)." }
+    $user = Get-Value 'User Id', 'UID', 'User'
+    $password = Get-Value 'Password', 'PWD'
+    $authentication = (Get-Value 'Authentication') -replace '\s', ''
+    $integrated = (Get-Value 'Integrated Security', 'Trusted_Connection') -in @('true', 'yes', 'sspi')
+
+    # The same sign-in, in sqlcmd's terms
+    $signIn = if ($integrated) { @('-E') }
+        elseif ($authentication) { @('--authentication-method', ($authentication -replace '^ActiveDirectoryMSI$', 'ActiveDirectoryManagedIdentity')) }
+        elseif ($user) { @('--authentication-method', 'SqlPassword') }
+        else { throw "$name has no sign-in: add User Id and Password, Authentication=..., or Integrated Security=True." }
+    if ($user -and -not $integrated) { $signIn += @('-U', $user) }
+    if ((Get-Value 'TrustServerCertificate') -in @('true', 'yes')) { $signIn += '-C' }
+
+    [pscustomobject]@{
+        # Only the host name, for messages and the firewall check
+        Server           = ($server -replace '^tcp:', '' -replace ',\d+$', '')
+        Database         = $database
+        ConnectionString = $connectionString
+        SignIn           = $signIn
+        Password         = $password
+    }
+}
+
+# Runs a SQL file or query on a target. A paused serverless database refuses the first connection
+# while it resumes, so failures are retried a few times. A password goes through SQLCMDPASSWORD,
+# never on the command line.
 function Invoke-Sql {
     param(
-        [Parameter(Mandatory)] [string] $Server,
-        [Parameter(Mandatory)] [string] $Database,
+        [Parameter(Mandatory)] $Target,
         [string] $File,
         [string] $Query,
         [switch] $Raw
     )
 
-    $arguments = @('-S', $Server, '-d', $Database, '--authentication-method', 'ActiveDirectoryDefault', '-l', '60', '-b')
+    $arguments = @('-S', $Target.Server, '-d', $Target.Database) + $Target.SignIn + @('-l', '60', '-b')
     if ($File) { $arguments += @('-i', $File) } else { $arguments += @('-Q', $Query) }
     # Raw: no headers, "|" between columns, for reading values; otherwise trimmed columns for people
     if ($Raw) { $arguments += @('-h', '-1', '-W', '-s', '|') } else { $arguments += '-W' }
 
-    for ($attempt = 1; $attempt -le 4; $attempt++) {
-        $output = & sqlcmd @arguments 2>&1 | ForEach-Object { "$_" }
-        if ($LASTEXITCODE -eq 0) { return @($output | Where-Object { $_.Trim() }) }
-        # This script's own checks (THROW 50000) and missing rights won't go away by retrying
-        if ($output -match 'Msg 50000,|permission was denied|do not have permission') { break }
-        if ($attempt -lt 4) {
-            Write-Host "  SQL attempt $attempt failed (a paused database may still be resuming); retrying in 20 s..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 20
+    if ($Target.Password) { $env:SQLCMDPASSWORD = $Target.Password }
+    try {
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $output = & sqlcmd @arguments 2>&1 | ForEach-Object { "$_" }
+            if ($LASTEXITCODE -eq 0) { return @($output | Where-Object { $_.Trim() }) }
+            # This script's own checks (THROW 50000), missing rights and wrong passwords won't go away by retrying
+            if ($output -match 'Msg 50000,|permission was denied|do not have permission|Login failed') { break }
+            if ($attempt -lt 4) {
+                Write-Host "  SQL attempt $attempt failed (a paused database may still be resuming); retrying in 20 s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 20
+            }
         }
     }
-    throw "sqlcmd failed on $Server/${Database}:`n$($output -join "`n")"
+    finally {
+        Remove-Item Env:SQLCMDPASSWORD -ErrorAction SilentlyContinue
+    }
+    throw "sqlcmd failed on $($Target.Server)/$($Target.Database):`n$($output -join "`n")"
+}
+
+# Your connection strings go to Terraform as environment variables, never into a file
+function Set-TerraformConnectionStrings {
+    if (-not $ParentConnectionString) { return }
+    $env:TF_VAR_parent_connection_string = $ParentConnectionString
+    $env:TF_VAR_child_connection_string = $ChildConnectionString
+    if ($ChildProvisioningConnectionString) { $env:TF_VAR_child_provisioning_connection_string = $ChildProvisioningConnectionString }
+}
+
+function Clear-TerraformConnectionStrings {
+    Remove-Item Env:TF_VAR_parent_connection_string, Env:TF_VAR_child_connection_string, Env:TF_VAR_child_provisioning_connection_string -ErrorAction SilentlyContinue
 }
 
 function Write-SqlFile([string] $name, [string[]] $lines) {
@@ -219,12 +311,17 @@ function Get-Deployment {
     if (-not ($outputs.PSObject.Properties.Name -contains 'function_app_name')) {
         throw "Nothing is deployed for suffix '$Suffix'. Run the setup first."
     }
+    # Terraform leaves out an output whose value is null, for example the identity client IDs
+    # when the Function uses your own connection strings
+    function Get-Output([string] $name) {
+        if ($outputs.PSObject.Properties.Name -contains $name) { $outputs.$name.value }
+    }
     [pscustomobject]@{
-        ResourceGroup         = $outputs.resource_group_name.value
-        FunctionApp           = $outputs.function_app_name.value
-        FunctionHost          = $outputs.function_app_hostname.value
-        RuntimeClientId       = $outputs.runtime_client_id.value
-        ProvisioningClientId  = $outputs.provisioning_client_id.value
+        ResourceGroup        = Get-Output 'resource_group_name'
+        FunctionApp          = Get-Output 'function_app_name'
+        FunctionHost         = Get-Output 'function_app_hostname'
+        RuntimeClientId      = Get-Output 'runtime_client_id'
+        ProvisioningClientId = Get-Output 'provisioning_client_id'
     }
 }
 
@@ -249,7 +346,7 @@ SELECT CASE WHEN @id IS NULL THEN 0 ELSE 1 END,
                              AND ic.is_included_column = 0 AND c.is_nullable = 1)),
        (SELECT ISNULL(SUM(row_count), 0) FROM sys.dm_db_partition_stats WHERE object_id = @id AND index_id IN (0, 1));
 "@
-    $values = @(Invoke-Sql -Server $ParentServer -Database $ParentDatabase -Query $query -Raw)[0].Split('|')
+    $values = @(Invoke-Sql -Target $script:parentTarget -Query $query -Raw)[0].Split('|')
     $exists, $hasPk, $hasCt, $hasRowVersion, $hasLastUpdate, $uniqueIndexes = $values[0..5] | ForEach-Object { [int] $_ }
     $rows = [long] $values[6]
     $willHaveCt = $hasCt -or ($EnableChangeTracking -and $hasPk)
@@ -291,6 +388,28 @@ function Get-CreateUserSql([string] $user, [string] $clientId) {
     )
 }
 
+# -EnableChangeTracking: database level (2-day retention, left as is when already on), then each
+# listed table with a primary key that doesn't have it yet. Nothing without the switch.
+function Get-ChangeTrackingSql($reports) {
+    $toEnable = @($reports | Where-Object { $_.HasPk -and -not $_.HasCt })
+    if (-not $EnableChangeTracking -or -not $toEnable) { return @() }
+    $lines = @(
+        ''
+        '-- Change Tracking: database level (2-day retention, left as is when already on), then per table'
+        'IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_databases WHERE database_id = DB_ID())'
+        '    ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);'
+        'GO'
+    )
+    foreach ($report in $toEnable) {
+        $lines += @(
+            "IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID($(ConvertTo-SqlLiteral $report.Name.Quoted)))"
+            "    ALTER TABLE $($report.Name.Quoted) ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);"
+            'GO'
+        )
+    }
+    $lines
+}
+
 function Get-ParentSql($reports, [string] $runtimeClientId) {
     $runtime = ConvertTo-SqlName $runtimeUser
     $lines = @(
@@ -300,22 +419,7 @@ function Get-ParentSql($reports, [string] $runtimeClientId) {
     ) + (Get-CreateUserSql $runtimeUser $runtimeClientId)
 
     $ctTables = @($reports | Where-Object { $_.HasPk -and ($_.HasCt -or $EnableChangeTracking) })
-    if ($EnableChangeTracking -and $ctTables) {
-        $lines += @(
-            ''
-            '-- Change Tracking: database level (2-day retention, left as is when already on), then per table'
-            'IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_databases WHERE database_id = DB_ID())'
-            '    ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);'
-            'GO'
-        )
-        foreach ($report in $ctTables | Where-Object { -not $_.HasCt }) {
-            $lines += @(
-                "IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID($(ConvertTo-SqlLiteral $report.Name.Quoted)))"
-                "    ALTER TABLE $($report.Name.Quoted) ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);"
-                'GO'
-            )
-        }
-    }
+    $lines += Get-ChangeTrackingSql $reports
 
     $lines += @('', '-- Read the rows, and see the table''s definition and size when it is profiled')
     foreach ($report in $reports) {
@@ -436,9 +540,9 @@ function Wait-ForSync($settings) {
         $results = foreach ($name in $names) {
             # "-" while the child table doesn't exist yet (Auto mode creates it on the first run)
             $count = "SET NOCOUNT ON; IF OBJECT_ID($(ConvertTo-SqlLiteral $name.Quoted), N'U') IS NULL SELECT '-' ELSE SELECT COUNT_BIG(*) FROM $($name.Quoted);"
-            $parentRows = @(Invoke-Sql -Server $settings.parent_server -Database $settings.parent_database -Query $count -Raw)[0]
-            $childRows = @(Invoke-Sql -Server $settings.child_server -Database $settings.child_database -Query $count -Raw)[0]
-            $state = @(Invoke-Sql -Server $settings.child_server -Database $settings.child_database -Raw -Query (
+            $parentRows = @(Invoke-Sql -Target $script:parentTarget -Query $count -Raw)[0]
+            $childRows = @(Invoke-Sql -Target $script:childTarget -Query $count -Raw)[0]
+            $state = @(Invoke-Sql -Target $script:childTarget -Raw -Query (
                 "SET NOCOUNT ON; IF OBJECT_ID(N'dbo.CustomSyncState', N'U') IS NULL SELECT 0 " +
                 "ELSE SELECT COUNT(*) FROM dbo.CustomSyncState WHERE TableName = $(ConvertTo-SqlLiteral $name.Setting);"))[0]
             [pscustomobject]@{
@@ -458,7 +562,7 @@ function Wait-ForSync($settings) {
 
 function Show-SyncStatus($settings) {
     Write-Step 'What SmartTableSync chose and recorded (child database)'
-    Invoke-Sql -Server $settings.child_server -Database $settings.child_database -Query @'
+    Invoke-Sql -Target $script:childTarget -Query @'
 SET NOCOUNT ON;
 IF OBJECT_ID(N'dbo.SyncTableConfig') IS NOT NULL
     SELECT TableName, IncrementalStrategy, MergeStrategy, BatchSize FROM dbo.SyncTableConfig ORDER BY TableName;
@@ -524,13 +628,18 @@ $env:ARM_SUBSCRIPTION_ID = $account.id
 
 if ($Destroy) {
     if (-not (Test-Path $settingsFile)) { throw "No quick start found for suffix '$Suffix' ($settingsFile is missing)." }
+    $deployment = Get-Deployment
     Write-Step "Removing the Azure resources of '$Suffix' from subscription '$($account.name)'"
-    Initialize-Terraform
     Invoke-Native { terraform "-chdir=$terraformDir" destroy -input=false "-var-file=$settingsFile" }
 
-    $dropFile = Write-SqlFile '99_drop_users.sql' (Get-DropUsersSql)
     Write-Host ''
-    Write-Host "Your databases were not touched. To remove the database users too, run $dropFile on them." -ForegroundColor Green
+    if ($deployment.RuntimeClientId) {
+        $dropFile = Write-SqlFile '99_drop_users.sql' (Get-DropUsersSql)
+        Write-Host "Your databases were not touched. To remove the database users too, run $dropFile on them." -ForegroundColor Green
+    }
+    else {
+        Write-Host 'Your databases were not touched.' -ForegroundColor Green
+    }
     return
 }
 
@@ -541,6 +650,19 @@ if ($SyncNow) {
     $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
     $deployment = Get-Deployment
 
+    # With your own connection strings there are no saved ones to compare with: pass them again
+    if ($deployment.RuntimeClientId) {
+        $script:parentTarget = New-SqlTarget $settings.parent_server $settings.parent_database
+        $script:childTarget = New-SqlTarget $settings.child_server $settings.child_database
+    }
+    elseif ($ParentConnectionString -and $ChildConnectionString) {
+        $script:parentTarget = ConvertFrom-ConnectionString $ParentConnectionString '-ParentConnectionString'
+        $script:childTarget = ConvertFrom-ConnectionString $ChildConnectionString '-ChildConnectionString'
+    }
+    else {
+        throw 'This quick start uses your own connection strings: pass -ParentConnectionString and -ChildConnectionString again, so the script can compare the databases.'
+    }
+
     Write-Step 'Starting a sync and waiting for the child'
     Start-Sync $deployment
     if (-not (Wait-ForSync $settings)) { Show-Troubleshooting }
@@ -550,7 +672,30 @@ if ($SyncNow) {
 
 # --- Setup (and dry run) ------------------------------------------------------------------------
 
-if (-not $ChildServer) { $ChildServer = $ParentServer }
+# Your own connection strings, or server and database names (then the Function gets managed identities)
+$useOwnConnectionStrings = [bool] ($ParentConnectionString -or $ChildConnectionString)
+if ($useOwnConnectionStrings) {
+    if (-not $ParentConnectionString -or -not $ChildConnectionString) { throw 'Give both -ParentConnectionString and -ChildConnectionString.' }
+    if ($ParentServer -or $ParentDatabase -or $ChildServer -or $ChildDatabase) {
+        throw 'Give either your connection strings or the server and database names, not both.'
+    }
+    $script:parentTarget = ConvertFrom-ConnectionString $ParentConnectionString '-ParentConnectionString'
+    $script:childTarget = ConvertFrom-ConnectionString $ChildConnectionString '-ChildConnectionString'
+    # Creates the child's objects: Manual mode in this script, Auto mode in the Function
+    $provisioningTarget = if ($ChildProvisioningConnectionString) {
+        ConvertFrom-ConnectionString $ChildProvisioningConnectionString '-ChildProvisioningConnectionString'
+    } else { $script:childTarget }
+}
+else {
+    if (-not $ParentServer -or -not $ParentDatabase -or -not $ChildDatabase) {
+        throw 'Give -ParentServer, -ParentDatabase and -ChildDatabase, or your own -ParentConnectionString and -ChildConnectionString.'
+    }
+    if (-not $ChildServer) { $ChildServer = $ParentServer }
+    $script:parentTarget = New-SqlTarget $ParentServer $ParentDatabase
+    $script:childTarget = New-SqlTarget $ChildServer $ChildDatabase
+    $provisioningTarget = $script:childTarget
+}
+
 $tableNames = @($Tables.Split(',') | Where-Object { $_.Trim() } | ForEach-Object { Get-TableName $_ })
 if (-not $tableNames) { throw 'List at least one table in -Tables.' }
 $duplicates = @($tableNames | Group-Object Setting | Where-Object Count -gt 1 | ForEach-Object Name)
@@ -560,13 +705,14 @@ New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 Write-Host ''
 Write-Host "Subscription : $($account.name) ($($account.id))"
 Write-Host "Signed in as : $($account.user)"
-Write-Host "Parent       : $ParentServer / $ParentDatabase"
-Write-Host "Child        : $ChildServer / $ChildDatabase"
+Write-Host "Parent       : $($script:parentTarget.Server) / $($script:parentTarget.Database)"
+Write-Host "Child        : $($script:childTarget.Server) / $($script:childTarget.Database)"
 Write-Host "Mode         : $Mode"
 Write-Host "Region       : $Location"
+Write-Host "Function     : $(if ($useOwnConnectionStrings) { 'your connection strings, saved as its app settings' } else { 'new managed identities, with database users created by this script' })"
 
 Write-Step '1/5  Checking the databases'
-Invoke-Sql -Server $ChildServer -Database $ChildDatabase -Query 'SELECT 1' | Out-Null
+Invoke-Sql -Target $script:childTarget -Query 'SELECT 1' | Out-Null
 $reports = @($tableNames | ForEach-Object { Get-TableReport $_ })
 $reports | Format-Table Table, Rows, Strategy, Note -AutoSize -Wrap | Out-Host
 
@@ -576,43 +722,60 @@ $problems = @($reports | Where-Object { $_.Strategy -in @('NO KEY', 'BLOCKED') }
 if ($problems) {
     Write-Host "These tables won't sync until you fix what the Note says; the others will: $(($problems | ForEach-Object Table) -join ', ')" -ForegroundColor Yellow
 }
-Test-AzureAccess $ParentServer
-if ($ChildServer -ne $ParentServer) { Test-AzureAccess $ChildServer }
+Test-AzureAccess $script:parentTarget.Server
+if ($script:childTarget.Server -ne $script:parentTarget.Server) { Test-AzureAccess $script:childTarget.Server }
 
-# Saved for -SyncNow and -Destroy, and passed to Terraform
+# Saved for -SyncNow and -Destroy, and passed to Terraform. Names only: your connection strings
+# never go into this file.
 $settings = [ordered]@{
     suffix          = $Suffix
     location        = $Location
-    parent_server   = $ParentServer
-    parent_database = $ParentDatabase
-    child_server    = $ChildServer
-    child_database  = $ChildDatabase
+    parent_server   = $script:parentTarget.Server
+    parent_database = $script:parentTarget.Database
+    child_server    = $script:childTarget.Server
+    child_database  = $script:childTarget.Database
     table_list      = ($tableNames | ForEach-Object Setting) -join ','
     mode            = $Mode
 }
 $settings | ConvertTo-Json | Set-Content -Path $settingsFile -Encoding utf8
 
 if ($DryRun) {
-    Write-Step 'SQL that the setup would run (identity SIDs are filled in after Terraform)'
-    Write-SqlFile '01_parent.sql' (Get-ParentSql $reports $null) | Out-Null
-    if ($Mode -eq 'Auto') {
-        Write-SqlFile '02_child.sql' (Get-ChildAutoSql $reports $null $null) | Out-Null
+    if ($useOwnConnectionStrings) {
+        Write-Step 'SQL that the setup would run'
+        $ctSql = Get-ChangeTrackingSql $reports
+        if ($ctSql) { Write-SqlFile '01_parent_change_tracking.sql' $ctSql | Out-Null }
+        Write-Host '  No database users or grants: the logins in your connection strings are used as they are.'
     }
     else {
+        Write-Step 'SQL that the setup would run (identity SIDs are filled in after Terraform)'
+        Write-SqlFile '01_parent.sql' (Get-ParentSql $reports $null) | Out-Null
+        if ($Mode -eq 'Auto') {
+            Write-SqlFile '02_child.sql' (Get-ChildAutoSql $reports $null $null) | Out-Null
+        }
+        else {
+            Write-SqlFile '03_child_grants.sql' (Get-ChildManualGrantsSql $reports $null) | Out-Null
+        }
+    }
+    if ($Mode -eq 'Manual') {
         Write-Host '  Manual mode: the child tables, types and procedures come from the scaffold tool during the setup.'
-        Write-SqlFile '03_child_grants.sql' (Get-ChildManualGrantsSql $reports $null) | Out-Null
     }
 
     Write-Step 'What Terraform would create'
     Initialize-Terraform
-    Invoke-Native { terraform "-chdir=$terraformDir" plan -input=false "-var-file=$settingsFile" }
+    Set-TerraformConnectionStrings
+    try {
+        Invoke-Native { terraform "-chdir=$terraformDir" plan -input=false "-var-file=$settingsFile" }
+    }
+    finally {
+        Clear-TerraformConnectionStrings
+    }
     Write-Host ''
     Write-Host 'Dry run only: nothing was created or changed.' -ForegroundColor Green
     return
 }
 
 if (-not $Yes) {
-    $answer = Read-Host 'Create the Azure resources, the database users and grants, and start syncing? Terraform shows its plan next. (y/N)'
+    $answer = Read-Host 'Create the Azure resources and start syncing? Terraform shows its plan next. (y/N)'
     if ($answer -notin @('y', 'Y', 'yes')) {
         Write-Host 'Cancelled.'
         return
@@ -621,25 +784,46 @@ if (-not $Yes) {
 
 Write-Step '2/5  Creating the Azure resources (Terraform asks you to confirm its plan)'
 Initialize-Terraform
-Invoke-Native { terraform "-chdir=$terraformDir" apply -input=false "-var-file=$settingsFile" }
+Set-TerraformConnectionStrings
+try {
+    Invoke-Native { terraform "-chdir=$terraformDir" apply -input=false "-var-file=$settingsFile" }
+}
+finally {
+    Clear-TerraformConnectionStrings
+}
 $deployment = Get-Deployment
 
-Write-Step '3/5  Parent: database user and read access for the runtime identity'
-$parentFile = Write-SqlFile '01_parent.sql' (Get-ParentSql $reports $deployment.RuntimeClientId)
-Invoke-Sql -Server $ParentServer -Database $ParentDatabase -File $parentFile | Out-Host
-
-if ($Mode -eq 'Auto') {
-    Write-Step '4/5  Child: database users and grants (the Function creates the tables itself)'
-    $childFile = Write-SqlFile '02_child.sql' (Get-ChildAutoSql $reports $deployment.RuntimeClientId $deployment.ProvisioningClientId)
-    Invoke-Sql -Server $ChildServer -Database $ChildDatabase -File $childFile | Out-Host
+if ($useOwnConnectionStrings) {
+    Write-Step '3/5  Parent: nothing to create, your connection string''s login reads the tables'
+    $ctSql = Get-ChangeTrackingSql $reports
+    if ($ctSql) {
+        $ctFile = Write-SqlFile '01_parent_change_tracking.sql' $ctSql
+        Invoke-Sql -Target $script:parentTarget -File $ctFile | Out-Host
+    }
 }
 else {
-    Write-Step '4/5  Child: tracking tables, synced tables and merge procedures from SmartTableSync.Scaffold, then grants'
+    Write-Step '3/5  Parent: database user and read access for the runtime identity'
+    $parentFile = Write-SqlFile '01_parent.sql' (Get-ParentSql $reports $deployment.RuntimeClientId)
+    Invoke-Sql -Target $script:parentTarget -File $parentFile | Out-Host
+}
+
+if ($Mode -eq 'Auto') {
+    if ($useOwnConnectionStrings) {
+        Write-Step '4/5  Child: nothing to create, the Function creates the tables itself with your child connection string'
+    }
+    else {
+        Write-Step '4/5  Child: database users and grants (the Function creates the tables itself)'
+        $childFile = Write-SqlFile '02_child.sql' (Get-ChildAutoSql $reports $deployment.RuntimeClientId $deployment.ProvisioningClientId)
+        Invoke-Sql -Target $script:childTarget -File $childFile | Out-Host
+    }
+}
+else {
+    Write-Step '4/5  Child: tracking tables, synced tables and merge procedures from SmartTableSync.Scaffold'
     $scaffoldDir = Join-Path $outputDir 'child'
     if (Test-Path $scaffoldDir) { Get-ChildItem $scaffoldDir -Filter '*.sql' | Remove-Item }
 
-    $env:ParentIntrospectionConnectionString = Get-AdminConnectionString $ParentServer $ParentDatabase
-    $env:ChildProvisioningConnectionString = Get-AdminConnectionString $ChildServer $ChildDatabase
+    $env:ParentIntrospectionConnectionString = $script:parentTarget.ConnectionString
+    $env:ChildProvisioningConnectionString = $provisioningTarget.ConnectionString
     try {
         $scaffold = Join-Path $repoRoot 'SmartTableSync.Scaffold'
         Invoke-Native { dotnet run --project $scaffold -- --infrastructure --output $scaffoldDir }
@@ -659,11 +843,13 @@ else {
         @(Get-ChildItem $scaffoldDir -Filter '*sp_Sync*.sql' | ForEach-Object FullName)
     foreach ($sqlFile in $childScripts) {
         Write-Host "  applying $(Split-Path $sqlFile -Leaf)"
-        Invoke-Sql -Server $ChildServer -Database $ChildDatabase -File $sqlFile | Out-Null
+        Invoke-Sql -Target $provisioningTarget -File $sqlFile | Out-Null
     }
 
-    $grantsFile = Write-SqlFile '03_child_grants.sql' (Get-ChildManualGrantsSql $reports $deployment.RuntimeClientId)
-    Invoke-Sql -Server $ChildServer -Database $ChildDatabase -File $grantsFile | Out-Host
+    if (-not $useOwnConnectionStrings) {
+        $grantsFile = Write-SqlFile '03_child_grants.sql' (Get-ChildManualGrantsSql $reports $deployment.RuntimeClientId)
+        Invoke-Sql -Target $script:childTarget -File $grantsFile | Out-Host
+    }
 }
 
 Write-Step '5/5  Publishing the Function, starting the first sync and waiting for it'
@@ -680,7 +866,8 @@ Start-Sync $deployment
 if (-not (Wait-ForSync $saved)) { Show-Troubleshooting }
 Show-SyncStatus $saved
 
+$syncNowHint = if ($useOwnConnectionStrings) { ' -ParentConnectionString <...> -ChildConnectionString <...>' } else { '' }
 Write-Host ''
 Write-Host "Done. The Function '$($deployment.FunctionApp)' now syncs every 5 minutes." -ForegroundColor Green
-Write-Host "  ./quickstart/deploy.ps1 -Suffix $Suffix -SyncNow    # sync now and compare" -ForegroundColor Green
+Write-Host "  ./quickstart/deploy.ps1 -Suffix $Suffix -SyncNow$syncNowHint    # sync now and compare" -ForegroundColor Green
 Write-Host "  ./quickstart/deploy.ps1 -Suffix $Suffix -Destroy    # remove the Azure resources" -ForegroundColor Green

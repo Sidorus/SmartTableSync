@@ -143,6 +143,9 @@ Reference:
 | The scaffold tool's commands | [SmartTableSync.Scaffold](SmartTableSync.Scaffold/README.md) |
 | Projects, code structure, architecture decisions | [Architecture](docs/architecture.md) |
 
+Every setting, with what it accepts, what happens on a wrong value, examples and a complete
+configuration: [configuration reference](docs/configuration.md).
+
 ## Manual or Auto mode
 
 The child needs a table, a table type and a merge procedure for every synced table. The mode
