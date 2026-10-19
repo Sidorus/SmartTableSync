@@ -9,6 +9,12 @@ All notable changes to SmartTableSync. The format follows
 
 ### Added
 
+- **Publishing to NuGet** (`.github/workflows/publish.yml`). Pushing a tag such as `v0.5.0`
+  builds, tests and publishes `SmartTableSync` and `SmartTableSync.Scaffold` with that version,
+  through nuget.org trusted publishing (no API key), after a maintainer approves the run. The
+  version comes from the tag only; the project files hold a local default, `0.0.0-dev`. See
+  [releasing](docs/releasing.md).
+
 - **Container host for Linux** (`SmartTableSync.Worker` and its `Dockerfile`). It keeps running
   and syncs every `SmartTableSync:Worker:IntervalMinutes` (default 5), or syncs once and exits
   with `--once`, for a Kubernetes CronJob or an Azure Container Apps job. Settings come from

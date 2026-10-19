@@ -1,0 +1,64 @@
+# Weekly pull requests that keep dependencies up to date, on top of the security updates
+# Dependabot opens anyway. Every pull request runs the CI, so a green one is safe to merge.
+version: 2
+updates:
+  # NuGet packages of every project
+  - package-ecosystem: nuget
+    directories:
+      - /SmartTableSync.Core
+      - /SmartTableSync.Scaffold
+      - /SmartTableSync.Worker
+      - /SmartTableSyncFunction
+      - /SmartTableSync.Tests
+      - /SmartTableSync.IntegrationTests
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Microsoft.Data.SqlClient and its Azure extension must stay on the same version
+      sqlclient:
+        patterns: ["Microsoft.Data.SqlClient*"]
+      # Released together with each .NET servicing update: one pull request instead of several
+      microsoft-extensions:
+        patterns: ["Microsoft.Extensions.*", "System.*"]
+      opentelemetry:
+        patterns: ["OpenTelemetry*", "Azure.Monitor.OpenTelemetry*"]
+      azure-functions:
+        patterns: ["Microsoft.Azure.Functions*"]
+      tests:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk", "coverlet*", "Testcontainers*"]
+    ignore:
+      # These follow the .NET version (10.x); a new major version means a new .NET release,
+      # which is a deliberate upgrade, not a weekly update
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
+
+  # Actions used by the workflows in .github/workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Base images of the container host's Dockerfile
+  - package-ecosystem: docker
+    directory: /SmartTableSync.Worker
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps"
+    ignore:
+      # The images follow the .NET version too
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

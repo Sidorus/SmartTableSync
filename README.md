@@ -204,9 +204,11 @@ for tables without any key, is in the **[roadmap](docs/roadmap.md)**.
 
 ## Status
 
-Version **0.4.0**. The sync engine runs in production on Azure SQL Database with a deployed
-Function App. Not yet published to NuGet. What changed in each version, and what to check when
-upgrading, is in the [changelog](CHANGELOG.md).
+The sync engine runs in production on Azure SQL Database with a deployed Function App. Releases
+are published to NuGet as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) and
+[SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold). What changed in
+each version, and what to check when upgrading, is in the [changelog](CHANGELOG.md); how a release
+is made, in [releasing](docs/releasing.md).
 
 ## License
 
