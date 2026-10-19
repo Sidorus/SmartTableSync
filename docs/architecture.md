@@ -8,6 +8,7 @@ For contributors, and anyone who wants to know where things are in the code.
 |---|---|
 | `SmartTableSync.Core` | The engine (NuGet package `SmartTableSync`) |
 | `SmartTableSyncFunction` | Example Azure Functions host (timer trigger, every 5 minutes) |
+| `SmartTableSync.Worker` | Container host with its `Dockerfile`: syncs on an interval, or once (`--once`) for a scheduler; see [containers](guides/containers.md) |
 | `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
 | `SmartTableSync.Tests` | Unit tests |
 | `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker), including syncs that run as the three identities with exactly the grants in `sql/07_permissions.sql` |

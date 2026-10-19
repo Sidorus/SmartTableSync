@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!-- A plain .NET host for SmartTableSync: runs the sync on an interval, or once ("once" argument) for a
+       scheduler such as a Kubernetes CronJob or an Azure Container Apps job. Built into the
+       container image by the Dockerfile in this folder. -->
+  <PropertyGroup>
+    <RootNamespace>SmartTableSync.Worker</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
+         (Managed Identity, Default, Workload Identity) out of the core package. Keep the same
+         version as the Microsoft.Data.SqlClient reference in SmartTableSync.Core. -->
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
+    <!-- Metrics over OTLP, only when OTEL_EXPORTER_OTLP_ENDPOINT is set (see Program.cs) -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartTableSync.Core\SmartTableSync.Core.csproj" />
+  </ItemGroup>
+
+</Project>

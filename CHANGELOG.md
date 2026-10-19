@@ -9,6 +9,13 @@ All notable changes to SmartTableSync. The format follows
 
 ### Added
 
+- **Container host for Linux** (`SmartTableSync.Worker` and its `Dockerfile`). It keeps running
+  and syncs every `SmartTableSync:Worker:IntervalMinutes` (default 5), or syncs once and exits
+  with `--once`, for a Kubernetes CronJob or an Azure Container Apps job. Settings come from
+  environment variables, logs go to standard output, and metrics go over OTLP when
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set. CI builds the image. See
+  [run it in a container](docs/guides/containers.md).
+
 - **Tables in schemas other than `dbo`.** Name them `schema.Table` in `SmartTableSync:TableList`,
   the per-table settings and the scaffold tool (a plain `Table` still means `dbo.Table`). The
   child keeps the parent's schema; the table's procedures and table type are created in that

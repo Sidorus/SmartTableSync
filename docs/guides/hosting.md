@@ -5,6 +5,9 @@ it with `AddSmartTableSync()` and call `ISyncOrchestrator.RunAsync` on whatever 
 from whatever scheduler you already use. The host decides how often it runs: every minute for a
 near real-time copy, once a night for a reporting copy.
 
+**Just want a container?** You don't need to write a host: the repository has one, with a
+Dockerfile. See [run it in a container](containers.md).
+
 The databases are prepared the same way whatever the host:
 [Manual mode](manual-mode.md) (steps 1-7) or [Auto mode](auto-mode.md) (steps 1-3). This page
 covers the host itself.
