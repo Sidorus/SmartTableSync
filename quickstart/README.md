@@ -199,7 +199,8 @@ integration tests check by running syncs as each identity with exactly those gra
 
 ## Connection strings
 
-The Function gets these app settings (on Linux, `:` in a setting name is written `__`):
+The quick start writes these as the Function's **app settings**; the sync engine reads them from
+there, as it reads them from any host's settings (on Linux, `:` in a setting name is written `__`):
 
 | Setting | Value |
 |---|---|
@@ -213,6 +214,11 @@ The Function gets these app settings (on Linux, `:` in a setting name is written
 `User Id` is the managed identity's client ID; it selects which of the Function's identities signs
 in. There are no passwords or keys for SQL anywhere. Every other setting has its default; see the
 [configuration reference](../docs/configuration.md) to change one.
+
+**Already have connection strings?** You don't need the quick start: put them into your host's
+settings under the same names (`ParentDbConnectionString`, `ChildDbConnectionString`, and in Auto
+mode `ChildProvisioningConnectionString`), together with `SmartTableSync:TableList`. The engine
+uses whatever sign-in they contain: a managed identity, a SQL login or Windows authentication.
 
 ## Auto or Manual mode
 
