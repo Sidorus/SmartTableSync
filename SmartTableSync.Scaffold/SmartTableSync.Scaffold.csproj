@@ -29,8 +29,8 @@
          to build a real IConfiguration from environment variables so Scaffold can bind the
          same SyncSettings (ChangeTrackingColumns/AllowFullRescanFor/IncrementalStrategyOverrides)
          the runtime does, via SyncSettingsServiceCollectionExtensions.Bind. -->
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.13" />
     <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
          out of the core package; needed to connect with an Entra identity. Keep the same
          version as the Microsoft.Data.SqlClient reference in SmartTableSync.Core. -->
