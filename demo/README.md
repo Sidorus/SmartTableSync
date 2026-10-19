@@ -330,3 +330,8 @@ Terraform lists what it will delete and asks you to type `yes`.
   display name, so it must be unique in your Microsoft Entra tenant.
 - Terraform state stays on your machine in `demo/terraform/` and is git-ignored. Keep it until
   you've run `-Destroy`.
+- The Function App reaches its **own** storage account (timer leases, keys, the deployment
+  package) with the account key, the setup the Terraform provider fully manages. Its identity-based
+  option currently produces a storage connection without a key, and the app starts unhealthy with
+  *"Unable to access AzureWebJobsStorage"*. The SQL connections don't use the key: SmartTableSync
+  signs in to both databases with the runtime managed identity.
