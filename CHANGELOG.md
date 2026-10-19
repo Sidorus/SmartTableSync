@@ -44,6 +44,10 @@ All notable changes to SmartTableSync. The format follows
   parent wasn't detected.
 - Measuring the largest value of `(max)` columns while profiling a table queried it without a
   schema, so it depended on the identity's default schema.
+- Running the demo a second time failed with *"There is already an object named 'Product'"*:
+  the script applied a `CREATE TABLE` script left from the first run. It now empties its
+  generated-scripts folders first, applies `*_AddColumns.sql` and `*_AlterColumns.sql`, and has a
+  table fixed by `*_AlterColumns.sql` copied again on the next sync.
 - The example Function sent only warnings and errors to Application Insights, and no
   `smarttablesync.*` metrics at all: the Application Insights SDK keeps only warnings from the
   worker by default, and no exporter was registered for the `SmartTableSync` meter. Its logs now
