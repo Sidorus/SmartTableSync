@@ -1,0 +1,18 @@
+# Only the engine and the worker host go into the image's build context
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+.git/
+.github/
+demo/
+quickstart/
+docs/
+sql/
+SmartTableSync.Tests/
+SmartTableSync.IntegrationTests/
+SmartTableSync.Scaffold/
+SmartTableSyncFunction/
+**/local.settings.json
+**/*.tfstate*
+**/.terraform/

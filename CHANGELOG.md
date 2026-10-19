@@ -9,6 +9,13 @@ All notable changes to SmartTableSync. The format follows
 
 ### Added
 
+- **Container host for Linux** (`SmartTableSync.Worker` and its `Dockerfile`). It keeps running
+  and syncs every `SmartTableSync:Worker:IntervalMinutes` (default 5), or syncs once and exits
+  with `--once`, for a Kubernetes CronJob or an Azure Container Apps job. Settings come from
+  environment variables, logs go to standard output, and metrics go over OTLP when
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set. CI builds the image. See
+  [run it in a container](docs/guides/containers.md).
+
 - **Tables in schemas other than `dbo`.** Name them `schema.Table` in `SmartTableSync:TableList`,
   the per-table settings and the scaffold tool (a plain `Table` still means `dbo.Table`). The
   child keeps the parent's schema; the table's procedures and table type are created in that
@@ -73,7 +80,7 @@ All notable changes to SmartTableSync. The format follows
 - **Tables with `decimal` or `numeric` columns** are planned again on the first run after the
   upgrade (their schema fingerprint now includes precision and scale; other tables keep theirs).
   A child created by an earlier version has those columns as `decimal(18,0)` and rounded values:
-  - The table stops with *"column … is decimal(18,0) in the child but decimal(10,2) in the
+  - The table stops with *"column ... is decimal(18,0) in the child but decimal(10,2) in the
     parent"*. Run the scaffold tool for it and apply `<Table>_AlterColumns.sql` to the child.
   - **Auto mode** then copies the table again by itself on the next run, so every value is exact.
   - **Manual mode:** also run the two `DELETE` statements at the end of that script, so the next

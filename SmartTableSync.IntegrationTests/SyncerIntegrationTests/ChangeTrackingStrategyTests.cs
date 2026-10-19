@@ -16,7 +16,7 @@ using SmartTableSync.Scaffolding;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Strategy 3 — SQL Server Change Tracking (SqlChangeTracking). Proves against a real database:
+/// Strategy 3 - SQL Server Change Tracking (SqlChangeTracking). Proves against a real database:
 /// auto-detection (CT wins over a LastUpdate column) and the manual override opting out of it;
 /// the baseline recorded before the initial copy; inserts, updates, deletes and primary-key
 /// changes picked up from CHANGETABLE; an uncommitted transaction neither blocking the read nor

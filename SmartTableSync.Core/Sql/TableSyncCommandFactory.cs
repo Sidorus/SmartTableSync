@@ -24,7 +24,7 @@ internal sealed class TableSyncCommandFactory
         _table = SqlIdentifier.Table(profile.TableName);
     }
 
-    /// <summary>Every row, page by page — the initial copy and the FullRescan strategy.</summary>
+    /// <summary>Every row, page by page - the initial copy and the FullRescan strategy.</summary>
     public SqlCommand BuildFullTablePageCommand(SqlConnection parent, string? afterKey, int pageSize) =>
         BuildPageCommand(parent, null, "*", _table, filter: null, keyAlias: null, afterKey, pageSize);
 

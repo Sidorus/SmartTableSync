@@ -1,6 +1,6 @@
 namespace SmartTableSync.Merge;
 
-/// <summary>Picks the IBatchMergeStrategy for a table, once, from SyncPlan.MergeStrategy —
+/// <summary>Picks the IBatchMergeStrategy for a table, once, from SyncPlan.MergeStrategy -
 /// the strategy doesn't change mid-run, so ConfigurableTableSyncer resolves it once at
 /// construction and shares the same instance between InitialSyncRunner and
 /// IncrementalSyncRunner rather than re-branching on the enum per batch.</summary>

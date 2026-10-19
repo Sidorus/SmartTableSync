@@ -53,7 +53,7 @@ public class SyncPlanHeuristicTests
         var plan = _heuristic.DerivePlan(profile, DefaultOptions);
 
         Assert.Equal(MergeStrategy.RowByRow, plan.MergeStrategy);
-        // No FK timing race here, so nothing should be flagged retryable — a RowByRow
+        // No FK timing race here, so nothing should be flagged retryable - a RowByRow
         // choice driven purely by row size has no FK race to retry around.
         Assert.Empty(plan.RetryableSqlErrorNumbers);
     }

@@ -1,6 +1,6 @@
 namespace SmartTableSync.Merge;
 
-/// <summary>Merges a whole batch in one stored-procedure call via a table-valued parameter —
+/// <summary>Merges a whole batch in one stored-procedure call via a table-valued parameter -
 /// efficient, but one bad row fails the whole batch, so this is only chosen when the table
 /// references no other table and rows are small enough that per-row isolation isn't needed.</summary>
 internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
@@ -12,7 +12,7 @@ internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
     {
         if (string.IsNullOrEmpty(plan.TvpTypeName))
             throw new InvalidOperationException(
-                $"{profile.TableName}: TvpBatchMergeStrategy requires a non-null TvpTypeName — a plan with " +
+                $"{profile.TableName}: TvpBatchMergeStrategy requires a non-null TvpTypeName - a plan with " +
                 $"MergeStrategy.Tvp and no TvpTypeName should never reach here (see SyncTableConfig.ToSyncPlan).");
 
         _profile = profile;
@@ -40,7 +40,7 @@ internal sealed class TvpBatchMergeStrategy : IBatchMergeStrategy
     // A TVP column typed rowversion/timestamp rejects an explicit value exactly like a real
     // table column does - the TVP type (SqlArtifactGenerator.GenerateTvpUdtScript) excludes
     // the table's rowversion column entirely, so the DataTable passed as @Rows must match
-    // that shape. Projects rather than mutates batch — callers (e.g. InitialSyncRunner's
+    // that shape. Projects rather than mutates batch - callers (e.g. InitialSyncRunner's
     // PK-violation fallback) still read the original DataTable afterward.
     private DataTable TvpShapedRows(DataTable batch)
     {

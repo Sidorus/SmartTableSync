@@ -27,7 +27,7 @@ still running when a position is recorded always lands after that position.
 Implement CT as `IncrementalStrategy.SqlChangeTracking`:
 
 1. **Detection**: `SchemaReader` reads `sys.change_tracking_tables`; `TableProfile` gains
-   `IsChangeTrackingEnabled`, which is part of `SchemaFingerprint` only when true — enabling or
+   `IsChangeTrackingEnabled`, which is part of `SchemaFingerprint` only when true - enabling or
    disabling CT re-provisions the table, while every other table keeps its fingerprint.
 2. **Selection** ([ADR-0010](0010-incremental-strategy-selection-hierarchy.md)): chosen
    **automatically** when CT is enabled on the table, ahead of RowVersion. CT being enabled is a
@@ -41,9 +41,9 @@ Implement CT as `IncrementalStrategy.SqlChangeTracking`:
    and parent writers aren't blocked. Rows whose key no longer exists are deleted on the child;
    the rest are merged. The position (`CustomSyncState.IncrementalPosition` = `CT:<version>`) is
    advanced only after the window was applied without retryable errors.
-4. **Self-healing**: when the version chain is broken — no position yet; a position older than
+4. **Self-healing**: when the version chain is broken - no position yet; a position older than
    `CHANGE_TRACKING_MIN_VALID_VERSION` (retention exceeded, `TRUNCATE TABLE`, CT re-enabled); or a
-   position **newer** than `CHANGE_TRACKING_CURRENT_VERSION()` (parent restored from a backup) —
+   position **newer** than `CHANGE_TRACKING_CURRENT_VERSION()` (parent restored from a backup) -
    the runner captures the current version, runs one full re-scan **plus a delete
    reconciliation** (a re-scan only inserts and updates), and resumes from the captured version.
    The `smarttablesync.full_rescans` metric records each fallback with a reason category.
@@ -68,7 +68,7 @@ Implement CT as `IncrementalStrategy.SqlChangeTracking`:
   old key is still read).
 - **Use CT only when requested through an override.** Rejected: every table would need
   configuration even when CT is clearly the best choice, inconsistent with RowVersion's
-  auto-detection. The override covers the opposite case — pinning a table to another strategy.
+  auto-detection. The override covers the opposite case - pinning a table to another strategy.
 - **Turn `TRACK_COLUMNS_UPDATED` on and merge only changed columns.** Deferred: only worth it for
   very large binary tables, and it needs partial-column MERGE procedures.
 - **CDC.** Rejected in [ADR-0014](0014-reject-cdc-prefer-change-tracking.md) (transaction-log
@@ -78,7 +78,7 @@ Implement CT as `IncrementalStrategy.SqlChangeTracking`:
 **Positive:**
 - No schema change on the parent table; deletes arrive within one run.
 - Commit-time versions need no long-running-transaction workaround.
-- The read cost of a run scales with changed rows — a large reduction for tables that would
+- The read cost of a run scales with changed rows - a large reduction for tables that would
   otherwise be `FullRescan`.
 - No child schema change (reuses `CustomSyncState.IncrementalPosition`).
 
@@ -88,6 +88,6 @@ Implement CT as `IncrementalStrategy.SqlChangeTracking`:
   makes that trade-off.
 - Requires parent-side DBA action: database- and table-level enable, the `VIEW CHANGE TRACKING`
   grant, and outside Azure SQL Database, `ALLOW_SNAPSHOT_ISOLATION` (recommended).
-- Requires a `PRIMARY KEY` constraint — as every strategy does in this engine.
+- Requires a `PRIMARY KEY` constraint - as every strategy does in this engine.
 - CT's automatic cleanup can fall behind on very busy tables (a documented SQL Server issue);
   SmartTableSync would see it as slower `CHANGETABLE` reads.

@@ -2,7 +2,7 @@ namespace SmartTableSync.Reconciliation;
 
 /// <summary>Deletes rows from the child that no longer exist in the parent: reads both key
 /// sets, diffs them, deletes the orphans. Called by ConfigurableTableSyncer only outside
-/// initial sync — a partially-populated child during initial sync would otherwise produce
+/// initial sync - a partially-populated child during initial sync would otherwise produce
 /// false deletes.</summary>
 internal sealed class DeleteReconciler
 {
@@ -50,7 +50,7 @@ internal sealed class DeleteReconciler
     private async Task<HashSet<string>> LoadKeysAsync(SqlCommand cmd, CancellationToken ct)
     {
         await using var _ = cmd;
-        // Uses the introspected row count as the HashSet's initial capacity hint — a more
+        // Uses the introspected row count as the HashSet's initial capacity hint - a more
         // accurate estimate than the old per-subclass hardcoded guesses, since it comes
         // from sys.dm_db_partition_stats rather than a one-off comment in the code.
         var estimatedRowCount = (int)Math.Clamp(_profile.RowCount, 1024, int.MaxValue);

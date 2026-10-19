@@ -7,7 +7,7 @@ namespace SmartTableSync.Introspection;
 /// table are a mistake and fail, rather than being silently ignored.</item>
 /// <item>The configured key columns (SmartTableSync:KeyColumns:&lt;Table&gt;): an explicit choice
 /// wins over an inferred one. They must name existing, NOT NULL, non-LOB, non-rowversion columns,
-/// each once — the child declares them as its PRIMARY KEY and the engine copies their values.</item>
+/// each once - the child declares them as its PRIMARY KEY and the engine copies their values.</item>
 /// <item>The best unique index (SchemaReader picks it).</item>
 /// </list>
 /// A table with none of these gets an empty key; SyncPlanHeuristic refuses it with a message that

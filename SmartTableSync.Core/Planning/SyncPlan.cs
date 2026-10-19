@@ -1,6 +1,6 @@
 namespace SmartTableSync.Planning;
 
-/// <summary>The resolved, ready-to-use configuration for syncing one table — derived by
+/// <summary>The resolved, ready-to-use configuration for syncing one table - derived by
 /// ISyncPlanHeuristic from a TableProfile, with any overrides from SyncTableConfig applied.</summary>
 /// <param name="BulkCopyTimeoutSeconds">Command timeout for every statement against the table,
 /// not only bulk copy. The name matches the persisted SyncTableConfig column.</param>

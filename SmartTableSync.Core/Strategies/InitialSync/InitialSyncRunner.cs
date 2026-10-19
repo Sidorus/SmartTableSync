@@ -6,8 +6,8 @@ namespace SmartTableSync.Strategies.InitialSync;
 /// on command timeout, and a fallback to the table's IBatchMergeStrategy on a PK violation
 /// (the child already has some of these rows).
 ///
-/// Owns the one piece of mutable state in the whole sync path — the batch size, which can
-/// shrink at runtime but never grows back — which is why it's an instance class rather than
+/// Owns the one piece of mutable state in the whole sync path - the batch size, which can
+/// shrink at runtime but never grows back - which is why it's an instance class rather than
 /// a stateless static helper like the rest of Syncers/.
 /// </summary>
 internal sealed class InitialSyncRunner : ISyncRunner
@@ -34,7 +34,7 @@ internal sealed class InitialSyncRunner : ISyncRunner
         _batchSize = plan.BatchSize;
     }
 
-    // lastSyncDate is unused — initial sync always resumes from the persisted batch-log
+    // lastSyncDate is unused - initial sync always resumes from the persisted batch-log
     // cursor, never from the caller's timestamp. Present only so this satisfies ISyncRunner,
     // the interface ConfigurableTableSyncer holds both this and IncrementalSyncRunner behind.
     public async Task<SyncOutcome> RunAsync(SqlConnection parent, SqlConnection child, DateTime lastSyncDate, CancellationToken ct)
@@ -80,7 +80,7 @@ internal sealed class InitialSyncRunner : ISyncRunner
                 backedOffAtCurrentPosition = false;
 
                 _logger.LogInformation(
-                    "{Table} batch {N}: {Count} rows bulk-inserted, key '{Key}', {Ms} ms — {Total} cumulative",
+                    "{Table} batch {N}: {Count} rows bulk-inserted, key '{Key}', {Ms} ms - {Total} cumulative",
                     tableName, batchNum, rowsRead, currentKey, sw.ElapsedMilliseconds, totalPrior + thisRunSynced);
             }
             catch (SqlException ex) when (ex.Number == -2 && !backedOffAtCurrentPosition && _batchSize > 1)
@@ -91,16 +91,16 @@ internal sealed class InitialSyncRunner : ISyncRunner
                 // fall through to the fatal-error path below like any other failure.
                 var newSize = BatchSizeBackoff.Halve(_batchSize);
                 _logger.LogWarning(
-                    "{Table} batch {N}: bulk copy timed out at batch size {Old} — retrying from the same position at {New}",
+                    "{Table} batch {N}: bulk copy timed out at batch size {Old} - retrying from the same position at {New}",
                     tableName, batchNum, _batchSize, newSize);
                 _batchSize = newSize;
                 backedOffAtCurrentPosition = true;
                 continue;
             }
-            catch (SqlException ex) when (ex.Number == 2627) // PK violation — child already has these rows
+            catch (SqlException ex) when (ex.Number == 2627) // PK violation - child already has these rows
             {
                 _logger.LogWarning(
-                    "{Table} batch {N}: PK violation in bulk copy (row {Key} exists) — falling back to MERGE",
+                    "{Table} batch {N}: PK violation in bulk copy (row {Key} exists) - falling back to MERGE",
                     tableName, batchNum, currentKey);
                 try
                 {
@@ -112,13 +112,13 @@ internal sealed class InitialSyncRunner : ISyncRunner
                     batchOk = true;
 
                     _logger.LogInformation(
-                        "{Table} batch {N}: {Count} rows merged (fallback), key '{Key}', {Ms} ms — {Total} cumulative",
+                        "{Table} batch {N}: {Count} rows merged (fallback), key '{Key}', {Ms} ms - {Total} cumulative",
                         tableName, batchNum, merged.Merged, currentKey, sw.ElapsedMilliseconds, totalPrior + thisRunSynced);
                 }
                 catch (Exception mergeEx) when (mergeEx is not OperationCanceledException)
                 {
                     _logger.LogError(mergeEx,
-                        "{Table} batch {N}: MERGE fallback also failed — pausing, will retry on next run",
+                        "{Table} batch {N}: MERGE fallback also failed - pausing, will retry on next run",
                         tableName, batchNum);
                     totalErr += rowsRead;
                 }
@@ -126,7 +126,7 @@ internal sealed class InitialSyncRunner : ISyncRunner
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex,
-                    "{Table} batch {N}: bulk insert of {Count} rows failed — pausing, will retry on next run",
+                    "{Table} batch {N}: bulk insert of {Count} rows failed - pausing, will retry on next run",
                     tableName, batchNum, rowsRead);
                 totalErr += rowsRead;
             }

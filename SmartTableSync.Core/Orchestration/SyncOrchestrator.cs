@@ -63,7 +63,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
     {
         if (!await _inProcessRunLock.WaitAsync(0, ct))
         {
-            _logger.LogWarning("SmartTableSync: previous run still in progress — skipping this invocation");
+            _logger.LogWarning("SmartTableSync: previous run still in progress - skipping this invocation");
             return;
         }
 
@@ -72,7 +72,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             await using var databaseLock = await _runLock.TryAcquireAsync(ct);
             if (databaseLock is null)
             {
-                _logger.LogWarning("SmartTableSync: another instance is already syncing this child database — skipping this invocation");
+                _logger.LogWarning("SmartTableSync: another instance is already syncing this child database - skipping this invocation");
                 return;
             }
 
@@ -133,7 +133,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             var shouldReconcile = IsReconcileDue(tableName, plan.IncrementalStrategy);
 
             // Use the parent DB clock so LastSyncDate is comparable to column LastUpdate
-            // values that SQL Server stamped — eliminates any app-server clock skew gap.
+            // values that SQL Server stamped - eliminates any app-server clock skew gap.
             var syncStartedAt = await GetDbUtcNowAsync(parent, ct);
 
             var result = await syncer.SyncAsync(parent, child, lastSync, ct);
@@ -144,9 +144,9 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
                 : 0);
 
             // Don't advance the timestamp in two cases:
-            // 1. Initial sync had errors — keeps InitialDate so next run re-enters initial sync
+            // 1. Initial sync had errors - keeps InitialDate so next run re-enters initial sync
             //    mode and resumes from the saved resume key rather than switching to incremental.
-            // 2. Incremental sync had retryable errors (e.g. an FK timing race) —
+            // 2. Incremental sync had retryable errors (e.g. an FK timing race) -
             //    keeps LastSyncDate so the failed rows fall inside the next run's query window
             //    and are retried. MERGE is idempotent so re-processing successful rows is safe.
             var initialSyncFailed = result.IsInitialSync && result.RowsErrored > 0;
@@ -180,7 +180,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "{Table}: sync failed — will retry on next run", tableName);
+            _logger.LogError(ex, "{Table}: sync failed - will retry on next run", tableName);
         }
     }
 
@@ -204,7 +204,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
         }
 
         var tableName = provisioning.Profile.TableName;
-        _logger.LogWarning("{Table}: parent schema changed — running one full re-scan so every child row matches the new schema", tableName);
+        _logger.LogWarning("{Table}: parent schema changed - running one full re-scan so every child row matches the new schema", tableName);
         _metrics.FullRescan(tableName, "schema_changed");
 
         var rescanPlan = provisioning.Plan with { IncrementalStrategy = IncrementalStrategy.FullRescan, IncrementalColumn = null };
@@ -214,7 +214,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
             return true;
         }
 
-        _logger.LogWarning("{Table}: the re-scan after the schema change had {Errors} error(s) — it runs again next run",
+        _logger.LogWarning("{Table}: the re-scan after the schema change had {Errors} error(s) - it runs again next run",
             tableName, rescan.RowsErrored);
         return false;
     }

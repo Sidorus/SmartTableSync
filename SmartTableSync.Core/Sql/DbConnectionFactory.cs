@@ -2,7 +2,7 @@ namespace SmartTableSync.Sql;
 
 /// <summary>Creates parent/child connections from configuration. Every connection gets the same
 /// open-retry provider (SyncSettings.ConnectionOpenAttempts), so transient Azure SQL failures
-/// while connecting — failover, throttling, brief unavailability — are retried with exponential
+/// while connecting - failover, throttling, brief unavailability - are retried with exponential
 /// backoff instead of failing the table for a whole cycle. Commands are deliberately not
 /// retried here; see SyncSettings.ConnectionOpenAttempts.</summary>
 internal sealed class DbConnectionFactory : IDbConnectionFactory
@@ -59,7 +59,7 @@ internal sealed class DbConnectionFactory : IDbConnectionFactory
         {
             var lastError = e.Exceptions[^1];
             logger.LogWarning(
-                "Opening a database connection failed with a transient error ({Error}) — retry {Attempt} after {Delay}",
+                "Opening a database connection failed with a transient error ({Error}) - retry {Attempt} after {Delay}",
                 lastError is SqlException sqlException ? sqlException.Number : lastError.GetType().Name,
                 e.RetryCount + 1, e.Delay);
         };

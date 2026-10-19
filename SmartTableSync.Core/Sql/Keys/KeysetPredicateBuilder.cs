@@ -2,7 +2,7 @@ namespace SmartTableSync.Sql.Keys;
 
 /// <summary>
 /// Builds a keyset (seek) pagination predicate for any number of ordered primary key
-/// columns. Pure — no I/O, no SqlConnection.
+/// columns. Pure - no I/O, no SqlConnection.
 ///
 /// For columns [c1, c2, ..., cn] with parameters [@p1, @p2, ..., @pn]:
 ///   c1 > @p1
@@ -46,13 +46,13 @@ internal static class KeysetPredicateBuilder
         return string.Join("\n    OR ", clauses);
     }
 
-    /// <summary>Builds the matching "ORDER BY c1, c2, ..." clause — keyset pagination
+    /// <summary>Builds the matching "ORDER BY c1, c2, ..." clause - keyset pagination
     /// requires the query's sort order to match the predicate's column order exactly.</summary>
     public static string BuildOrderBy(IReadOnlyList<string> primaryKeyColumns, string? tableAlias = null) =>
         string.Join(", ", primaryKeyColumns.Select(c => Column(c, tableAlias)));
 
     /// <summary>Builds the "key as a single string" SELECT expression used to compare
-    /// parent/child key sets for delete reconciliation, joined with '|' for composite keys —
+    /// parent/child key sets for delete reconciliation, joined with '|' for composite keys -
     /// the same format as CompositeKey. Every conversion is lossless and culture-independent,
     /// so two different keys never produce the same string and
     /// SqlTypeMapping.ParseKeyComponent parses each component back to its exact value:

@@ -7,7 +7,7 @@ using SmartTableSync.Hosting;
 using SmartTableSync.Scaffolding;
 using SmartTableSync.Sql;
 
-// Manual, on-demand tool — never run by the timer-triggered Function. Reads schema
+// Manual, on-demand tool - never run by the timer-triggered Function. Reads schema
 // (read-only) and writes reviewable .sql files; never executes anything against a
 // database itself. It uses its own connection strings (the parent-introspection and
 // child-provisioning identities in sql/07_permissions.sql), never the Function's runtime
@@ -16,7 +16,7 @@ using SmartTableSync.Sql;
 if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 {
     Console.WriteLine("""
-        SmartTableSync.Scaffold — generates reviewable SQL for one or more tables.
+        SmartTableSync.Scaffold - generates reviewable SQL for one or more tables.
 
         Usage:
           dotnet run -- <TableName> [<TableName> ...] [--output <dir>]
@@ -24,10 +24,10 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
           dotnet run -- --rowversion-setup <TableName> [<TableName> ...] [--column <Name>] [--output <dir>]
           dotnet run -- --change-tracking-setup <TableName> [<TableName> ...] [--retention-days <N>] [--output <dir>]
 
-        Environment variables required (per-table generation — --infrastructure needs none):
+        Environment variables required (per-table generation - --infrastructure needs none):
           ParentIntrospectionConnectionString   (read-only: VIEW DEFINITION + SELECT on parent)
           ChildProvisioningConnectionString      (only reads the existing child schema to decide
-                                                   what to write — never executes DDL)
+                                                   what to write - never executes DDL)
                                                    Not needed for --rowversion-setup or
                                                    --change-tracking-setup (parent-only).
 
@@ -36,23 +36,23 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
         SmartTableSync__IncrementalStrategyOverrides__<Table>, SmartTableSync__KeyColumns__<Table>)
         from environment variables, so
         generated artifacts match what SyncTableProvisioner will actually derive at runtime for
-        the same settings — set them the same way you would for the Function host.
+        the same settings - set them the same way you would for the Function host.
 
         --infrastructure writes the table-agnostic tracking schema every managed table
         depends on (CustomSyncState, SyncBatchLog, SyncTableConfig) to one reviewable file.
         Apply it once, before syncing any table for the first time.
 
         --rowversion-setup writes a script that adds a rowversion column (default name
-        "RowVer", override with --column) plus its required index to the named table(s) —
+        "RowVer", override with --column) plus its required index to the named table(s) -
         for the operator/DBA to apply BY HAND against the PARENT database, opting that table
         into the RowVersion incremental strategy. SmartTableSync never has, and never will
-        have, DDL access to the parent database in either Manual or Auto mode — this script
+        have, DDL access to the parent database in either Manual or Auto mode - this script
         is generated for manual review only, same trust model as sql/07_permissions.sql.
 
         --change-tracking-setup writes a script that enables SQL Server Change Tracking on the
         database (if not already on; default 2-day retention, override with --retention-days)
         and on the named table(s), plus the VIEW CHANGE TRACKING grant the runtime identity
-        needs — for a DBA to apply BY HAND against the PARENT database. Once applied, the table
+        needs - for a DBA to apply BY HAND against the PARENT database. Once applied, the table
         is switched to the SqlChangeTracking incremental strategy automatically on its next
         re-provisioning (unless SmartTableSync__IncrementalStrategyOverrides__<Table> pins it).
 
@@ -108,11 +108,11 @@ if (args.Contains("--rowversion-setup"))
             var profile = await rowVersionSchemaReader.ProfileTableAsync(rowVersionParent, tableName, CancellationToken.None);
             var path = Path.Combine(outputDir, $"{tableName}_RowVersionSetup.sql");
             await File.WriteAllTextAsync(path, rowVersionGenerator.GenerateRowVersionSetupScript(profile, columnName));
-            Console.WriteLine($"wrote {path} — apply manually against the PARENT database");
+            Console.WriteLine($"wrote {path} - apply manually against the PARENT database");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Same aggregate-and-continue behavior as the main per-table loop below — one bad
+            // Same aggregate-and-continue behavior as the main per-table loop below - one bad
             // table (e.g. a typo'd name that fails introspection) shouldn't abort the rest.
             Console.Error.WriteLine($"{tableName}: FAILED: {ex.Message}");
             failedRowVersionTables.Add(tableName);
@@ -121,7 +121,7 @@ if (args.Contains("--rowversion-setup"))
 
     if (failedRowVersionTables.Count > 0)
     {
-        Console.Error.WriteLine($"{failedRowVersionTables.Count} table(s) failed: {string.Join(", ", failedRowVersionTables)} — fix and re-run.");
+        Console.Error.WriteLine($"{failedRowVersionTables.Count} table(s) failed: {string.Join(", ", failedRowVersionTables)} - fix and re-run.");
         return 1;
     }
 
@@ -165,11 +165,11 @@ if (args.Contains("--change-tracking-setup"))
         try
         {
             tableName = SyncTableName.Normalize(requestedName);
-            // Catalog metadata only (columns + PK) — enough for the script, no row sampling.
+            // Catalog metadata only (columns + PK) - enough for the script, no row sampling.
             var profile = await changeTrackingSchemaReader.GetFingerprintInputsAsync(changeTrackingParent, tableName, CancellationToken.None);
             var path = Path.Combine(outputDir, $"{tableName}_ChangeTrackingSetup.sql");
             await File.WriteAllTextAsync(path, changeTrackingGenerator.GenerateChangeTrackingSetupScript(profile, retentionDays));
-            Console.WriteLine($"wrote {path} — apply manually against the PARENT database");
+            Console.WriteLine($"wrote {path} - apply manually against the PARENT database");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -180,7 +180,7 @@ if (args.Contains("--change-tracking-setup"))
 
     if (failedChangeTrackingTables.Count > 0)
     {
-        Console.Error.WriteLine($"{failedChangeTrackingTables.Count} table(s) failed: {string.Join(", ", failedChangeTrackingTables)} — fix and re-run.");
+        Console.Error.WriteLine($"{failedChangeTrackingTables.Count} table(s) failed: {string.Join(", ", failedChangeTrackingTables)} - fix and re-run.");
         return 1;
     }
 
@@ -284,7 +284,7 @@ foreach (var requestedName in tableNames)
             }
             else
             {
-                Console.WriteLine("  child table already exists and has every parent column — skipping CREATE TABLE");
+                Console.WriteLine("  child table already exists and has every parent column - skipping CREATE TABLE");
             }
 
             if (diff.ColumnsToRetype.Count > 0)
@@ -345,7 +345,7 @@ Console.WriteLine();
 
 if (failedTables.Count > 0)
 {
-    Console.Error.WriteLine($"{failedTables.Count} table(s) failed: {string.Join(", ", failedTables)} — fix the settings above and re-run.");
+    Console.Error.WriteLine($"{failedTables.Count} table(s) failed: {string.Join(", ", failedTables)} - fix the settings above and re-run.");
     return 1;
 }
 

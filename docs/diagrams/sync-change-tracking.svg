@@ -30,7 +30,7 @@
 
   <rect class="box" x="260" y="30" width="160" height="50" rx="8"/>
   <text class="t" x="340" y="49" text-anchor="middle" dominant-baseline="central">Application</text>
-  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE … COMMIT</text>
+  <text class="s" x="340" y="66" text-anchor="middle" dominant-baseline="central">UPDATE ... COMMIT</text>
   <line class="arr" x1="340" y1="80" x2="340" y2="116" marker-end="url(#a)"/>
 
   <path class="wr" d="M260 55 L150 55 L150 286" marker-end="url(#w)"/>

@@ -4,14 +4,14 @@ namespace SmartTableSync.Hosting;
 
 public static class SmartTableSyncServiceCollectionExtensions
 {
-    /// <summary>Registers the entire sync engine — settings binding, schema introspection,
-    /// plan derivation, table provisioning, scaffolding, and the orchestrator itself — behind
+    /// <summary>Registers the entire sync engine - settings binding, schema introspection,
+    /// plan derivation, table provisioning, scaffolding, and the orchestrator itself - behind
     /// their interfaces, so any host (Azure Function, console app, whatever) gets a working
     /// engine from this one call instead of needing to know its internal wiring.
     ///
     /// Uses TryAdd throughout, so a host can override any single piece (e.g. a different
     /// ISyncMetricsReporter) by registering its own implementation either before or after
-    /// this call. The default, SyncMetricsReporter, emits via System.Diagnostics.Metrics —
+    /// this call. The default, SyncMetricsReporter, emits via System.Diagnostics.Metrics -
     /// no APM vendor package required; point any OpenTelemetry exporter at the
     /// "SmartTableSync" meter name to collect it.</summary>
     public static IServiceCollection AddSmartTableSync(this IServiceCollection services)

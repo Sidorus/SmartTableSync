@@ -15,7 +15,7 @@ using SmartTableSync.Orchestration;
 namespace SmartTableSync.IntegrationTests.SyncerIntegrationTests;
 
 /// <summary>
-/// Item 1 — configurable change-tracking column. Proves the three resolutions
+/// Item 1 - configurable change-tracking column. Proves the three resolutions
 /// SyncPlanHeuristic/SyncTableProvisioner can reach for a table's incremental strategy,
 /// against real introspection and a real sync run, not just the unit-level heuristic math:
 ///   - a table with the default "LastUpdate" column resolves Timestamp with zero config
@@ -100,7 +100,7 @@ public class IncrementalStrategyTests
         const int unchangedId = 1;
         const int newParentId = 2;
 
-        // Already-synced row, present in both — proves an unchanged row surviving a
+        // Already-synced row, present in both - proves an unchanged row surviving a
         // re-merge is harmless, not just that new/changed rows get picked up.
         await SyncerTestHelpers.InsertIncrementalStrategyFullRescanRowAsync(parent, unchangedId, "Unchanged");
         await SyncerTestHelpers.InsertIncrementalStrategyFullRescanRowAsync(child, unchangedId, "Unchanged");

@@ -110,7 +110,7 @@ public class SchemaFingerprintTests
     public void Compute_ReorderingCompositePrimaryKeyColumns_ProducesDifferentHash()
     {
         // Composite key column ORDER matters (changes the keyset predicate / resume-key
-        // format), so this must be detected — unlike a pure non-key column reorder.
+        // format), so this must be detected - unlike a pure non-key column reorder.
         var original = CreateProfile(primaryKeyColumns: ["A", "B"]);
         var reordered = original with { PrimaryKeyColumns = ["B", "A"] };
 
@@ -121,7 +121,7 @@ public class SchemaFingerprintTests
     public void Compute_ReorderingNonKeyColumnsOnly_ProducesSameHash()
     {
         // A pure physical column reorder with no name/type/nullability change shouldn't
-        // invalidate the fingerprint — application code always maps by column name.
+        // invalidate the fingerprint - application code always maps by column name.
         var original = CreateProfile(columns: [
             new ColumnProfile("Id", "int", 4, false),
             new ColumnProfile("Name", "nvarchar", 100, true),

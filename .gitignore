@@ -1,4 +1,4 @@
-# Azure Functions local settings — contains secrets, never commit
+# Azure Functions local settings - contains secrets, never commit
 local.settings.json
 
 # Build output
@@ -12,10 +12,10 @@ obj/
 # Rider
 .idea/
 
-# Publish profiles and deployment artifacts — contain Azure resource names / subscription IDs
+# Publish profiles and deployment artifacts - contain Azure resource names / subscription IDs
 **/Properties/
 
-# Markdown docs — keep only the public-facing READMEs, the changelog, user guides in docs/ and
+# Markdown docs - keep only the public-facing READMEs, the changelog, user guides in docs/ and
 # the ADRs out of the ignore list
 *.md
 !README.md

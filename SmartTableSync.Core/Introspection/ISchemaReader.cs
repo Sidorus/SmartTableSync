@@ -9,7 +9,7 @@ internal interface ISchemaReader
     Task<TableProfile> GetFingerprintInputsAsync(
         SqlConnection parent, string tableName, IReadOnlyList<string>? configuredKeyColumns, CancellationToken ct);
 
-    /// <summary>Full profile — everything GetFingerprintInputsAsync returns, plus indexed
+    /// <summary>Full profile - everything GetFingerprintInputsAsync returns, plus indexed
     /// LOB-key detection, incoming-FK detection, and row count/size sampling. Only run
     /// when (re)provisioning a table, not on every invocation. A configured key is checked for
     /// duplicate values here, so once per provisioning.</summary>
@@ -18,14 +18,14 @@ internal interface ISchemaReader
 
     /// <summary>Stretch goal: scans every table in the parent database (not just the
     /// configured ones) and returns the names of tables with an indexed nvarchar(max)/
-    /// varbinary(max) key column — the same catalog-only rule that excludes a table from
+    /// varbinary(max) key column - the same catalog-only rule that excludes a table from
     /// Azure SQL Data Sync. Catalog-metadata-only, no data scan, so safe to run broadly.
     /// Does NOT check the oversized-row case (would require scanning every table's data),
-    /// so a "no" from this method isn't a full guarantee — treat it as an assisted first
+    /// so a "no" from this method isn't a full guarantee - treat it as an assisted first
     /// pass, not a complete answer.</summary>
     Task<IReadOnlyList<string>> FindDataSyncIncompatibleTablesAsync(SqlConnection parent, CancellationToken ct);
 
-    /// <summary>Cheap existence check via OBJECT_ID — used by the scaffold tool to decide
+    /// <summary>Cheap existence check via OBJECT_ID - used by the scaffold tool to decide
     /// whether a CREATE TABLE script is needed for the child, without the "0 columns found"
     /// exception GetFingerprintInputsAsync/ProfileTableAsync throw for a missing table.</summary>
     Task<bool> TableExistsAsync(SqlConnection connection, string tableName, CancellationToken ct);

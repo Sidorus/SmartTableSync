@@ -5,13 +5,13 @@ namespace SmartTableSync.Planning;
 
 /// <summary>
 /// Pure hash of the parts of a TableProfile that determine sync behavior: column
-/// name/type/length/nullability, sync key columns (in order — order matters for
+/// name/type/length/nullability, sync key columns (in order - order matters for
 /// composite keys) and where they come from, identity column, and whether SQL Server Change Tracking is enabled on
 /// the table (it selects the incremental strategy). Deliberately excludes row count/size/FK data,
 /// which change constantly without requiring re-provisioning.
 ///
 /// Non-key columns are sorted by name before hashing, so a pure physical column reorder
-/// (no name/type change) doesn't spuriously invalidate the fingerprint — application code
+/// (no name/type change) doesn't spuriously invalidate the fingerprint - application code
 /// always maps by column name (SELECT *), never position. Primary key column ORDER is
 /// preserved exactly as given, since reordering a composite key changes the keyset
 /// predicate and resume-key format and must be detected.

@@ -56,7 +56,7 @@ Database into another that also keeps the child's own tables:
 
 | Alternative | Why it doesn't fit this case | Cost |
 |---|---|---|
-| Transactional replication | Azure SQL Database can only be a subscriber, never the publisher | — |
+| Transactional replication | Azure SQL Database can only be a subscriber, never the publisher | - |
 | Read replicas, active geo-replication, database copy | Whole database only, read-only or a one-time snapshot; the child can't have its own tables | A full secondary database |
 | Fabric mirroring | Replicates into OneLake as read-only Delta tables, not into another Azure SQL Database | F2 capacity ≈ **$320/month** |
 | Azure Data Factory, incremental copy | Works, but every run is billed, and deletes and upserts need extra pipeline design | ≈ **$170 per table per month** at a 5-minute schedule |
@@ -114,7 +114,7 @@ More: [every step of a run in detail](docs/how-it-works.md) ·
 |---|---|
 | **Databases** | Azure SQL Database, Azure SQL Managed Instance, SQL Server on-premises or in a VM, in any mix (for example an on-premises parent and an Azure SQL child). SQL Server 2016 SP1 or later. |
 | **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
-| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function (included as an example), a background service, a Hangfire or Quartz.NET job, a Windows service, a container. It only needs network access to both databases. |
+| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`, on Windows or Linux: an Azure Function (included as an example), a Linux container (image included), a background service, a Hangfire or Quartz.NET job, a Windows service. It only needs network access to both databases. |
 | **Schedule** | Decided by the host: any interval, from every minute to once a night. The example Function runs every 5 minutes. |
 
 ## Guides
@@ -128,6 +128,7 @@ every SQL statement.
 | **Sync my own Azure SQL databases** with one script | [Quick start](quickstart/README.md) |
 | Set it up by hand in **Manual mode**: scaffold tool, reviewed SQL, least rights (production) | [Manual mode, step by step](docs/guides/manual-mode.md) |
 | Set it up by hand in **Auto mode**: the engine creates the child's tables | [Auto mode, step by step](docs/guides/auto-mode.md) |
+| Run it in a **container** on Linux: Docker, Azure Container Apps, Kubernetes | [Run it in a container](docs/guides/containers.md) |
 | Run it in **my own app**: a background service, Hangfire or Quartz.NET | [Run it in your own app](docs/guides/hosting.md) |
 
 Reference:

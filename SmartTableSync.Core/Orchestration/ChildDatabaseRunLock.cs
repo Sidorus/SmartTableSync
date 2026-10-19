@@ -3,7 +3,7 @@ namespace SmartTableSync.Orchestration;
 /// <summary>ISyncRunLock backed by a SQL Server application lock (sp_getapplock) in the child
 /// database, the one resource every host instance syncing into it shares. The lock is owned by
 /// the session of a dedicated connection held for the whole run, so SQL Server releases it by
-/// itself if the host crashes or loses the connection — a stale lock can't block future runs.
+/// itself if the host crashes or loses the connection - a stale lock can't block future runs.
 /// Needs no extra permission: sp_getapplock is available to every database user.</summary>
 internal sealed class ChildDatabaseRunLock : ISyncRunLock
 {

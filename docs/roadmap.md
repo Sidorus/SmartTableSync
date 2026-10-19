@@ -8,7 +8,7 @@ What is planned next. **Nothing on this page is built yet**; what works today is
 
 | Priority | Problem today | Planned fix |
 |---|---|---|
-| 1 | The run lock's connection is idle during a run; whether it survives more than 30 minutes on Azure SQL Database is unverified. Two runs could then overlap: correct data, double work. | Keep the lock connection active between tables, check that the lock is still held before each table, and add a long-run test. |
+| 1 | The run lock's connection is idle during a run, and Azure SQL Database can close idle connections after about 30 minutes, so two very long runs could overlap: correct data, double work. | Keep the lock connection active between tables, and check that the lock is still held before each table. |
 | 2 | The time of the last delete check is kept in memory, so a host that scales to zero repeats the full key comparison on most cold starts. | Store it per table in `CustomSyncState`, so every host instance and restart sees the same time. |
 | 3 | A row that can't be written (other than a foreign-key timing error) is logged and skipped, and stays out of date until it changes again. | Record failed keys in a small `SyncFailedRow` table, read them again on the next runs, and report how many are waiting as a metric. |
 | 4 | Changing `IncrementalStrategyOverrides`, `TimestampColumns`, `AllowFullRescanFor` or `KeyColumns` for a table that is already set up has no effect until its schema changes. | Include those settings in what decides that a table must be planned again. |

@@ -11,7 +11,7 @@
 -- | Runtime                | the Azure Function                    | always-on; also profiles a new or changed parent table |
 --
 -- Table names below (ProductAttributeValue, ProductCatalogItem,
--- DocumentAsset) match this repo's example schema — substitute your
+-- DocumentAsset) match this repo's example schema - substitute your
 -- actual managed table list.
 --
 -- SmartTableSync.IntegrationTests runs this script as written (LeastPrivilegeSyncTests): it
@@ -20,13 +20,13 @@
 -- headers and those markers when editing.
 --
 -- Two auth options are shown per identity: Azure AD / Managed Identity
--- (recommended — no secret to manage) and SQL authentication (if you
+-- (recommended - no secret to manage) and SQL authentication (if you
 -- need it, e.g. local dev against a non-Azure SQL Server). Pick one
 -- per identity, not both.
 -- ============================================================
 
 -- ============================================================
--- 1. Child-provisioning — run on the CHILD database.
+-- 1. Child-provisioning - run on the CHILD database.
 -- Used to apply the scaffold tool's scripts (tables, TVP types, stored
 -- procedures) after a human reviewed them (SmartTableSync:Mode = Manual,
 -- the default); the scaffold tool itself only reads the existing child
@@ -38,31 +38,31 @@
 -- gains these rights either way.
 -- ============================================================
 
--- Option A — Azure AD / Managed Identity (recommended):
+-- Option A - Azure AD / Managed Identity (recommended):
 -- CREATE USER [smarttablesync-child-provisioning] FROM EXTERNAL PROVIDER;
 
--- Option B — SQL authentication (requires a server-level login created first; keep the
+-- Option B - SQL authentication (requires a server-level login created first; keep the
 -- same name, or rename it in every GRANT below too):
 -- CREATE USER [smarttablesync-child-provisioning] FOR LOGIN [smarttablesync-child-provisioning];
 
 ALTER ROLE [db_ddladmin] ADD MEMBER [smarttablesync-child-provisioning];
--- db_ddladmin grants CREATE/ALTER/DROP on tables, procedures, and types — exactly what
+-- db_ddladmin grants CREATE/ALTER/DROP on tables, procedures, and types - exactly what
 -- the scaffold tool's generated CREATE TABLE / CREATE TYPE / CREATE OR ALTER PROCEDURE
 -- statements need, without full db_owner.
 GO
 
 -- ============================================================
--- 2. Parent-introspection — run on the PARENT database.
+-- 2. Parent-introspection - run on the PARENT database.
 -- Used only by SmartTableSync.Scaffold (schema generation). The Function
 -- profiles tables with its runtime identity instead (section 3).
 -- Read-only: schema metadata + the data needed for row/size sampling.
 -- No DDL rights at all.
 -- ============================================================
 
--- Option A — Azure AD / Managed Identity (recommended):
+-- Option A - Azure AD / Managed Identity (recommended):
 -- CREATE USER [smarttablesync-parent-introspection] FROM EXTERNAL PROVIDER;
 
--- Option B — SQL authentication:
+-- Option B - SQL authentication:
 -- CREATE USER [smarttablesync-parent-introspection] FOR LOGIN [smarttablesync-parent-introspection];
 
 GRANT VIEW DEFINITION TO [smarttablesync-parent-introspection];
@@ -76,7 +76,7 @@ GRANT VIEW DEFINITION TO [smarttablesync-parent-introspection];
 GRANT SELECT ON [dbo].[ProductAttributeValue] TO [smarttablesync-parent-introspection];
 GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-parent-introspection];
 GRANT SELECT ON [dbo].[DocumentAsset]         TO [smarttablesync-parent-introspection];
--- SELECT is needed for the MAX(DATALENGTH()) row-size sampling in ProfileTableAsync —
+-- SELECT is needed for the MAX(DATALENGTH()) row-size sampling in ProfileTableAsync -
 -- schema metadata alone isn't enough for that specific check.
 
 GRANT VIEW DATABASE STATE TO [smarttablesync-parent-introspection];
@@ -86,10 +86,10 @@ GRANT VIEW DATABASE STATE TO [smarttablesync-parent-introspection];
 GO
 
 -- ============================================================
--- 3. Runtime — used by the always-on Azure Function. No DDL rights;
+-- 3. Runtime - used by the always-on Azure Function. No DDL rights;
 -- SELECT on the parent's synced tables, read/write only on the
 -- child's synced tables plus the tracking tables (including
--- SyncTableConfig — writing a config row is DML, not DDL, so it
+-- SyncTableConfig - writing a config row is DML, not DDL, so it
 -- belongs here, not with child-provisioning).
 -- ============================================================
 
@@ -164,7 +164,7 @@ GO
 --   Server=<server>.database.windows.net;Database=<db>;
 --   Authentication=Active Directory Managed Identity;User Id=<managed-identity-client-id>;
 --
--- No Azure.Identity API calls are needed in code for this — the connection-string
+-- No Azure.Identity API calls are needed in code for this - the connection-string
 -- keyword handles the token acquisition, through the Microsoft.Data.SqlClient.Extensions.Azure
 -- package the Function and the scaffold tool reference. Set ParentDbConnectionString/
 -- ChildDbConnectionString (Function) and ParentIntrospectionConnectionString/

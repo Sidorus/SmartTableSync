@@ -5,9 +5,9 @@ namespace SmartTableSync.Strategies.SqlChangeTracking;
 /// CHANGETABLE(CHANGES ...), with deletes reported directly. The position lives in
 /// CustomSyncState.IncrementalPosition as "CT:&lt;version&gt;".
 ///
-/// When the version chain is broken — no position yet, a position older than
+/// When the version chain is broken - no position yet, a position older than
 /// CHANGE_TRACKING_MIN_VALID_VERSION (retention exceeded, TRUNCATE TABLE, Change Tracking
-/// re-enabled) or newer than CHANGE_TRACKING_CURRENT_VERSION (parent restored from a backup) —
+/// re-enabled) or newer than CHANGE_TRACKING_CURRENT_VERSION (parent restored from a backup) -
 /// it runs one full re-scan plus a delete reconciliation, then resumes from the version
 /// captured before that re-scan.
 /// </summary>
@@ -46,10 +46,10 @@ internal sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
         {
             null => new FullRescanReason("no_position", "no Change Tracking position yet"),
             var position when position < minValid => new FullRescanReason("position_expired",
-                $"position {position} is older than CHANGE_TRACKING_MIN_VALID_VERSION ({minValid}) — " +
+                $"position {position} is older than CHANGE_TRACKING_MIN_VALID_VERSION ({minValid}) - " +
                 "retention exceeded, table truncated, or Change Tracking re-enabled"),
             var position when position > current => new FullRescanReason("position_ahead",
-                $"position {position} is ahead of CHANGE_TRACKING_CURRENT_VERSION ({current}) — " +
+                $"position {position} is ahead of CHANGE_TRACKING_CURRENT_VERSION ({current}) - " +
                 "was the parent database restored from a backup?"),
             _ => null,
         };
@@ -100,7 +100,7 @@ internal sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
     {
         var reason = window.FullRescanRequired!;
         Logger.LogWarning(
-            "{Table}: {Reason} — running a full re-scan, then resuming Change Tracking from version {Version}",
+            "{Table}: {Reason} - running a full re-scan, then resuming Change Tracking from version {Version}",
             Profile.TableName, reason.Description, window.To);
         _metrics.FullRescan(Profile.TableName, reason.Category);
 
@@ -120,7 +120,7 @@ internal sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
         else
         {
             Logger.LogWarning(
-                "{Table}: full re-scan had {Errors} errors — Change Tracking position not set, the re-scan repeats next run",
+                "{Table}: full re-scan had {Errors} errors - Change Tracking position not set, the re-scan repeats next run",
                 Profile.TableName, outcome.Errored);
         }
 
@@ -140,7 +140,7 @@ internal sealed class ChangeTrackingSyncRunner : ChangeWindowSyncRunner<long>
     }
 
     // SET TRANSACTION ISOLATION LEVEL outlives the transaction and would leak to the pooled
-    // connection. Called from a finally block, so failures are logged, not thrown — throwing
+    // connection. Called from a finally block, so failures are logged, not thrown - throwing
     // would hide the exception already propagating.
     private async Task ResetIsolationLevelAsync(SqlConnection parent, CancellationToken ct)
     {

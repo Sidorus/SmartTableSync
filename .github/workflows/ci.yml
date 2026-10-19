@@ -70,6 +70,16 @@ jobs:
           terraform init -backend=false -input=false
           terraform validate
 
+  # Runs next to the build: the container image (SmartTableSync.Worker) must still build. Nothing
+  # is pushed to a registry.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the container image
+        run: docker build -f SmartTableSync.Worker/Dockerfile -t smarttablesync-worker:ci .
+
   # 2. Test: only after a successful build. Each job runs on a fresh runner, so dotnet test
   # compiles again here rather than reusing the build job's output. The integration tests start
   # their own throwaway SQL Server containers through Testcontainers; the runner's Docker is all

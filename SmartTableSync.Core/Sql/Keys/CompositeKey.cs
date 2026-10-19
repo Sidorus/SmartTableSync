@@ -1,9 +1,9 @@
 namespace SmartTableSync.Sql.Keys;
 
 /// <summary>
-/// A primary key as one string — the key columns' values in key order, joined with '|'
+/// A primary key as one string - the key columns' values in key order, joined with '|'
 /// (e.g. "206|en"). Used as the resume position between pages and as a row's identity in
-/// delete reconciliation. Pure — no I/O. "No position yet" is null, handled by the callers.
+/// delete reconciliation. Pure - no I/O. "No position yet" is null, handled by the callers.
 /// </summary>
 internal static class CompositeKey
 {
@@ -14,7 +14,7 @@ internal static class CompositeKey
     private const string IsoDateTimeFormat = "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF";
 
     /// <summary>Builds the resume-cursor string for a row, e.g. "206|en" for a 2-column key.
-    /// Formats with InvariantCulture explicitly — SqlTypeMapping.ParseKeyComponent parses
+    /// Formats with InvariantCulture explicitly - SqlTypeMapping.ParseKeyComponent parses
     /// with InvariantCulture, and a bare ToString() defaults to CurrentCulture, which can
     /// mismatch (and fail to round-trip) for DateTime/DateTimeOffset/decimal-typed keys on a
     /// host whose culture isn't invariant/en-US-compatible. DateTime/DateTimeOffset use ISO

@@ -18,7 +18,7 @@ internal sealed class FullRescanStrategy : IIncrementalStrategy
         return candidate.Profile.RowCount <= threshold || candidate.AllowFullRescan
             ? null
             : $"no usable change-detection column and {candidate.Profile.RowCount} rows exceeds the FullRescan " +
-              $"threshold ({threshold}) — set SmartTableSync:TimestampColumns:{tableName} to the correct column " +
+              $"threshold ({threshold}) - set SmartTableSync:TimestampColumns:{tableName} to the correct column " +
               $"name, or add '{tableName}' to SmartTableSync:AllowFullRescanFor to accept a full re-scan every run.";
     }
 

@@ -1,7 +1,7 @@
 namespace SmartTableSync.Strategies.SqlChangeTracking;
 
 /// <summary>Reads changes from SQL Server Change Tracking. Chosen whenever a DBA has enabled
-/// Change Tracking on the table — SmartTableSync never enables it itself.</summary>
+/// Change Tracking on the table - SmartTableSync never enables it itself.</summary>
 internal sealed class SqlChangeTrackingStrategy : IIncrementalStrategy
 {
     public IncrementalStrategy Kind => IncrementalStrategy.SqlChangeTracking;
@@ -18,7 +18,7 @@ internal sealed class SqlChangeTrackingStrategy : IIncrementalStrategy
     // its columns; a key taken from a unique index or configuration can't stand in for it.
     public string? WhyNotApplicable(StrategyCandidate candidate) =>
         !candidate.Profile.IsChangeTrackingEnabled
-            ? "SQL Server Change Tracking is not enabled on this table — a DBA must run ALTER TABLE ... ENABLE " +
+            ? "SQL Server Change Tracking is not enabled on this table - a DBA must run ALTER TABLE ... ENABLE " +
               "CHANGE_TRACKING first (see SmartTableSync.Scaffold --change-tracking-setup)."
             : candidate.Profile.KeySource != SyncKeySource.PrimaryKey || candidate.Profile.PrimaryKeyColumns.Count == 0
                 ? "SQL Server Change Tracking needs a PRIMARY KEY constraint, and this table has none."

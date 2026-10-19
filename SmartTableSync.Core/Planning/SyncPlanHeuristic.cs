@@ -29,7 +29,7 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             : MergeStrategy.Tvp;
 
         // Batch size keys off the MAX observed row size for LOB-bearing tables, not the
-        // average — an average hides the rare oversized-row case (DocumentAsset: mostly
+        // average - an average hides the rare oversized-row case (DocumentAsset: mostly
         // small rows, worst case ~52 MB). Narrow tables with no LOB columns have no such
         // outlier risk, so average is a safe, representative estimate there.
         var effectiveRowSize = profile.MaxLobColumnSizeBytes.Count > 0
@@ -53,7 +53,7 @@ internal sealed class SyncPlanHeuristic : ISyncPlanHeuristic
             options.BaseTimeoutSeconds + maxRowSizeMb * options.SecondsPerMb);
 
         // 547 = FK constraint violation. Only retryable when RowByRow was chosen for FK-
-        // timing reasons specifically — a RowByRow choice driven by row size alone has no
+        // timing reasons specifically - a RowByRow choice driven by row size alone has no
         // FK timing race to retry around.
         IReadOnlyList<int> retryableSqlErrorNumbers = mergeStrategy == MergeStrategy.RowByRow && profile.ReferencesOtherTables
             ? [547]

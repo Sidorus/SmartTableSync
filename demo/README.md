@@ -24,14 +24,14 @@ flowchart LR
             Parent[("sqldb-parent<br/>Product, Customer, Document")]
             Child[("sqldb-child<br/>synced copies + tracking tables")]
         end
-        AI["Application Insights"]
+        Insights["Application Insights"]
     end
 
     You -- "seed, scaffold, grants" --> sql
     Func -- "uses" --> Id
     Id -- "SELECT" --> Parent
     Id -- "read/write data,<br/>no DDL" --> Child
-    Func -- "logs, metrics" --> AI
+    Func -- "logs, metrics" --> Insights
 ```
 
 | Resource | Size | Cost while the demo exists |

@@ -147,7 +147,7 @@ never writes them to a file or prints them.
 | `-SyncNow` | no | start a sync now and wait for it, after the setup. With way B, pass the two connection strings again: they aren't saved anywhere on your machine. |
 | `-Destroy` | no | remove the Azure resources |
 | `-SyncTimeoutSeconds` | no | how long to wait for the first copy, default 600 |
-| `-Yes` | no | skip the script's own "Create …?" question. Terraform still shows its plan and asks you to confirm it. |
+| `-Yes` | no | skip the script's own "Create ...?" question. Terraform still shows its plan and asks you to confirm it. |
 
 ## What the script does
 
@@ -180,7 +180,7 @@ exactly what was applied:
 | `02_child.sql` | child | way A, Auto mode: both users, `db_ddladmin`, schema grants |
 | `child/*.sql` | child | Manual mode: the scaffold tool's scripts |
 | `03_child_grants.sql` | child | way A, Manual mode: runtime user and per-object grants |
-| `quickstart.tfvars.json` | — | server and database names, tables and mode, read again by `-SyncNow` and `-Destroy`. **Never** your connection strings. |
+| `quickstart.tfvars.json` | - | server and database names, tables and mode, read again by `-SyncNow` and `-Destroy`. **Never** your connection strings. |
 
 The script never deletes anything from your databases, and every SQL script is safe to run again.
 Running the whole setup again with the same suffix updates what changed (for example a longer
@@ -194,14 +194,14 @@ already.
 
 With way A, SmartTableSync never uses a password. The Function signs in to SQL with **managed
 identities**, Microsoft Entra identities that Azure manages for it. The script creates a database
-user for each of them, tied to the identity by its ID (`CREATE USER … WITH SID = …, TYPE = E`), so
+user for each of them, tied to the identity by its ID (`CREATE USER ... WITH SID = ..., TYPE = E`), so
 the database user names are always the same, whatever the identities are called in Azure:
 
 | Managed identity (Azure) | Database user | Used for |
 |---|---|---|
 | `id-smarttablesync-runtime-<suffix>` | `smarttablesync-runtime` | every sync: reads the parent, writes rows into the child |
 | `id-smarttablesync-provisioning-<suffix>` (Auto mode only) | `smarttablesync-child-provisioning` | creating and changing the child's tables, table types and procedures |
-| you | — | the setup itself: checks, users, grants, Change Tracking, Manual mode's scripts |
+| you | - | the setup itself: checks, users, grants, Change Tracking, Manual mode's scripts |
 
 **Parent database** (both modes):
 
