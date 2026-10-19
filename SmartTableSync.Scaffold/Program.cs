@@ -287,6 +287,14 @@ foreach (var requestedName in tableNames)
                 Console.WriteLine("  child table already exists and has every parent column — skipping CREATE TABLE");
             }
 
+            if (diff.ColumnsToRetype.Count > 0)
+            {
+                var alterColumnsPath = Path.Combine(outputDir, $"{tableName}_AlterColumns.sql");
+                await File.WriteAllTextAsync(alterColumnsPath, generator.GenerateAlterColumnsScript(profile, diff.ColumnsToRetype));
+                Console.WriteLine($"  wrote {alterColumnsPath} (decimal/numeric columns with the wrong precision or scale; " +
+                    "apply it, then copy the table again as the script describes)");
+            }
+
             foreach (var problem in diff.Problems)
             {
                 Console.WriteLine($"  NEEDS A MANUAL CHANGE: {problem}");

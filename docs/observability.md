@@ -33,10 +33,17 @@ Every run also writes one log line per table at Information level, for example
 
 ## Application Insights (the example Function)
 
-The example Function (`SmartTableSyncFunction/Program.cs`) uses OpenTelemetry with the Azure
-Monitor exporter, as Microsoft's isolated worker guide recommends. It exports when Azure sets
-`APPLICATIONINSIGHTS_CONNECTION_STRING`, which happens when the Function App is connected to
-Application Insights; the demo does that. Logs land in `traces`, metrics in `customMetrics`.
+The example Function (`SmartTableSyncFunction/Program.cs`) sends both to Application Insights
+when the Function App is connected to it (Azure then sets `APPLICATIONINSIGHTS_CONNECTION_STRING`);
+the demo does that.
+
+- **Logs** go the classic way, through the Functions host: they land in `traces` with their level,
+  next to the host's *"Executing/Executed 'Functions.SmartTableSync'"* lines, and the portal's
+  **Log stream** shows them live with their level (`[Information]`, `[Warning]`, ...). `host.json`
+  sets the level.
+- **Metrics** go through OpenTelemetry with the Azure Monitor exporter, registered for the
+  `SmartTableSync` meter only, and land in `customMetrics`.
+
 Queries for both are in the setup guide under [logs and metrics](setup.md#logs-and-metrics).
 
 In your own host, the same takes three lines (packages `OpenTelemetry.Extensions.Hosting` and

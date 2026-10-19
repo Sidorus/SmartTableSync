@@ -29,7 +29,14 @@ internal static class SchemaFingerprint
             sb.Append(col.Name).Append(':')
               .Append(col.SqlTypeName).Append(':')
               .Append(col.MaxLength).Append(':')
-              .Append(col.IsNullable).Append(';');
+              .Append(col.IsNullable);
+
+            // Only for decimal and numeric, whose precision and scale the length can't show: a
+            // table without them keeps the fingerprint it had before this was added.
+            if (col.IsExactNumeric)
+                sb.Append(':').Append(col.Precision).Append(',').Append(col.Scale);
+
+            sb.Append(';');
         }
 
         sb.Append("|PK:").Append(string.Join(",", profile.PrimaryKeyColumns));

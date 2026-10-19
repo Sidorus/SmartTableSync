@@ -158,6 +158,64 @@ public class SqlArtifactGeneratorTests
 
     // --- ProductCatalogItem shape: single string PK, Tvp, no identity ---
 
+    // --- Exact types: decimal(10,2) must not become decimal(18,0) and round every value ---
+
+    private static TableProfile PricedItemProfile() => new(
+        TableName: "PricedItem",
+        Columns:
+        [
+            new ColumnProfile("Id", "int", 4, false, Precision: 10, Scale: 0),
+            new ColumnProfile("Price", "decimal", 9, false, Precision: 10, Scale: 2),
+            new ColumnProfile("Rate", "numeric", 9, true, Precision: 12, Scale: 6),
+            new ColumnProfile("ChangedAt", "datetime2", 7, false, Precision: 23, Scale: 3),
+            new ColumnProfile("OpensAt", "time", 3, true, Precision: 8, Scale: 0),
+            new ColumnProfile("SentAt", "datetimeoffset", 9, true, Precision: 32, Scale: 5),
+        ],
+        PrimaryKeyColumns: ["Id"],
+        IdentityColumn: null,
+        IndexedLobColumns: [],
+        ReferencesOtherTables: false,
+        RowCount: 10,
+        AvgRowSizeBytes: 100,
+        MaxLobColumnSizeBytes: new Dictionary<string, long>());
+
+    [Fact]
+    public void GeneratedDdl_KeepsPrecisionAndScale_InTableTableTypeAndProcedure()
+    {
+        var profile = PricedItemProfile();
+        var tvpPlan = new SyncPlan(profile.TableName, MergeStrategy.Tvp, 100, SqlBulkCopyOptions.Default, 120, [], "PricedItemTableType");
+        var rowByRowPlan = tvpPlan with { MergeStrategy = MergeStrategy.RowByRow, TvpTypeName = null };
+
+        var table = _generator.GenerateCreateTableScript(profile);
+        var type = _generator.GenerateTvpUdtScript(profile, "PricedItemTableType");
+        var procedure = _generator.GenerateMergeProcedureScript(profile, rowByRowPlan);
+
+        foreach (var script in new[] { table, type })
+        {
+            Assert.Contains("[Price] [decimal](10,2) NOT NULL", script);
+            Assert.Contains("[Rate] [numeric](12,6) NULL", script);
+            Assert.Contains("[ChangedAt] [datetime2](3) NOT NULL", script);
+            Assert.Contains("[OpensAt] [time](0) NULL", script);
+            Assert.Contains("[SentAt] [datetimeoffset](5) NULL", script);
+            Assert.Contains("[Id] [int] NOT NULL", script);
+        }
+
+        Assert.Contains("@Price [decimal](10,2)", procedure);
+        Assert.DoesNotContain("[decimal] ", table + type + procedure);
+    }
+
+    [Fact]
+    public void GenerateAlterColumnsScript_GivesTheParentsPrecisionAndScale_AndExplainsTheCopy()
+    {
+        var profile = PricedItemProfile();
+
+        var script = _generator.GenerateAlterColumnsScript(profile, [profile.Columns[1]]);
+
+        Assert.Contains("ALTER TABLE [dbo].[PricedItem] ALTER COLUMN [Price] [decimal](10,2) NOT NULL;", script);
+        Assert.Contains("-- DELETE FROM [dbo].[CustomSyncState] WHERE [TableName] = N'PricedItem';", script);
+        Assert.Contains("-- DELETE FROM [dbo].[SyncBatchLog]    WHERE [TableName] = N'PricedItem';", script);
+    }
+
     private static TableProfile ProductCatalogItemProfile() => new(
         TableName: "ProductCatalogItem",
         Columns:

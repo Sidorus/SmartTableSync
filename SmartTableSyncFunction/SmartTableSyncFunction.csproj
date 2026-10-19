@@ -9,9 +9,8 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" OutputItemType="Analyzer" />
-    <!-- Logs, traces and the SmartTableSync metrics go to Application Insights through
-         OpenTelemetry, as Microsoft's isolated worker guide recommends (see Program.cs). -->
-    <PackageReference Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.2.0" />
+    <!-- The SmartTableSync metrics go to Application Insights through OpenTelemetry; the logs go
+         through the Functions host (see Program.cs). -->
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.10.0" />
     <!-- Microsoft.Data.SqlClient 7.0 moved the "Authentication=Active Directory ..." providers
          (Managed Identity, Default, Interactive) out of the core package. Keep the same version

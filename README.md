@@ -252,8 +252,8 @@ To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet
 `IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
 OpenTelemetry exporter can collect them; a host has to register that meter with its exporter.
-The example Function does that and sends its logs and metrics to Application Insights through
-OpenTelemetry ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
+The example Function does that; it sends its metrics to Application Insights through
+OpenTelemetry, and its logs through the Functions host ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
 use Prometheus, Grafana or OTLP instead or turn it off, is in [observability](docs/observability.md).
 
 To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
@@ -326,9 +326,8 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Schema changes**
 - Auto mode adds new parent columns by itself, but a changed column type or length, a changed
   primary key, a removed `NOT NULL` column or a column that now allows `NULL` in the parent but
-  not in the child needs a reviewed script; until then that table
-  stops with an error. A precision or scale change that keeps the same storage size (for example
-  `decimal(10,2)` → `decimal(10,4)`) isn't detected.
+  not in the child, or a different precision or scale of a `decimal` or `numeric` column, needs a
+  reviewed script; until then that table stops with an error.
 - In Auto mode, a schema change costs one full re-scan of that table.
 - In Manual mode, rows synced before a column was added get its value only when they next change.
 

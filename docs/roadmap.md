@@ -11,10 +11,9 @@ What is planned next. **Nothing on this page is built yet**; what works today is
 | 1 | The run lock's connection is idle during a run; whether it survives more than 30 minutes on Azure SQL Database is unverified. Two runs could then overlap: correct data, double work. | Keep the lock connection active between tables, check that the lock is still held before each table, and add a long-run test. |
 | 2 | The time of the last delete check is kept in memory, so a host that scales to zero repeats the full key comparison on most cold starts. | Store it per table in `CustomSyncState`, so every host instance and restart sees the same time. |
 | 3 | A row that can't be written (other than a foreign-key timing error) is logged and skipped, and stays out of date until it changes again. | Record failed keys in a small `SyncFailedRow` table, read them again on the next runs, and report how many are waiting as a metric. |
-| 4 | A precision or scale change that keeps the same storage size (`decimal(10,2)` → `decimal(10,4)`) isn't detected. | Add precision and scale to the schema fingerprint and to the child schema comparison. |
-| 5 | Changing `IncrementalStrategyOverrides`, `TimestampColumns`, `AllowFullRescanFor` or `KeyColumns` for a table that is already set up has no effect until its schema changes. | Include those settings in what decides that a table must be planned again. |
-| 6 | In Manual mode a new plan is saved before the reviewed child scripts are applied, so the table can fail until they are. | Check that the child matches the plan before saving it, and wait with a clear message until it does. |
-| 7 | In Manual mode, rows synced before a column was added get its value only when they next change. | Re-scan the table once, automatically, after the child gains the column. |
+| 4 | Changing `IncrementalStrategyOverrides`, `TimestampColumns`, `AllowFullRescanFor` or `KeyColumns` for a table that is already set up has no effect until its schema changes. | Include those settings in what decides that a table must be planned again. |
+| 5 | In Manual mode a new plan is saved before the reviewed child scripts are applied, so the table can fail until they are. | Check that the child matches the plan before saving it, and wait with a clear message until it does. |
+| 6 | In Manual mode, rows synced before a column was added get its value only when they next change. | Re-scan the table once, automatically, after the child gains the column. |
 
 ## 2. Tables with no unique columns
 

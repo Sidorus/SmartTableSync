@@ -165,4 +165,24 @@ public class SchemaFingerprintTests
 
         Assert.NotEqual(SchemaFingerprint.Compute(uniqueIndex), SchemaFingerprint.Compute(configured));
     }
+
+    [Fact]
+    public void Compute_DecimalScaleChange_ChangesHash()
+    {
+        var before = CreateProfile(columns: [new ColumnProfile("Id", "int", 4, false), new ColumnProfile("Price", "decimal", 9, false, 10, 2)]);
+        var after = CreateProfile(columns: [new ColumnProfile("Id", "int", 4, false), new ColumnProfile("Price", "decimal", 9, false, 10, 4)]);
+
+        Assert.NotEqual(SchemaFingerprint.Compute(before), SchemaFingerprint.Compute(after));
+    }
+
+    [Fact]
+    public void Compute_PrecisionOfOtherTypes_DoesNotChangeHash()
+    {
+        // Only decimal and numeric take part, so a table without them keeps the fingerprint it
+        // had before precision and scale were read, and isn't planned again on upgrade.
+        var withoutPrecision = CreateProfile(columns: [new ColumnProfile("Id", "int", 4, false), new ColumnProfile("At", "datetime2", 8, false)]);
+        var withPrecision = CreateProfile(columns: [new ColumnProfile("Id", "int", 4, false, 10, 0), new ColumnProfile("At", "datetime2", 8, false, 27, 7)]);
+
+        Assert.Equal(SchemaFingerprint.Compute(withoutPrecision), SchemaFingerprint.Compute(withPrecision));
+    }
 }

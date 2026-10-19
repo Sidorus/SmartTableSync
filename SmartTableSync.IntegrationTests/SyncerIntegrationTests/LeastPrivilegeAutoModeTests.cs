@@ -338,6 +338,85 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
         Assert.Equal(1, await ScalarAsync(child, "SELECT COUNT(*) FROM sys.tables WHERE name = 'Note' AND schema_id = SCHEMA_ID('archive')"));
     }
 
+    [Fact]
+    public async Task AutoMode_DecimalColumn_ArrivesWithExactValuesAndTheParentsPrecision()
+    {
+        // Arrange - decimal(10,2) values with cents: a child created as decimal(18,0) would round them
+        const string table = "PricedProduct";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreatePricedParentTableAsync(parent, table);
+
+        // Act
+        var errors = await RunAutoModeAsync(table);
+
+        // Assert
+        Assert.Empty(errors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+        Assert.Equal(99.95m, await DecimalAsync(child, $"SELECT [Price] FROM [dbo].[{table}] WHERE [Id] = 1"));
+        Assert.Equal(2, await ScalarAsync(child, $"SELECT CAST(scale AS INT) FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.{table}') AND name = N'Price'"));
+    }
+
+    [Fact]
+    public async Task AutoMode_ChildDecimalWithWrongScale_IsReportedThenCopiedExactlyAfterTheAlter()
+    {
+        // Arrange - a child table as earlier versions created it: decimal(18,0) for a decimal(10,2) parent
+        const string table = "LegacyPricedProduct";
+        await using var parent = new SqlConnection(_sql.ParentConnectionString);
+        await using var child = new SqlConnection(_sql.ChildConnectionString);
+        await parent.OpenAsync();
+        await child.OpenAsync();
+        await CreatePricedParentTableAsync(parent, table);
+        await ExecuteAsync(child, $"""
+            CREATE TABLE [dbo].[{table}] (
+                [Id] INT NOT NULL PRIMARY KEY,
+                [Name] NVARCHAR(50) NOT NULL,
+                [Price] DECIMAL(18, 0) NOT NULL,
+                [LastUpdate] DATETIME NOT NULL);
+            """);
+
+        // Act - the wrong column is reported and nothing is copied into it
+        var firstErrors = await RunAutoModeAsync(table);
+
+        // Assert
+        Assert.Contains(firstErrors, e => e.Contains("decimal(18,0) in the child but decimal(10,2) in the parent", StringComparison.Ordinal));
+        Assert.Equal(0, await ScalarAsync(child, $"SELECT COUNT(*) FROM [dbo].[{table}]"));
+
+        // Act - the repair the scaffold tool writes (<Table>_AlterColumns.sql), applied by an administrator
+        await ExecuteAsync(child, $"ALTER TABLE [dbo].[{table}] ALTER COLUMN [Price] [decimal](10,2) NOT NULL");
+        var secondErrors = await RunAutoModeAsync(table);
+
+        // Assert
+        Assert.Empty(secondErrors);
+        await AssertChildMatchesParentAsync(parent, child, table);
+        Assert.Equal(99.95m, await DecimalAsync(child, $"SELECT [Price] FROM [dbo].[{table}] WHERE [Id] = 1"));
+    }
+
+    // Prices with cents, and read access for the runtime identity on the parent
+    private static async Task CreatePricedParentTableAsync(SqlConnection parent, string table)
+    {
+        await ExecuteAsync(parent, $"""
+            CREATE TABLE [dbo].[{table}] (
+                [Id] INT NOT NULL PRIMARY KEY,
+                [Name] NVARCHAR(50) NOT NULL,
+                [Price] DECIMAL(10, 2) NOT NULL,
+                [LastUpdate] DATETIME NOT NULL CONSTRAINT [DF_{table}_LastUpdate] DEFAULT (GETUTCDATE()));
+            INSERT INTO [dbo].[{table}] ([Id], [Name], [Price], [LastUpdate])
+            VALUES (1, N'A', 99.95, DATEADD(hour, -1, GETUTCDATE())),
+                   (2, N'B', 19.99, DATEADD(hour, -1, GETUTCDATE())),
+                   (3, N'C', 0.01, DATEADD(hour, -1, GETUTCDATE()));
+            GRANT SELECT, VIEW DEFINITION ON [dbo].[{table}] TO [smarttablesync-runtime];
+            """);
+    }
+
+    private static async Task<decimal> DecimalAsync(SqlConnection connection, string sql)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        return (decimal)(await command.ExecuteScalarAsync())!;
+    }
+
     // A new parent table with 50 rows, and the documented step for adding a table: read access
     // for the runtime identity on it in the parent. The rows were last changed an hour ago, outside
     // the Timestamp strategy's one-minute look-back, so no incremental pass reads them again.

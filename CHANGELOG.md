@@ -34,14 +34,33 @@ All notable changes to SmartTableSync. The format follows
 
 ### Fixed
 
+- **`decimal` and `numeric` values were rounded in the child.** Precision and scale weren't read
+  from the parent, so the scaffold tool and Auto mode created `decimal(10,2)` as `decimal`,
+  which SQL Server makes `decimal(18,0)`: 99.95 arrived as 100, with no error. Tables, table types
+  and procedures now get the parent's exact type, for `datetime2(n)`, `time(n)` and
+  `datetimeoffset(n)` too. A `decimal` or `numeric` column whose precision or scale differs from
+  the parent is now detected, and the scaffold tool writes `<Table>_AlterColumns.sql` for it
+  (see *Upgrading* below). This also closes the former limitation that such a change in the
+  parent wasn't detected.
 - Measuring the largest value of `(max)` columns while profiling a table queried it without a
   schema, so it depended on the identity's default schema.
 - The example Function sent only warnings and errors to Application Insights, and no
   `smarttablesync.*` metrics at all: the Application Insights SDK keeps only warnings from the
-  worker by default, and no exporter was registered for the `SmartTableSync` meter. It now uses
-  OpenTelemetry with the Azure Monitor exporter, as Microsoft's isolated worker guide recommends,
-  so each table's per-run summary and the metrics arrive too. See
-  [logs and metrics](docs/setup.md#logs-and-metrics).
+  worker by default, and no exporter was registered for the `SmartTableSync` meter. Its logs now
+  go through the Functions host, so they arrive with their level and appear in the portal's Log
+  stream like any Function's, and the metrics go through OpenTelemetry with the Azure Monitor
+  exporter. See [logs and metrics](docs/setup.md#logs-and-metrics).
+
+### Upgrading
+
+- **Tables with `decimal` or `numeric` columns** are planned again on the first run after the
+  upgrade (their schema fingerprint now includes precision and scale; other tables keep theirs).
+  A child created by an earlier version has those columns as `decimal(18,0)` and rounded values:
+  - The table stops with *"column … is decimal(18,0) in the child but decimal(10,2) in the
+    parent"*. Run the scaffold tool for it and apply `<Table>_AlterColumns.sql` to the child.
+  - **Auto mode** then copies the table again by itself on the next run, so every value is exact.
+  - **Manual mode:** also run the two `DELETE` statements at the end of that script, so the next
+    run copies the table again; then apply the regenerated table type and procedure scripts.
 
 ## [0.4.0] - 2026-10-18
 

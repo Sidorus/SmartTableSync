@@ -1,8 +1,6 @@
 using Azure.Monitor.OpenTelemetry.Exporter;
-using Microsoft.Azure.Functions.Worker.OpenTelemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using SmartTableSync.Diagnostics;
 using SmartTableSync.Hosting;
@@ -18,17 +16,19 @@ var host = new HostBuilder()
         // call to replace it.
         services.AddSmartTableSync();
 
-        // The Function's logs (Information and above, so each table's "N synced, N deleted"
-        // line too), its traces, and the SmartTableSync metrics go to Application Insights
-        // through OpenTelemetry. Azure sets APPLICATIONINSIGHTS_CONNECTION_STRING when the
-        // Function App is connected to Application Insights; without it (for example when
-        // running locally) nothing is exported and the Function runs as usual.
-        var telemetry = services.AddOpenTelemetry().UseFunctionsWorkerDefaults();
-        telemetry.WithMetrics(metrics => metrics.AddMeter(SyncMetricsReporter.MeterName));
-
+        // Logs: no logging provider is added here, so the worker sends its logs to the Functions
+        // host, which writes them to Application Insights with their level and the function's
+        // "Executing"/"Executed" lines, and shows them in the portal's Log stream. host.json sets
+        // the level (Information, so each table's "N synced, N deleted" line is included).
+        //
+        // Metrics: the SmartTableSync meter goes to Application Insights through OpenTelemetry.
+        // Azure sets APPLICATIONINSIGHTS_CONNECTION_STRING when the Function App is connected to
+        // Application Insights; without it (for example when running locally) nothing is exported.
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
         {
-            telemetry.UseAzureMonitorExporter();
+            services.AddOpenTelemetry().WithMetrics(metrics => metrics
+                .AddMeter(SyncMetricsReporter.MeterName)
+                .AddAzureMonitorMetricExporter());
         }
     })
     .Build();

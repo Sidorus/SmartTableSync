@@ -6,12 +6,17 @@ namespace SmartTableSync.Scaffolding;
 /// don't block inserts, so they're left in place rather than dropped with their data.</param>
 /// <param name="Problems">Changes that can't be applied without risking data (a changed type or
 /// length, a changed primary key, a column the parent dropped that is NOT NULL in the child, a
-/// column that now allows NULL in the parent but not in the child). Empty when the child can be
-/// brought in line automatically.</param>
+/// column that now allows NULL in the parent but not in the child, a decimal or numeric column
+/// with a different precision or scale). Empty when the child can be brought in line
+/// automatically.</param>
+/// <param name="ColumnsToRetype">decimal and numeric columns whose only difference is precision or
+/// scale, with the parent's type. Also listed in Problems; the scaffold tool writes an ALTER
+/// COLUMN script for them.</param>
 internal sealed record ChildSchemaDiff(
     IReadOnlyList<ColumnProfile> ColumnsToAdd,
     IReadOnlyList<string> ExtraNullableColumns,
-    IReadOnlyList<string> Problems);
+    IReadOnlyList<string> Problems,
+    IReadOnlyList<ColumnProfile> ColumnsToRetype);
 
 /// <summary>Compares a parent table with its existing child copy. Pure, so every rule is
 /// unit-tested without a database. The child's own IDENTITY property is not compared: child
@@ -25,12 +30,19 @@ internal static class ChildSchemaComparer
         var columnsToAdd = new List<ColumnProfile>();
         var extraNullableColumns = new List<string>();
         var problems = new List<string>();
+        var columnsToRetype = new List<ColumnProfile>();
 
         foreach (var parentColumn in parent.Columns)
         {
             if (!childColumns.TryGetValue(parentColumn.Name, out var childColumn))
             {
                 columnsToAdd.Add(parentColumn);
+            }
+            else if (OnlyPrecisionOrScaleDiffers(parentColumn, childColumn))
+            {
+                columnsToRetype.Add(parentColumn);
+                problems.Add($"column {parentColumn.Name} is {Describe(childColumn)} in the child but {Describe(parentColumn)} in the parent, " +
+                    "so its values are rounded; apply the scaffold tool's <Table>_AlterColumns.sql");
             }
             else if (!SameType(parentColumn, childColumn))
             {
@@ -60,7 +72,7 @@ internal static class ChildSchemaComparer
             problems.Add($"primary key changed from ({string.Join(", ", child.PrimaryKeyColumns)}) to ({string.Join(", ", parent.PrimaryKeyColumns)})");
         }
 
-        return new ChildSchemaDiff(columnsToAdd, extraNullableColumns, problems);
+        return new ChildSchemaDiff(columnsToAdd, extraNullableColumns, problems, columnsToRetype);
     }
 
     /// <summary>True when an existing table type has exactly the columns the merge procedure
@@ -76,9 +88,21 @@ internal static class ChildSchemaComparer
                 && pair.First.IsNullable == pair.Second.IsNullable);
     }
 
+    // decimal(18,0) and decimal(10,2) both take 9 bytes, so for decimal and numeric the length
+    // alone can't tell them apart: precision and scale are compared too. Other types with a
+    // precision (datetime2, time, datetimeoffset) aren't: a wider child column loses nothing.
     private static bool SameType(ColumnProfile a, ColumnProfile b) =>
-        string.Equals(a.SqlTypeName, b.SqlTypeName, StringComparison.OrdinalIgnoreCase) && a.MaxLength == b.MaxLength;
+        string.Equals(a.SqlTypeName, b.SqlTypeName, StringComparison.OrdinalIgnoreCase)
+        && a.MaxLength == b.MaxLength
+        && (!a.IsExactNumeric || (a.Precision == b.Precision && a.Scale == b.Scale));
+
+    private static bool OnlyPrecisionOrScaleDiffers(ColumnProfile parent, ColumnProfile child) =>
+        parent.IsExactNumeric
+        && string.Equals(parent.SqlTypeName, child.SqlTypeName, StringComparison.OrdinalIgnoreCase)
+        && (parent.Precision != child.Precision || parent.Scale != child.Scale);
 
     private static string Describe(ColumnProfile column) =>
-        column.MaxLength == -1 ? $"{column.SqlTypeName}(max)" : $"{column.SqlTypeName}({column.MaxLength} bytes)";
+        column.IsExactNumeric ? $"{column.SqlTypeName}({column.Precision},{column.Scale})"
+        : column.MaxLength == -1 ? $"{column.SqlTypeName}(max)"
+        : $"{column.SqlTypeName}({column.MaxLength} bytes)";
 }

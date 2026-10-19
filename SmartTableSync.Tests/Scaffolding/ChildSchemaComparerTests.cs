@@ -135,4 +135,52 @@ public class ChildSchemaComparerTests
 
         Assert.True(ChildSchemaComparer.TableTypeMatches(Table([_id, _name, rowVersion]), [_id, _name]));
     }
+
+    // --- decimal precision and scale: decimal(18,0) and decimal(10,2) are both 9 bytes ---
+
+    [Fact]
+    public void Compare_DecimalWithDifferentScale_IsReportedAndListedForAlterColumn()
+    {
+        var parentPrice = new ColumnProfile("Price", "decimal", 9, false, Precision: 10, Scale: 2);
+        var childPrice = parentPrice with { Precision = 18, Scale = 0 };
+
+        var diff = ChildSchemaComparer.Compare(Table([_id, parentPrice]), Table([_id, childPrice]));
+
+        Assert.Equal([parentPrice], diff.ColumnsToRetype);
+        var problem = Assert.Single(diff.Problems);
+        Assert.Contains("decimal(18,0) in the child but decimal(10,2) in the parent", problem);
+    }
+
+    [Fact]
+    public void Compare_DecimalWithSamePrecisionAndScale_NothingToDo()
+    {
+        var price = new ColumnProfile("Price", "decimal", 9, false, Precision: 10, Scale: 2);
+
+        var diff = ChildSchemaComparer.Compare(Table([_id, price]), Table([_id, price]));
+
+        Assert.Empty(diff.Problems);
+        Assert.Empty(diff.ColumnsToRetype);
+    }
+
+    [Fact]
+    public void Compare_WiderDatetime2InChild_IsNotAProblem()
+    {
+        // datetime2(7) holds every datetime2(3) value, so an older child stays as it is.
+        var parentChanged = new ColumnProfile("ChangedAt", "datetime2", 7, false, Precision: 23, Scale: 3);
+        var childChanged = parentChanged with { MaxLength = 7, Precision = 27, Scale = 7 };
+
+        var diff = ChildSchemaComparer.Compare(Table([_id, parentChanged]), Table([_id, childChanged]));
+
+        Assert.Empty(diff.Problems);
+        Assert.Empty(diff.ColumnsToRetype);
+    }
+
+    [Fact]
+    public void TableTypeMatches_DecimalWithDifferentScale_IsFalse()
+    {
+        var parentPrice = new ColumnProfile("Price", "decimal", 9, false, Precision: 10, Scale: 2);
+
+        Assert.False(ChildSchemaComparer.TableTypeMatches(
+            Table([_id, parentPrice]), [_id, parentPrice with { Precision = 18, Scale = 0 }]));
+    }
 }
