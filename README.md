@@ -64,28 +64,29 @@ Check your own numbers in the [Azure pricing calculator](https://azure.microsoft
 
 ## How it works
 
-Every run, for each configured table:
+Every 5 minutes, for each table in the list:
 
 ```mermaid
 flowchart TD
-    Timer["Timer trigger (5 min)"] --> Lock{"Run lock<br/>(sp_getapplock on child)"}
-    Lock -- "held by another instance" --> Skip["Skip this run"]
-    Lock -- acquired --> SR["SchemaReader<br/>inspects parent schema"]
-    SR --> FP{"Schema fingerprint changed,<br/>or new table?"}
-    FP -- No --> Plan["Load persisted SyncPlan<br/>(dbo.SyncTableConfig)"]
-    FP -- Yes --> Heuristic["SyncPlanHeuristic<br/>merge strategy + incremental strategy"]
-    Heuristic --> Plan
-
-    Plan --> Phase{"Initial copy<br/>finished?"}
-    Phase -- No --> Initial["Initial copy<br/>keyset-paginated SqlBulkCopy, resumable"]
-    Phase -- Yes --> Incremental["Incremental pass<br/>changed rows, page by page"]
-
-    Initial --> Merge["MERGE (TVP batch or row by row)<br/>+ deletes"]
-    Incremental --> Merge
-    Merge --> ChildDB[("Child DB")]
-    Plan --> Reconcile["Delete reconciliation<br/>(periodic key-set diff)"] --> ChildDB
-    Merge --> Metrics["Metrics<br/>System.Diagnostics.Metrics"]
+    Start(["Every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
+    Busy -- Yes --> Skip["Skip this time"]
+    Busy -- No --> Strategy["How to find changes,<br/>picked once per table,<br/>first that fits:<br/>1. Change Tracking<br/>2. RowVersion<br/>3. Timestamp<br/>4. Full re-scan"]
+    Strategy --> Copied{"Copied once<br/>already?"}
+    Copied -- No --> First["Copy all rows,<br/>in batches"]
+    Copied -- Yes --> Changes["Copy only the rows<br/>changed since last time,<br/>using that strategy"]
+    First --> Child[("Child database")]
+    Changes --> Child
+    Child --> Progress["Save progress,<br/>only if nothing failed"]
+    Child -. "about once an hour" .-> Deletes["Remove rows deleted<br/>in the parent"]
 ```
+
+If a table fails, its progress is not saved and the next run tries it again from the same place.
+The other tables carry on.
+
+- **Every step in detail**, including how the plan is made, Auto and Manual mode, and where each
+  step lives in the code: [how a sync run works](docs/how-it-works.md).
+- **How "changed since last time" is found**, one diagram per strategy:
+  [how SmartTableSync finds what changed](docs/sync-strategies.md).
 
 ### Incremental strategies
 
