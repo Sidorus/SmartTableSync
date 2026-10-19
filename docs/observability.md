@@ -18,7 +18,7 @@ Insights; the sections below show the other options and how to turn things off.
 | Metric | Type | Tags | What it tells you |
 |---|---|---|---|
 | `smarttablesync.rows_synced` | counter | `TableName`, `SyncMode` | rows written into the child |
-| `smarttablesync.rows_errored` | counter | `TableName`, `SyncMode` | rows that couldn't be written (see [known limitations](../README.md#known-limitations)) |
+| `smarttablesync.rows_errored` | counter | `TableName`, `SyncMode` | rows that couldn't be written (see [known limitations](limitations.md)) |
 | `smarttablesync.rows_deleted` | counter | `TableName` | rows removed from the child |
 | `smarttablesync.sync_duration_seconds` | histogram | `TableName`, `SyncMode` | how long one table's run took |
 | `smarttablesync.sync_lag_minutes` | histogram | `TableName` | time since the table's previous successful run, recorded on each incremental run |

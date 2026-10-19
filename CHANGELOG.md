@@ -3,7 +3,7 @@
 All notable changes to SmartTableSync. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project uses
 [Semantic Versioning](https://semver.org/). Still open: see
-[Known limitations](README.md#known-limitations).
+[Known limitations](docs/limitations.md).
 
 ## [Unreleased]
 
@@ -22,6 +22,13 @@ All notable changes to SmartTableSync. The format follows
   unaffected (same key, same schema fingerprint). See
   [ADR-0021](docs/adr/0021-key-fallback-for-tables-without-a-primary-key.md).
 
+- **Quick start for existing databases** (`quickstart/`). One script takes a parent and a child
+  Azure SQL database you already have and a table list. It shows which strategy each table will
+  get, creates the Function App with its managed identities (Terraform, nothing on the databases),
+  creates the database users by SID with only the rights each needs, in Auto or Manual mode, and
+  runs and checks the first sync. It also has `-DryRun`, `-SyncNow` and `-Destroy`. See
+  [quickstart/README.md](quickstart/README.md).
+
 ### Changed
 
 - The scaffold tool prefixes the files of a non-dbo table with the schema
@@ -31,6 +38,12 @@ All notable changes to SmartTableSync. The format follows
   `schema.Table`.
 - A table with no usable key at all now stops when it is set up, with a message naming
   `SmartTableSync:KeyColumns:<Table>`, instead of failing later in its first page query.
+- **Documentation by task.** The README starts with a guide for each way to run SmartTableSync:
+  the demo, the quick start, [Manual mode](docs/guides/manual-mode.md) and
+  [Auto mode](docs/guides/auto-mode.md) step by step (every scaffold command and SQL statement),
+  and [your own app](docs/guides/hosting.md) (background service, Hangfire, Quartz.NET, with
+  complete `Program.cs` files). Known limitations moved to [their own page](docs/limitations.md);
+  the README keeps a summary and links to it and to the roadmap.
 
 ### Fixed
 

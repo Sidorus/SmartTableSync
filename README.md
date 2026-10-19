@@ -10,8 +10,42 @@ It was built for **Azure SQL Database**, where it runs in production, but it isn
 Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instance or SQL Server
 (on-premises or in a VM), in any combination. See [where it runs](#where-it-runs).
 
-**New here?** Watch it work with the [one-script demo](demo/README.md), or go straight to
-[getting started](#getting-started).
+**New here?** Watch it work with the [one-script demo](demo/README.md), or start syncing your own
+Azure SQL databases with the [quick start](quickstart/README.md). Every other way to set it up is
+under [guides](#guides). What it can't do yet: [known limitations](docs/limitations.md); what's
+coming: [roadmap](docs/roadmap.md).
+
+## Guides
+
+Pick the way you want to run it. Each guide is a step-by-step recipe with every command and
+every SQL statement.
+
+| I want to | Guide |
+|---|---|
+| **See it work** first: everything is created for me, with demo tables | [Run the demo](demo/README.md) (`./demo/run-demo.ps1 -Suffix <yours>`) |
+| **Sync my own Azure SQL databases** with one script | [Quick start](quickstart/README.md) |
+| Set it up by hand in **Manual mode**: scaffold tool, reviewed SQL, least rights (production) | [Manual mode, step by step](docs/guides/manual-mode.md) |
+| Set it up by hand in **Auto mode**: the engine creates the child's tables | [Auto mode, step by step](docs/guides/auto-mode.md) |
+| Run it in **my own app**: a background service, Hangfire or Quartz.NET | [Run it in your own app](docs/guides/hosting.md) |
+
+Reference:
+
+| Topic | Page |
+|---|---|
+| Every setting, with examples | [Configuration reference](docs/configuration.md) |
+| Why each identity needs each right; troubleshooting | [Setup guide](docs/setup.md) |
+| How changes are found (Change Tracking, RowVersion, Timestamp, full re-scan) | [Sync strategies](docs/sync-strategies.md) |
+| What happens in a run | [How it works](docs/how-it-works.md) |
+| Logs, metrics, Application Insights, Prometheus, Grafana | [Observability](docs/observability.md) |
+| The scaffold tool's commands | [SmartTableSync.Scaffold](SmartTableSync.Scaffold/README.md) |
+| What it doesn't do yet | [Known limitations](docs/limitations.md) |
+| What comes next (control API, web page, ...) | [Roadmap](docs/roadmap.md) |
+
+To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
+Directory ...` in the connection string), the host needs the
+`Microsoft.Data.SqlClient.Extensions.Azure` package, in the same version as
+`Microsoft.Data.SqlClient`; the example Function and the scaffold tool have it. SQL and Windows
+authentication don't need it.
 
 ## The problem
 
@@ -41,7 +75,7 @@ flowchart LR
 |---|---|
 | **Databases** | Azure SQL Database, Azure SQL Managed Instance, SQL Server on-premises or in a VM. Parent and child can be any mix, for example an on-premises parent and an Azure SQL child. The generated SQL needs SQL Server 2016 SP1 or later; the integration tests run against SQL Server 2022. |
 | **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
-| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function, a background service, a Hangfire or Quartz.NET job, a Windows service, a container. The included Azure Function is one example. The host only needs network access to both databases. See [hosting the engine yourself](docs/setup.md#hosting-the-engine-yourself). |
+| **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`: an Azure Function, a background service, a Hangfire or Quartz.NET job, a Windows service, a container. The included Azure Function is one example. The host only needs network access to both databases. See [run it in your own app](docs/guides/hosting.md). |
 | **Schedule** | Decided by the host: any interval, from every minute to once a night. The example Function runs every 5 minutes. |
 
 ## Why build it: the alternatives and their cost
@@ -218,50 +252,6 @@ are never applied automatically: the table stops with an error that
 names the change until a reviewed script is applied. The [setup guide](docs/setup.md#auto-mode)
 has the details.
 
-## Getting started
-
-- **See it run first:** [`demo/`](demo/README.md) deploys a parent and a child database, the
-  example Function and three demo tables to your own Azure subscription with one script, then syncs them.
-- **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
-  database identities and the exact rights each needs, preparing parent tables, generating and
-  applying the child's SQL, the settings, hosting in your own app, and troubleshooting.
-- **Understand how changes are found:** [how SmartTableSync finds what changed](docs/sync-strategies.md)
-  explains Change Tracking, RowVersion, Timestamp and full re-scan, each with a diagram.
-- **Monitor it:** [observability](docs/observability.md) lists every metric and shows
-  Application Insights, Prometheus and Grafana, OTLP, and how to turn monitoring off.
-- **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
-  parent's schema and writes the SQL for review; it never executes anything.
-
-In short:
-
-1. Create the runtime, parent-introspection and child-provisioning identities
-   ([`sql/07_permissions.sql`](sql/07_permissions.sql)). The always-on runtime gets no DDL rights.
-   Child tables are created without `IDENTITY`, since their key values are copied from the parent.
-2. Optional, per table, applied by a DBA on the **parent**:
-   `smarttablesync-scaffold --change-tracking-setup <Table>` or `--rowversion-setup <Table>`.
-3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
-   review and apply the generated scripts to the **child**, or let **Auto mode** create them.
-4. Grant the runtime identity access to the new child objects.
-5. Configure the connection strings and `SmartTableSync:TableList`, then start your host (for
-   example, publish the example Function).
-
-To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet package
-`SmartTableSync`, once published), call `services.AddSmartTableSync()` and invoke
-`ISyncOrchestrator.RunAsync` on your own schedule; the setup guide has
-[examples](docs/setup.md#hosting-the-engine-yourself). `ISyncRunLock`,
-`IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
-implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
-OpenTelemetry exporter can collect them; a host has to register that meter with its exporter.
-The example Function does that; it sends its metrics to Application Insights through
-OpenTelemetry, and its logs through the Functions host ([where to find them](docs/setup.md#logs-and-metrics)). Every metric, and how to
-use Prometheus, Grafana or OTLP instead or turn it off, is in [observability](docs/observability.md).
-
-To connect with Managed Identity or another Microsoft Entra method (`Authentication=Active
-Directory ...` in the connection string), the host also needs the
-`Microsoft.Data.SqlClient.Extensions.Azure` package, in the same version as
-`Microsoft.Data.SqlClient`. Since SqlClient 7.0 those providers are no longer part of the core
-package. SQL authentication doesn't need it.
-
 ## Project layout
 
 | Project | What it is |
@@ -271,7 +261,8 @@ package. SQL authentication doesn't need it.
 | `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
 | `SmartTableSync.Tests` | Unit tests |
 | `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker), including syncs that run as the three identities with exactly the grants in `sql/07_permissions.sql` |
-| `demo/` | Terraform, SQL and a script that deploy and run the whole setup on Azure |
+| `demo/` | Terraform, SQL and a script that deploy and run the whole setup on Azure, with its own databases and demo tables |
+| `quickstart/` | Terraform and a script that set up the sync between two Azure SQL databases you already have |
 
 Inside Core, each incremental strategy has its own folder under `Strategies/` holding the
 strategy (when it applies, which column it reads) and its runner. Every runner derives from
@@ -286,71 +277,21 @@ Significant decisions — what was chosen, what was rejected, and why — are re
 
 ## Known limitations
 
-What changed and which problems were fixed is in the [changelog](CHANGELOG.md). Still open:
+The main ones, in short; the full list is on its own page,
+**[known limitations](docs/limitations.md)**:
 
-**Scope**
-- One-way only, parent → child. The child is a read-only copy; rows written directly into it
-  are overwritten or removed by the next sync.
-- Every synced table needs a key: its primary key; without one, the columns named in
-  `SmartTableSync:KeyColumns:<Table>` (`NOT NULL`, unique together), or else a unique index whose
-  key columns are all `NOT NULL` (not filtered, not disabled). Configured columns are checked for
-  duplicates only when the table is set up or its schema changes; duplicates that appear later
-  aren't caught: the child keeps one row per key value, and a batch that holds both rows can
-  fail. Change Tracking still needs a real primary key
-  ([setup](docs/setup.md#tables-without-a-primary-key)). A table with no unique columns at all
-  (duplicate rows possible) can't be synced yet; a whole-table copy for it is
-  [planned](docs/roadmap.md).
-- Tables can be in any schema (`sales.Order`); the child keeps the parent's schema, so a parent
-  table can't be copied into a different schema.
-- Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid` or `image` aren't
-  supported; key columns must be numeric, string, date/time or `uniqueidentifier`.
+- One-way only, parent → child; the child is a read-only copy.
+- Every table needs a key (primary key, unique index, or `SmartTableSync:KeyColumns`); a table
+  with possible duplicate rows can't be synced yet.
+- Deletes reach the child on every run only with Change Tracking; with the other strategies, at
+  the next delete check (hourly by default).
+- Changes in the parent that could lose data (a column's type, length or key) need a reviewed
+  script; the table stops until then.
 
-**Change detection**
-- **Timestamp** strategy: a row is only seen as changed when the application updates its datetime
-  column on every `UPDATE` (a column default fires only on `INSERT`). Rows where that column is
-  `NULL` are copied by the first sync but not picked up as changed later. The column must hold
-  **UTC** time (for example `SYSUTCDATETIME()`): it is compared with the parent's UTC clock, so
-  local time in a time zone behind UTC makes changes look older than they are and they are missed.
-- **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
-  and full re-scan tables get them from the delete reconciliation: by default at most once an
-  hour per host process, and also on the first run after the host starts. On a host that scales
-  to zero, that means a full key comparison of those tables on most cold starts.
-- A row that can't be written into the child for any reason other than a foreign-key timing
-  error is logged and skipped. It is corrected only when it changes again in the parent (a full
-  re-scan table: on the next run), so watch the error logs or the `smarttablesync.rows_errored`
-  metric.
-- A table's strategy is picked when it is set up. Changing `IncrementalStrategyOverrides`,
-  `TimestampColumns` or `AllowFullRescanFor` later has no effect until the parent table's schema
-  changes or you [reset its plan](docs/how-it-works.md#changing-a-tables-strategy-later).
+## Roadmap
 
-**Schema changes**
-- Auto mode adds new parent columns by itself, but a changed column type or length, a changed
-  primary key, a removed `NOT NULL` column or a column that now allows `NULL` in the parent but
-  not in the child, or a different precision or scale of a `decimal` or `numeric` column, needs a
-  reviewed script; until then that table stops with an error.
-- In Auto mode, a schema change costs one full re-scan of that table.
-- In Manual mode, rows synced before a column was added get its value only when they next change.
-
-**Security and setup**
-- Auto mode's runtime identity needs schema-level grants on the child (broader than per-object
-  grants), so use a child database dedicated to the sync.
-- Child tables created **with** `IDENTITY` by an earlier version still need `ALTER` for the
-  runtime identity until they're recreated from the scaffold tool's script.
-- Before turning a child into a writable database (for example in disaster recovery), add
-  `IDENTITY` or a sequence back to its key columns: child tables are created without them.
-
-**Not yet verified**
-- The current version hasn't run on real Azure yet: the [demo](demo/README.md) is ready but
-  unrun, so Flex Consumption with .NET 10 and Managed Identity end to end are untested there.
-- Whether the run lock's connection, which stays idle during a run, survives a run longer than
-  30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes). If
-  it doesn't, two runs could overlap: the data stays correct, because every write is an
-  idempotent `MERGE`, but the work is done twice.
-- The Hangfire and Quartz.NET hosting examples in the setup guide haven't been compiled in a
-  real host.
-
-What's planned next, including an API and a web page to control the sync, is in the
-[roadmap](docs/roadmap.md).
+What's planned next, including an API and a web page to control the sync and a whole-table copy
+for tables without any key, is in the **[roadmap](docs/roadmap.md)**.
 
 ## Status
 

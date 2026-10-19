@@ -21,6 +21,7 @@ obj/
 !README.md
 !CHANGELOG.md
 !docs/*.md
+!docs/guides/*.md
 !docs/adr/*.md
 
 # Terraform (demo) - state holds resource IDs and the lock file is created by terraform init
@@ -33,3 +34,6 @@ obj/
 
 # SQL the demo script generates with SmartTableSync.Scaffold
 demo/generated/
+
+# SQL and settings the quick start writes per deployment
+quickstart/generated/
