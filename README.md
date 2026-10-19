@@ -10,6 +10,9 @@ It was built for **Azure SQL Database**, where it runs in production, but it isn
 Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instance or SQL Server
 (on-premises or in a VM), in any combination. See [where it runs](#where-it-runs).
 
+**New here?** Watch it work with the [one-script demo](demo/README.md), or go straight to
+[getting started](#getting-started).
+
 ## The problem
 
 Azure SQL Database doesn't support cross-database queries — you can't `JOIN` or even `SELECT`
@@ -54,7 +57,7 @@ Database into another that also keeps the child's own tables:
 | Read replicas, active geo-replication, database copy | Whole database only, read-only or a one-time snapshot; the child can't have its own tables | A full secondary database |
 | Fabric mirroring | Replicates into OneLake as read-only Delta tables, not into another Azure SQL Database; needs a running Fabric capacity | F2 capacity ≈ **$320/month** |
 | Azure Data Factory, incremental copy | Works, but every run is billed, and deletes and upserts need extra pipeline design | ≈ **$170 per table per month** at a 5-minute schedule |
-| Azure Functions | Named in the guide, but you write the sync yourself | This project is that Function |
+| Azure Functions | Named in the guide, but you write the sync yourself | This project is that sync, ready-made, with an example Function host |
 
 **Data Factory estimate**, per table, every 5 minutes (8,640 runs a month):
 
@@ -85,18 +88,19 @@ table in the list:
 flowchart TD
     Start(["Every run, e.g.<br/>every 5 minutes"]) --> Busy{"Is the previous sync<br/>still running?"}
     Busy -- Yes --> Skip["Skip this time"]
-    Busy -- No --> Strategy["How to find changes,<br/>picked once per table,<br/>first that fits:<br/>1. Change Tracking<br/>2. RowVersion<br/>3. Timestamp<br/>4. Full re-scan"]
+    Busy -- No --> Strategy["How to find changes,<br/>picked when the table is set up,<br/>first that fits:<br/>1. Change Tracking<br/>2. RowVersion<br/>3. Timestamp<br/>4. Full re-scan"]
     Strategy --> Copied{"Copied once<br/>already?"}
     Copied -- No --> First["Copy all rows,<br/>in batches"]
     Copied -- Yes --> Changes["Copy only the rows<br/>changed since last time,<br/>using that strategy"]
     First --> Child[("Child database")]
     Changes --> Child
-    Child --> Progress["Save progress,<br/>only if nothing failed"]
-    Child -. "about once an hour" .-> Deletes["Remove rows deleted<br/>in the parent"]
+    Child --> Progress["Save progress,<br/>unless the run failed"]
+    Child -. "when due, hourly by default" .-> Deletes["Remove rows deleted<br/>in the parent"]
 ```
 
-If a table fails, its progress is not saved and the next run tries it again from the same place.
-The other tables carry on.
+If a table's run fails, its progress isn't saved and the next run retries it from the same place.
+The other tables carry on. A single row that can't be written is logged and skipped; see
+[reliability](#reliability).
 
 - **Every step in detail**, including how the plan is made, Auto and Manual mode, and where each
   step lives in the code: [how a sync run works](docs/how-it-works.md).
@@ -106,7 +110,9 @@ The other tables carry on.
 ### Incremental strategies
 
 How a table finds what changed since the last run. Chosen automatically per table — the first
-applicable one in this order wins — or forced with `SmartTableSync:IncrementalStrategyOverrides:<Table>`:
+applicable one in this order wins — or forced with `SmartTableSync:IncrementalStrategyOverrides:<Table>`.
+The choice is made when a table is first set up and kept until the parent table's schema changes;
+see [changing a table's strategy later](docs/how-it-works.md#changing-a-tables-strategy-later).
 
 | Strategy | Used when | Deletes |
 |---|---|---|
@@ -117,23 +123,31 @@ applicable one in this order wins — or forced with `SmartTableSync:Incremental
 
 How each one works, step by step with a diagram: [How SmartTableSync finds what changed](docs/sync-strategies.md).
 
-A large table with no usable strategy fails at provisioning with a message naming the setting to
-fix — it never silently re-scans millions of rows every five minutes.
+A large table with no usable strategy fails at setup with a message naming the setting to fix —
+it never silently re-scans millions of rows on every run.
 
 ### Merge strategies
 
-- **TVP** — one stored-procedure call per batch, for tables that reference no other table and
-  have small rows.
+How changed rows are written into the child. The first copy of a table always uses bulk copy
+(`SqlBulkCopy`); these apply to everything after it.
+
+- **TVP** (table-valued parameter: the whole batch goes to the child as one parameter) — one
+  stored-procedure call per batch, for tables that reference no other table and whose rows stay
+  under about 1 MB.
 - **Row by row** — one call per row, so one failing row doesn't fail the batch: for tables that
-  reference another table (a row can arrive before the row it references; the FK error is retried
-  next run) or that have very large rows.
+  reference another table (a row can arrive before the row it references; that foreign-key error
+  is retried next run) or that have rows over about 1 MB.
 
 ### Reliability
 
-- Initial copy is keyset-paginated and resumable from the last completed batch.
-- Incremental passes read changes in bounded pages, so a backlog after an outage never loads
-  into memory at once.
-- The position is only advanced after a pass succeeds; a retryable failure re-reads the window.
+- The first copy reads the table in primary-key order, one batch at a time, and continues from
+  the last finished batch if it stops.
+- Later runs read changes in bounded pages, so a backlog after an outage never loads into memory
+  at once.
+- The position (where the next run starts) only moves forward when a run succeeds. A row that
+  failed because the row it references hadn't arrived yet makes the next run read it again. Any
+  other row that can't be written is logged and skipped; it is synced again when it next changes
+  (on a full re-scan table, on the next run).
 - Opening a connection retries transient Azure SQL errors with exponential backoff.
 - An application lock in the child database guarantees one run at a time across every host
   instance; SQL Server releases it automatically if a host dies.
@@ -164,8 +178,8 @@ The mode decides who creates them.
 
 | | **Manual** (default) | **Auto** |
 |---|---|---|
-| Who creates the child objects | You: run the scaffold tool, review the SQL, apply it | The Function, the first time it sees a table |
-| Adding a table | Scaffold, apply, grant, then add it to `TableList` | Grant read on the parent table, add it to `TableList` |
+| Who creates the child objects | You: run the scaffold tool, review the SQL, apply it | The engine, the first time it sees a table |
+| Adding a table | Scaffold, apply, grant, then add it to `TableList` | Grant the runtime and introspection identities read on the parent table (`SELECT`, plus `VIEW DEFINITION` for the runtime), add it to `TableList` |
 | Best for | Production, where every schema change is reviewed | Dev, test and demo environments; many tables; quick start |
 
 **Turn on Auto mode** with two settings:
@@ -176,7 +190,7 @@ The mode decides who creates them.
 ```
 
 Then give the two identities their rights **once**, before the first run. Grants on the `dbo`
-schema also cover the objects the Function creates later. They're broader than Manual mode's
+schema also cover the objects the engine creates later. They're broader than Manual mode's
 per-object grants, so use a child database dedicated to the sync:
 
 ```sql
@@ -188,7 +202,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [smarttablesync-
 The parent needs the same read rights as in Manual mode (see [`sql/07_permissions.sql`](sql/07_permissions.sql)).
 
 **What happens:** each run makes sure the tracking tables exist. When a table is new, or its
-parent schema changed, the Function creates the missing child table, its table type and its
+parent schema changed, the engine creates the missing child table, its table type and its
 merge procedure with the provisioning identity, logs `child DDL objects verified/created`, and
 syncs. Every other run only syncs. Creating objects is left to the separate provisioning
 identity; the always-on runtime identity only reads and writes data.
@@ -196,17 +210,18 @@ identity; the always-on runtime identity only reads and writes data.
 **When the parent schema changes:** a **new column** is added to the child automatically, the
 table type and procedure are recreated, and the table is re-scanned once so existing rows get
 the new values. Changes that could lose data (a changed type or length, a changed primary key, a
-removed `NOT NULL` column) are never applied automatically: the table stops with an error that
+removed `NOT NULL` column, a column that now allows `NULL` in the parent but not in the child)
+are never applied automatically: the table stops with an error that
 names the change until a reviewed script is applied. The [setup guide](docs/setup.md#auto-mode)
 has the details.
 
 ## Getting started
 
 - **See it run first:** [`demo/`](demo/README.md) deploys a parent and a child database, the
-  Function and three demo tables to your own Azure subscription with one script, then syncs them.
+  example Function and three demo tables to your own Azure subscription with one script, then syncs them.
 - **Set it up for your tables:** the [setup guide](docs/setup.md) walks through the three
   database identities and the exact rights each needs, preparing parent tables, generating and
-  applying the child's SQL, the Function settings, and troubleshooting.
+  applying the child's SQL, the settings, hosting in your own app, and troubleshooting.
 - **Understand how changes are found:** [how SmartTableSync finds what changed](docs/sync-strategies.md)
   explains Change Tracking, RowVersion, Timestamp and full re-scan, each with a diagram.
 - **The scaffold tool:** [`SmartTableSync.Scaffold`](SmartTableSync.Scaffold/README.md) reads the
@@ -222,10 +237,13 @@ In short:
 3. `smarttablesync-scaffold --infrastructure` and `smarttablesync-scaffold <Table> ...`, then
    review and apply the generated scripts to the **child**, or let **Auto mode** create them.
 4. Grant the runtime identity access to the new child objects.
-5. Configure the connection strings and `SmartTableSync:TableList`, then publish the Function.
+5. Configure the connection strings and `SmartTableSync:TableList`, then start your host (for
+   example, publish the example Function).
 
-To host the engine elsewhere, reference `SmartTableSync.Core`, call `services.AddSmartTableSync()`
-and invoke `ISyncOrchestrator.RunAsync` on your own schedule. `ISyncRunLock`,
+To host the engine elsewhere, reference the `SmartTableSync.Core` project (NuGet package
+`SmartTableSync`, once published), call `services.AddSmartTableSync()` and invoke
+`ISyncOrchestrator.RunAsync` on your own schedule; the setup guide has
+[examples](docs/setup.md#hosting-the-engine-yourself). `ISyncRunLock`,
 `IDbConnectionFactory` and `ISyncMetricsReporter` can be replaced by registering your own
 implementation. Metrics use the `SmartTableSync` meter (`System.Diagnostics.Metrics`), so any
 OpenTelemetry exporter can collect them.
@@ -241,7 +259,7 @@ package. SQL authentication doesn't need it.
 | Project | What it is |
 |---|---|
 | `SmartTableSync.Core` | The engine (NuGet package `SmartTableSync`) |
-| `SmartTableSyncFunction` | Thin Azure Functions host (timer trigger) |
+| `SmartTableSyncFunction` | Example Azure Functions host (timer trigger, every 5 minutes) |
 | `SmartTableSync.Scaffold` | CLI (`dotnet tool`, `smarttablesync-scaffold`) that writes reviewable SQL; never executes DDL |
 | `SmartTableSync.Tests` | Unit tests |
 | `SmartTableSync.IntegrationTests` | Tests against a real, disposable SQL Server (Testcontainers; needs Docker), including syncs that run as the three identities with exactly the grants in `sql/07_permissions.sql` |
@@ -272,13 +290,20 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
 **Change detection**
 - **Timestamp** strategy: a row is only seen as changed when the application updates its datetime
   column on every `UPDATE` (a column default fires only on `INSERT`). Rows where that column is
-  `NULL` are copied by the first sync but not picked up as changed later.
+  `NULL` are copied by the first sync but not picked up as changed later. The column must hold
+  **UTC** time (for example `SYSUTCDATETIME()`): it is compared with the parent's UTC clock, so
+  local time in a time zone behind UTC makes changes look older than they are and they are missed.
 - **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
-  and full re-scan tables get them from the delete reconciliation, by default hourly.
+  and full re-scan tables get them from the delete reconciliation: by default at most once an
+  hour per host process, and also on the first run after the host starts.
+- A table's strategy is picked when it is set up. Changing `IncrementalStrategyOverrides`,
+  `TimestampColumns` or `AllowFullRescanFor` later has no effect until the parent table's schema
+  changes or you [reset its plan](docs/how-it-works.md#changing-a-tables-strategy-later).
 
 **Schema changes**
 - Auto mode adds new parent columns by itself, but a changed column type or length, a changed
-  primary key or a removed `NOT NULL` column needs a reviewed script; until then that table
+  primary key, a removed `NOT NULL` column or a column that now allows `NULL` in the parent but
+  not in the child needs a reviewed script; until then that table
   stops with an error. A precision or scale change that keeps the same storage size (for example
   `decimal(10,2)` → `decimal(10,4)`) isn't detected.
 - In Auto mode, a schema change costs one full re-scan of that table.
@@ -297,22 +322,12 @@ What changed and which problems were fixed is in the [changelog](CHANGELOG.md). 
   unrun, so Flex Consumption with .NET 10 and Managed Identity end to end are untested there.
 - Whether the run lock's connection, which stays idle during a run, survives a run longer than
   30 minutes on Azure SQL Database (idle connections can be closed after about 30 minutes).
-- Not yet published to NuGet.
 
 ## Status
 
-Version **0.4.0**; what changed is in the [changelog](CHANGELOG.md). The sync engine runs in
-production on Azure SQL Database with a deployed Function App. Not yet published to NuGet.
-
-Upgrading from 0.3.0: hosts that only call `AddSmartTableSync()` are unaffected. Code that uses
-the engine's types directly needs new `using` lines, because the public types moved namespace
-(for example `ISyncOrchestrator` is now in `SmartTableSync.Abstractions`). Existing child tables
-keep working as they are, including ones created with `IDENTITY`.
-
-0.3.0 is not drop-in compatible with 0.2.0 code that used engine types directly: the public API
-is now only what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and
-the replaceable services above). Hosts that only call `AddSmartTableSync()` are unaffected; the
-`SmartTableSync:ChangeTrackingColumns` setting keeps working.
+Version **0.4.0**. The sync engine runs in production on Azure SQL Database with a deployed
+Function App. Not yet published to NuGet. What changed in each version, and what to check when
+upgrading, is in the [changelog](CHANGELOG.md).
 
 ## License
 

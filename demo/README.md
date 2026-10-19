@@ -56,8 +56,11 @@ tells it which one to use.
 
 ## Prerequisites
 
-- An Azure subscription where you can create resource groups, and a Microsoft Entra account
-  that can be the SQL server's admin
+- An Azure subscription where you can create resource groups and assign roles (Owner, or
+  Contributor plus User Access Administrator): Terraform gives the Function's identity a role on
+  its storage account
+- A Microsoft Entra account that becomes the SQL server's admin: the account you are signed in
+  with in Azure CLI. Pass that same account's name as `-SqlAdminLogin`
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in:
   `az login`, then `az account set --subscription <id>`
 - [Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or later

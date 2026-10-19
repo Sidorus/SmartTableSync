@@ -25,8 +25,8 @@ if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
 
         Environment variables required (per-table generation — --infrastructure needs none):
           ParentIntrospectionConnectionString   (read-only: VIEW DEFINITION + SELECT on parent)
-          ChildProvisioningConnectionString      (used only to check whether the child table
-                                                   already exists — never executes DDL)
+          ChildProvisioningConnectionString      (only reads the existing child schema to decide
+                                                   what to write — never executes DDL)
                                                    Not needed for --rowversion-setup or
                                                    --change-tracking-setup (parent-only).
 

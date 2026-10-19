@@ -59,6 +59,6 @@
 
   <line class="arr" x1="340" y1="520" x2="340" y2="556" marker-end="url(#a)"/>
   <rect class="del" x="150" y="560" width="380" height="60" rx="8"/>
-  <text class="rt" x="340" y="580" text-anchor="middle" dominant-baseline="central">Delete reconciliation, every hour</text>
+  <text class="rt" x="340" y="580" text-anchor="middle" dominant-baseline="central">Delete reconciliation, hourly by default</text>
   <text class="rs" x="340" y="600" text-anchor="middle" dominant-baseline="central">parent keys vs child keys → delete what is gone</text>
 </svg>

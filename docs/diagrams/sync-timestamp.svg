@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="800" viewBox="0 0 680 800" role="img" aria-labelledby="title desc">
   <title id="title">Timestamp strategy</title>
-  <desc id="desc">The application sets the LastUpdate column of dbo.Customer on every change. A run reads the last sync time saved in the child (10:00), subtracts one minute, and reads rows with LastUpdate at or after 09:59 in key order: keys 2, 4 and 6. Key 6 was already synced and is read again, which is harmless. The run start on the parent clock (10:05) is saved once all rows succeeded. Deletes come from the hourly delete reconciliation.</desc>
+  <desc id="desc">The application sets the LastUpdate column of dbo.Customer on every change. A run reads the last sync time saved in the child (10:00), subtracts one minute, and reads rows with LastUpdate at or after 09:59 in key order: keys 2, 4 and 6. Key 6 was already synced and is read again, which is harmless. The run start on the parent clock (10:05) is saved once the run succeeded. Deletes come from the hourly delete reconciliation.</desc>
   <style>
     svg { --bg:#ffffff; --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --surface:#f6f8fa; --df:#eeedfe; --ds:#534ab7; --dt:#3c3489; --cf:#e1f5ee; --cs:#0f6e56; --ctx:#085041; --wr:#bc4c00; --rf:#faece7; --rs:#993c1d; --rt:#712b13; }
     @media (prefers-color-scheme: dark) { svg { --bg:#0d1117; --fg:#e6edf3; --muted:#9198a1; --line:#3d444d; --surface:#151b23; --df:#2a2650; --ds:#afa9ec; --dt:#cecbf6; --cf:#0b3a30; --cs:#5dcaa5; --ctx:#9fe1cb; --wr:#f0883e; --rf:#3d1e12; --rs:#f0997b; --rt:#f5c4b3; } }
@@ -77,10 +77,10 @@
   <line class="arr" x1="340" y1="562" x2="340" y2="596" marker-end="url(#a)"/>
   <rect class="data" x="150" y="600" width="380" height="60" rx="8"/>
   <text class="dt" x="340" y="620" text-anchor="middle" dominant-baseline="central">Child database</text>
-  <text class="ds" x="340" y="640" text-anchor="middle" dominant-baseline="central">upsert 2, 4, 6 · save 10:05 if all succeeded</text>
+  <text class="ds" x="340" y="640" text-anchor="middle" dominant-baseline="central">upsert 2, 4, 6 · save 10:05 if the run succeeded</text>
 
   <line class="arr" x1="340" y1="660" x2="340" y2="696" marker-end="url(#a)"/>
   <rect class="del" x="150" y="700" width="380" height="60" rx="8"/>
-  <text class="rt" x="340" y="720" text-anchor="middle" dominant-baseline="central">Delete reconciliation, every hour</text>
+  <text class="rt" x="340" y="720" text-anchor="middle" dominant-baseline="central">Delete reconciliation, hourly by default</text>
   <text class="rs" x="340" y="740" text-anchor="middle" dominant-baseline="central">parent keys vs child keys → delete what is gone</text>
 </svg>

@@ -74,10 +74,10 @@
   <line class="arr" x1="340" y1="550" x2="340" y2="586" marker-end="url(#a)"/>
   <rect class="data" x="150" y="590" width="380" height="60" rx="8"/>
   <text class="dt" x="340" y="610" text-anchor="middle" dominant-baseline="central">Child database</text>
-  <text class="ds" x="340" y="630" text-anchor="middle" dominant-baseline="central">upsert 2, 4 · save 0x…07DB if all succeeded</text>
+  <text class="ds" x="340" y="630" text-anchor="middle" dominant-baseline="central">upsert 2, 4 · save 0x…07DB if the run succeeded</text>
 
   <line class="arr" x1="340" y1="650" x2="340" y2="686" marker-end="url(#a)"/>
   <rect class="del" x="150" y="690" width="380" height="60" rx="8"/>
-  <text class="rt" x="340" y="710" text-anchor="middle" dominant-baseline="central">Delete reconciliation, every hour</text>
+  <text class="rt" x="340" y="710" text-anchor="middle" dominant-baseline="central">Delete reconciliation, hourly by default</text>
   <text class="rs" x="340" y="730" text-anchor="middle" dominant-baseline="central">parent keys vs child keys → delete 3</text>
 </svg>

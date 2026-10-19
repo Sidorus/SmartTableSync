@@ -54,8 +54,11 @@ Apply the child files in this order: tables (or added columns), table types, pro
 
 For an existing child table, the tool compares it with the parent, the same way Auto mode does.
 New columns get the `_AddColumns.sql` script. Changes that could lose data (a changed type or
-length, a changed primary key, a removed `NOT NULL` column) are printed as `NEEDS A MANUAL
-CHANGE` and left to you.
+length, a changed primary key, a removed `NOT NULL` column, a column that now allows `NULL` in
+the parent but not in the child) are printed as `NEEDS A MANUAL CHANGE` and left to you.
+
+The Change Tracking script grants `VIEW CHANGE TRACKING` to `smarttablesync-runtime`. If your
+runtime identity has another name, change it in the script before applying.
 
 ## Connection strings
 
@@ -64,7 +67,7 @@ Set as environment variables:
 | Variable | Identity | Rights it needs |
 |---|---|---|
 | `ParentIntrospectionConnectionString` | parent introspection | on the parent: `VIEW DEFINITION`, `SELECT` on the tables, `VIEW DATABASE STATE` |
-| `ChildProvisioningConnectionString` | child provisioning | on the child: `db_ddladmin`. The tool only checks whether each child table already exists |
+| `ChildProvisioningConnectionString` | child provisioning | on the child: `db_ddladmin`. The tool only reads the existing child schema (tables, columns, table types) to decide what to write; it never changes anything |
 
 With your own Microsoft Entra sign-in (through Azure CLI, Visual Studio or environment
 credentials):

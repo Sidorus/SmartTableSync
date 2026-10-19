@@ -38,6 +38,13 @@ All notable changes to SmartTableSync. The format follows
 - In Auto mode, a parent schema change on an already-synced table runs **one full re-scan** of that table (metric reason `schema_changed`).
 - SQL built from table and column names (which can't be parameters) is quoted by `SqlIdentifier` and marked as reviewed for Semgrep's SQL-injection rule; every value is a parameter.
 
+### Upgrading from 0.3.0
+
+- Hosts that only call `AddSmartTableSync()` are unaffected.
+- Code that uses the engine's types directly needs new `using` lines, because the public types
+  moved namespace (for example `ISyncOrchestrator` is now in `SmartTableSync.Abstractions`).
+- Existing child tables keep working as they are, including ones created with `IDENTITY`.
+
 ## [0.3.0]
 
 SQL Server Change Tracking as the third incremental strategy, the strategy registry and
@@ -45,3 +52,11 @@ template-method runners, a minimal public API, and production hardening (run loc
 retries, delete reconciliation intervals). See
 [ADR-0016](docs/adr/0016-implement-change-tracking-as-third-strategy.md) and
 [ADR-0017](docs/adr/0017-strategy-registry-and-template-method-runners.md).
+
+### Upgrading from 0.2.0
+
+- Not drop-in compatible for code that used engine types directly: the public API is now only
+  what a host needs (`AddSmartTableSync`, the settings types, `ISyncOrchestrator`, and the
+  replaceable services `ISyncRunLock`, `IDbConnectionFactory`, `ISyncMetricsReporter`).
+- Hosts that only call `AddSmartTableSync()` are unaffected; the
+  `SmartTableSync:ChangeTrackingColumns` setting keeps working.

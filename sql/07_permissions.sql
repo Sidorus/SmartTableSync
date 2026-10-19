@@ -1,7 +1,8 @@
 -- ============================================================
 -- Three separate identities, matching three separate jobs. The
--- always-on Function should never hold an identity capable of
--- schema changes — only the manually-run scaffold tool needs that.
+-- always-on runtime identity never gets schema-change rights: only
+-- whoever applies the scaffold tool's scripts (and, opt-in, the host
+-- in Auto mode, through the separate provisioning identity) needs them.
 --
 -- | Identity              | Used by                              | Runs                          |
 -- |------------------------|----------------------------------------|---------------------------------|
@@ -26,9 +27,10 @@
 
 -- ============================================================
 -- 1. Child-provisioning — run on the CHILD database.
--- Used by SmartTableSync.Scaffold to create/alter tables, TVP types,
--- and stored procedures for a human to review and apply by hand
--- (SmartTableSync:Mode = Manual, the default). Also used, opt-in, by
+-- Used to apply the scaffold tool's scripts (tables, TVP types, stored
+-- procedures) after a human reviewed them (SmartTableSync:Mode = Manual,
+-- the default); the scaffold tool itself only reads the existing child
+-- schema with it, to decide what to write. Also used, opt-in, by
 -- the Function itself via ChildDdlProvisioner/ChildProvisioningConnectionString
 -- when SmartTableSync:Mode = Auto: a cheap IF NOT EXISTS check of the
 -- tracking tables at the start of each run, and DDL only for a new
@@ -39,8 +41,9 @@
 -- Option A — Azure AD / Managed Identity (recommended):
 -- CREATE USER [smarttablesync-child-provisioning] FROM EXTERNAL PROVIDER;
 
--- Option B — SQL authentication (requires a server-level login created first):
--- CREATE USER [smarttablesync_child_provisioning] FOR LOGIN [smarttablesync_child_provisioning];
+-- Option B — SQL authentication (requires a server-level login created first; keep the
+-- same name, or rename it in every GRANT below too):
+-- CREATE USER [smarttablesync-child-provisioning] FOR LOGIN [smarttablesync-child-provisioning];
 
 ALTER ROLE [db_ddladmin] ADD MEMBER [smarttablesync-child-provisioning];
 -- db_ddladmin grants CREATE/ALTER/DROP on tables, procedures, and types — exactly what
@@ -60,12 +63,12 @@ GO
 -- CREATE USER [smarttablesync-parent-introspection] FROM EXTERNAL PROVIDER;
 
 -- Option B — SQL authentication:
--- CREATE USER [smarttablesync_parent_introspection] FOR LOGIN [smarttablesync_parent_introspection];
+-- CREATE USER [smarttablesync-parent-introspection] FOR LOGIN [smarttablesync-parent-introspection];
 
 GRANT VIEW DEFINITION TO [smarttablesync-parent-introspection];
 -- VIEW DEFINITION is what lets SchemaReader query sys.columns / sys.indexes /
--- sys.key_constraints / sys.identity_columns / sys.foreign_keys / sys.dm_db_partition_stats
--- for tables this principal can otherwise SELECT from.
+-- sys.key_constraints / sys.identity_columns / sys.foreign_keys for tables this principal
+-- can otherwise SELECT from (sys.dm_db_partition_stats needs VIEW DATABASE STATE, below).
 -- Database-wide is the simplest grant. To limit it to the synced tables only, grant it per
 -- table instead (repeat for each managed table):
 -- GRANT VIEW DEFINITION ON OBJECT::[dbo].[ProductCatalogItem] TO [smarttablesync-parent-introspection];
@@ -79,7 +82,7 @@ GRANT SELECT ON [dbo].[DocumentAsset]         TO [smarttablesync-parent-introspe
 GRANT VIEW DATABASE STATE TO [smarttablesync-parent-introspection];
 -- Row count and average row size come from sys.dm_db_partition_stats. Without this grant the
 -- scaffold tool's per-table generation and --rowversion-setup fail with
--- "VIEW DATABASE PERFORMANCE STATE permission denied". Read-only server metadata.
+-- "VIEW DATABASE PERFORMANCE STATE permission denied". Read-only database-level metadata.
 GO
 
 -- ============================================================
@@ -93,7 +96,7 @@ GO
 -- Run on the PARENT database:
 
 -- CREATE USER [smarttablesync-runtime] FROM EXTERNAL PROVIDER;   -- Managed Identity
--- CREATE USER [smarttablesync_runtime] FOR LOGIN [smarttablesync_runtime]; -- SQL auth
+-- CREATE USER [smarttablesync-runtime] FOR LOGIN [smarttablesync-runtime]; -- SQL auth
 
 GRANT SELECT ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
 GRANT SELECT ON [dbo].[ProductCatalogItem]    TO [smarttablesync-runtime];
@@ -121,7 +124,7 @@ GO
 -- Run on the CHILD database:
 
 -- CREATE USER [smarttablesync-runtime] FROM EXTERNAL PROVIDER;   -- Managed Identity
--- CREATE USER [smarttablesync_runtime] FOR LOGIN [smarttablesync_runtime]; -- SQL auth
+-- CREATE USER [smarttablesync-runtime] FOR LOGIN [smarttablesync-runtime]; -- SQL auth
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON [dbo].[ProductAttributeValue] TO [smarttablesync-runtime];
 GRANT SELECT, INSERT, UPDATE, DELETE ON [dbo].[ProductCatalogItem]    TO [smarttablesync-runtime];
