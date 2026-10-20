@@ -290,6 +290,25 @@ function Clear-TerraformConnectionStrings {
     Remove-Item Env:TF_VAR_parent_connection_string, Env:TF_VAR_child_connection_string, Env:TF_VAR_child_provisioning_connection_string -ErrorAction SilentlyContinue
 }
 
+# Runs the scaffold tool. In the repository it runs from source; in a project created with
+# "dotnet new smarttablesync-azure" it's the local tool in .config/dotnet-tools.json, in the same
+# version as the SmartTableSync package the Function uses.
+function Invoke-Scaffold([string[]] $arguments) {
+    $project = Join-Path $repoRoot 'SmartTableSync.Scaffold'
+    if (Test-Path $project) {
+        Invoke-Native { dotnet run --project $project -- @arguments }
+        return
+    }
+    Push-Location $repoRoot
+    try {
+        Invoke-Native { dotnet tool restore }
+        Invoke-Native { dotnet smarttablesync-scaffold @arguments }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Write-SqlFile([string] $name, [string[]] $lines) {
     $path = Join-Path $outputDir $name
     Set-Content -Path $path -Value ($lines -join "`n") -Encoding utf8
@@ -830,10 +849,8 @@ else {
     $env:ParentIntrospectionConnectionString = $script:parentTarget.ConnectionString
     $env:ChildProvisioningConnectionString = $provisioningTarget.ConnectionString
     try {
-        $scaffold = Join-Path $repoRoot 'SmartTableSync.Scaffold'
-        Invoke-Native { dotnet run --project $scaffold -- --infrastructure --output $scaffoldDir }
-        $scaffoldArgs = @($reports | ForEach-Object Table) + @('--output', $scaffoldDir)
-        Invoke-Native { dotnet run --project $scaffold -- @scaffoldArgs }
+        Invoke-Scaffold @('--infrastructure', '--output', $scaffoldDir)
+        Invoke-Scaffold (@($reports | ForEach-Object Table) + @('--output', $scaffoldDir))
     }
     finally {
         Remove-Item Env:ParentIntrospectionConnectionString, Env:ChildProvisioningConnectionString -ErrorAction SilentlyContinue

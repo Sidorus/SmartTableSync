@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Ruslan Sidoriako",
+  "classifications": [ "Azure", "Functions", "SQL", "Sync" ],
+  "identity": "SmartTableSync.Templates.AzureFunction",
+  "groupIdentity": "SmartTableSync.AzureFunction",
+  "name": "SmartTableSync Azure Function with quick start",
+  "description": "An Azure Function that syncs tables from a parent to a child Azure SQL database, with a script and Terraform that deploy it and start the first sync.",
+  "shortName": "smarttablesync-azure",
+  "sourceName": "SmartTableSyncFunction",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "skipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "description": "Doesn't restore the NuGet packages after creating the project.",
+      "defaultValue": "false"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "SmartTableSyncFunction/SmartTableSyncFunction.csproj" }
+  ],
+  "postActions": [
+    {
+      "id": "restore",
+      "condition": "(!skipRestore)",
+      "description": "Restore the NuGet packages: SmartTableSync and the Azure Functions packages.",
+      "manualInstructions": [ { "text": "Run 'dotnet restore'" } ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    }
+  ]
+}

@@ -1,9 +1,10 @@
 name: Publish to NuGet
 
-# Publishes SmartTableSync and SmartTableSync.Scaffold to nuget.org when a version tag is pushed,
-# for example v0.5.0 or v0.5.0-preview.1. The tag is the version: nothing else needs changing.
-# Signs in with NuGet trusted publishing (no API key); the nuget.org policy allows exactly this
-# workflow file, in the "release" environment, for these two packages. See docs/releasing.md.
+# Publishes SmartTableSync, SmartTableSync.Scaffold and SmartTableSync.Templates to nuget.org when
+# a version tag is pushed, for example v0.5.0 or v0.5.0-preview.1. The tag is the version: nothing
+# else needs changing. Signs in with NuGet trusted publishing (no API key); the nuget.org policy
+# allows exactly this workflow file, in the "release" environment, for these three packages.
+# See docs/releasing.md.
 on:
   push:
     tags: ['v*']
@@ -93,7 +94,13 @@ jobs:
         run: |
           dotnet pack SmartTableSync.Core/SmartTableSync.Core.csproj --no-build --configuration Release --output artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack SmartTableSync.Scaffold/SmartTableSync.Scaffold.csproj --no-build --configuration Release --output artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack SmartTableSync.Templates/SmartTableSync.Templates.csproj --no-build --configuration Release --output artifacts -p:Version=${{ steps.version.outputs.version }}
           ls -l artifacts
+
+      # The template must create a project that builds with the packages of this release, before
+      # anything is pushed
+      - name: Test the template
+        run: bash .github/scripts/test-template.sh artifacts
 
       - name: NuGet login (trusted publishing)
         id: login
@@ -146,8 +153,9 @@ jobs:
           fi
           {
             echo ""
-            echo "**Install:** \`dotnet add package SmartTableSync --version $VERSION\`, and the scaffold tool:"
-            echo "\`dotnet tool install --global SmartTableSync.Scaffold --version $VERSION\`"
+            echo "**Install:** \`dotnet add package SmartTableSync --version $VERSION\`, the scaffold tool:"
+            echo "\`dotnet tool install --global SmartTableSync.Scaffold --version $VERSION\`, and the Azure Function template"
+            echo "with the quick start: \`dotnet new install SmartTableSync.Templates::$VERSION\`"
           } >> notes.md
 
       - name: Create the GitHub Release

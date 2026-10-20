@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "smarttablesync.scaffold": {
+      "version": "SMARTTABLESYNC_VERSION",
+      "commands": [
+        "smarttablesync-scaffold"
+      ],
+      "rollForward": false
+    }
+  }
+}

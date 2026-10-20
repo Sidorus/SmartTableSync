@@ -7,6 +7,22 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **SmartTableSync.Templates**, a `dotnet new` template package. `dotnet new install
+  SmartTableSync.Templates`, then `dotnet new smarttablesync-azure -n MySync`, creates a project
+  of your own with the Azure Function (using the SmartTableSync package), the quick start script
+  and its Terraform, and the scaffold tool as a local tool, all in the template's version. The
+  quick start no longer needs a clone of the repository.
+
+### Changed
+
+- `quickstart/deploy.ps1` runs the scaffold tool from NuGet (the project's
+  `.config/dotnet-tools.json`) when it runs in a project created from the template, and from
+  source in the repository, as before.
+- The Manual mode guide and the setup guide install the scaffold tool from NuGet instead of running
+  it from the repository.
+
 ## [0.5.0] - 2026-10-20
 
 The first release on NuGet, as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync)

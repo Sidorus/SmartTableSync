@@ -7,6 +7,26 @@ connection strings, and runs the first sync.
 The [demo](../demo/README.md) is different: it creates its own SQL server, databases and demo
 tables. Use the demo to see SmartTableSync work; use this quick start for your own tables.
 
+## Get the script: from NuGet or from a clone
+
+**From NuGet, without cloning this repository.** The `smarttablesync-azure` template creates a
+project of your own with the Function, `quickstart/deploy.ps1` and its Terraform. The Function
+uses the [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) package, and the script
+runs the [scaffold tool](https://www.nuget.org/packages/SmartTableSync.Scaffold) from NuGet, both
+in the template's version.
+
+```powershell
+dotnet new install SmartTableSync.Templates     # once per machine
+dotnet new smarttablesync-azure -n MySync
+cd MySync
+```
+
+**From a clone of this repository.** The script builds the Function in `SmartTableSyncFunction/`
+and runs the scaffold tool from source.
+
+Either way, the commands below are the same: run them from the project's (or the repository's)
+root folder.
+
 ## Two ways to give it the databases
 
 **A. Server and database names.** The script creates managed identities for the Function, the
@@ -42,6 +62,7 @@ never writes them to a file or prints them.
 
 ## Contents
 
+- [Get the script: from NuGet or from a clone](#get-the-script-from-nuget-or-from-a-clone)
 - [Two ways to give it the databases](#two-ways-to-give-it-the-databases)
 - [What you need](#what-you-need)
 - [Step by step](#step-by-step)

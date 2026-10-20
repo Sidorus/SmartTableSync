@@ -1,7 +1,8 @@
 # Releasing a version
 
-How a new version of the two NuGet packages, [SmartTableSync](https://www.nuget.org/packages/SmartTableSync)
-and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold), is published.
+How a new version of the three NuGet packages, [SmartTableSync](https://www.nuget.org/packages/SmartTableSync),
+[SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) and
+[SmartTableSync.Templates](https://www.nuget.org/packages/SmartTableSync.Templates), is published.
 For maintainers.
 
 ## In short
@@ -57,7 +58,8 @@ release before making it final. A pre-release doesn't need its own changelog sec
 | The tagged commit is on main | the tag points to a commit that isn't part of `main` |
 | Build and test | the build fails or any unit or integration test fails |
 | Package release notes | never stops it: the changelog section `## [version]` becomes the packages' release notes, shown on nuget.org's *Release Notes* tab and in Visual Studio; without a section, the packages link to the changelog |
-| Pack | packing fails; both packages get the tag's version |
+| Pack | packing fails; all three packages get the tag's version |
+| Test the template | a project created from the template doesn't build with the packed SmartTableSync package, or the packed scaffold tool doesn't run in it ([`.github/scripts/test-template.sh`](../.github/scripts/test-template.sh), also run by CI) |
 | NuGet login | the trusted publishing policy doesn't match |
 | Push | nuget.org refuses the package; a version that's already published is skipped |
 
@@ -69,7 +71,7 @@ The packages are also kept with the run as an artifact, for 90 days.
 - the version as its title;
 - the changelog section `## [version]` as its notes, or, when there is none (as for most
   pre-releases), the list of pull requests merged since the previous release;
-- the two `.nupkg` files attached;
+- the three `.nupkg` files attached;
 - the *Pre-release* label for a version with a suffix, otherwise *Latest*.
 
 The badges at the top of the README (NuGet version, downloads, latest release) update by
@@ -82,6 +84,7 @@ To try a package before releasing it, pack it with any version and use it from a
 ```bash
 dotnet pack SmartTableSync.Core/SmartTableSync.Core.csproj -c Release -o ./artifacts -p:Version=0.6.0-local
 dotnet pack SmartTableSync.Scaffold/SmartTableSync.Scaffold.csproj -c Release -o ./artifacts -p:Version=0.6.0-local
+dotnet pack SmartTableSync.Templates/SmartTableSync.Templates.csproj -c Release -o ./artifacts -p:Version=0.6.0-local
 ```
 
 Use the library from that folder in another project:
@@ -98,6 +101,17 @@ dotnet tool install SmartTableSync.Scaffold --tool-path ./tool-test --add-source
 ./tool-test/smarttablesync-scaffold --help
 ```
 
+Try the template from it, in a throwaway template store so your installed templates stay as they
+are (a `nuget.config` next to the new project that adds `./artifacts` as a source lets it restore
+the local SmartTableSync package):
+
+```bash
+dotnet new install ./artifacts/SmartTableSync.Templates.0.6.0-local.nupkg --debug:custom-hive ./template-test
+dotnet new smarttablesync-azure -n MySync --debug:custom-hive ./template-test
+```
+
+Or run the same test as CI: `bash .github/scripts/test-template.sh ./artifacts`.
+
 Without `-p:Version`, a local package gets the default version `0.0.0-dev` from the project files,
 so it can never be mistaken for a release. Remove the local source again with
 `dotnet nuget remove source smarttablesync-local`.
@@ -106,7 +120,7 @@ so it can never be mistaken for a release. Remove the local source again with
 
 | Where | Setting | Effect |
 |---|---|---|
-| nuget.org | trusted publishing policy for `Sidorus/SmartTableSync`, workflow `publish.yml`, environment `release`, packages `SmartTableSync` and `SmartTableSync.Scaffold` | only this workflow can publish these two packages; there's no API key that could leak |
+| nuget.org | trusted publishing policy for `Sidorus/SmartTableSync`, workflow `publish.yml`, environment `release`, packages `SmartTableSync`, `SmartTableSync.Scaffold` and `SmartTableSync.Templates` | only this workflow can publish these three packages; there's no API key that could leak |
 | GitHub, environment `release` | required reviewer; only `v*` tags; secret `NUGET_USER` | every publish waits for approval, and nothing but a release tag can use the environment |
 | GitHub, ruleset *Release tags* | creating, moving and deleting `v*` tags restricted to admins | only a maintainer can start a release, and a published tag can't be moved |
 | GitHub, ruleset *Protect main* | pull requests with passing checks | only reviewed, tested code is on `main`, and so only that can be released |

@@ -14,8 +14,9 @@ schema. Replace them with yours.
 
 ## What you need
 
-- **The repository**, for the scaffold tool. Until it's on NuGet, run it from the repository root:
-  `dotnet run --project SmartTableSync.Scaffold -- <arguments>` (needs the .NET 10 SDK).
+- **The scaffold tool**, from NuGet (needs the .NET 10 SDK):
+  `dotnet tool install --global SmartTableSync.Scaffold`. In a clone of the repository you can run
+  it from source instead: `dotnet run --project SmartTableSync.Scaffold -- <arguments>`.
 - **A way to run SQL:** SSMS, Azure Data Studio, or `sqlcmd`. The examples use
   [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) with your Microsoft
   Entra sign-in:
@@ -77,8 +78,8 @@ changed](../sync-strategies.md) helps you choose. To add Change Tracking or a `r
 let the scaffold tool write the script, review it, and have a DBA apply it **to the parent**:
 
 ```bash
-dotnet run --project SmartTableSync.Scaffold -- --change-tracking-setup Product --output sql/generated/parent
-dotnet run --project SmartTableSync.Scaffold -- --rowversion-setup Customer --output sql/generated/parent
+smarttablesync-scaffold --change-tracking-setup Product --output sql/generated/parent
+smarttablesync-scaffold --rowversion-setup Customer --output sql/generated/parent
 ```
 
 ```bash
@@ -116,7 +117,7 @@ set them here too, so the scripts match what the engine will do.
 Once per child database:
 
 ```bash
-dotnet run --project SmartTableSync.Scaffold -- --infrastructure --output sql/generated/child
+smarttablesync-scaffold --infrastructure --output sql/generated/child
 sqlcmd -S myserver.database.windows.net -d ChildDb --authentication-method ActiveDirectoryDefault -i sql/generated/child/00_infrastructure.sql
 ```
 
@@ -125,7 +126,7 @@ This creates `dbo.SyncTableConfig`, `dbo.CustomSyncState` and `dbo.SyncBatchLog`
 ## 6. Generate and apply the child tables
 
 ```bash
-dotnet run --project SmartTableSync.Scaffold -- Product Customer sales.Order --output sql/generated/child
+smarttablesync-scaffold Product Customer sales.Order --output sql/generated/child
 ```
 
 For each table it prints the plan (strategy and merge method) and writes:
@@ -222,7 +223,7 @@ GRANT SELECT, VIEW DEFINITION ON dbo.Supplier TO [smarttablesync-runtime];
 ```
 
 ```bash
-dotnet run --project SmartTableSync.Scaffold -- Supplier --output sql/generated/child
+smarttablesync-scaffold Supplier --output sql/generated/child
 # apply Supplier.sql, SupplierTableType.sql (if written), sp_SyncSupplier*.sql to the child, then the step 7 grants for it
 ```
 
