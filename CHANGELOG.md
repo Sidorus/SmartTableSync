@@ -7,6 +7,11 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-20
+
+Fixes the quick start in projects created from the template: in 0.5.1 it stopped when publishing
+the Function. The library and the scaffold tool are unchanged apart from the version.
+
 ### Fixed
 
 - The quick start in a project created from the `smarttablesync-azure` template stopped at
@@ -18,6 +23,26 @@ All notable changes to SmartTableSync. The format follows
 
 - Turning on Change Tracking is now the first step of the quick start, in the README's *Get
   started*, the NuGet guide and the template's READMEs.
+
+### Upgrading
+
+Nothing to change in the databases or settings. For a project created from the 0.5.1 template,
+either add `--dotnet-isolated` to the `func azure functionapp publish` line in
+`quickstart/deploy.ps1`, or run `dotnet new update` and create the project again.
+
+### Tested
+
+- Both ways in the README's *Get started*, from nuget.org in empty folders:
+  - **Own app:** a worker with the SmartTableSync package and SQL Server in Docker, with Change
+    Tracking turned on as the guide says. The first run created the child table and copied
+    1,000 rows; after updates, an insert and a delete in the parent, the next run synced 11 rows
+    and 1 delete.
+  - **Azure Function:** the template, Change Tracking turned on as the guide says, and
+    `deploy.ps1` with connection strings on two Azure SQL databases. The dry run, the setup
+    (Terraform, publishing the Function, the first sync: 500 and 300 rows), `-SyncNow` after
+    updates, inserts and a delete in the parent, and `-Destroy` all completed, with the child
+    matching the parent row for row.
+- Unit and integration tests (298 and 72) pass.
 
 ## [0.5.1] - 2026-10-20
 
