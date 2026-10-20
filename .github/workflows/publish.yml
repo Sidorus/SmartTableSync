@@ -24,6 +24,8 @@ jobs:
     permissions:
       id-token: write   # the short-lived token for nuget.org trusted publishing
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -84,3 +86,62 @@ jobs:
         with:
           name: nuget-packages-${{ steps.version.outputs.version }}
           path: artifacts/*.nupkg
+
+  # After a successful publish: a GitHub Release for the tag, with the changelog section of that
+  # version as its notes and the two packages attached. A pre-release version (v1.2.3-preview.1)
+  # becomes a pre-release on GitHub too. Its own job, so only this step can write to the repository.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-${{ needs.publish.outputs.version }}
+          path: artifacts
+
+      - name: Release notes from the changelog
+        id: notes
+        run: |
+          VERSION="${{ needs.publish.outputs.version }}"
+          # The lines under "## [1.2.3]" up to the next "## [" heading
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then
+            echo "from_changelog=true" >> "$GITHUB_OUTPUT"
+            echo "Notes: the changelog section for $VERSION"
+          else
+            echo "from_changelog=false" >> "$GITHUB_OUTPUT"
+            echo "No changelog section for $VERSION; the release lists the merged pull requests instead"
+          fi
+          {
+            echo ""
+            echo "**Install:** \`dotnet add package SmartTableSync --version $VERSION\`, and the scaffold tool:"
+            echo "\`dotnet tool install --global SmartTableSync.Scaffold --version $VERSION\`"
+          } >> notes.md
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ needs.publish.outputs.version }}"
+          ARGS=(--title "$VERSION" --notes-file notes.md --verify-tag)
+          # Without a changelog section, GitHub adds the list of merged pull requests
+          if [ "${{ steps.notes.outputs.from_changelog }}" != "true" ]; then
+            ARGS+=(--generate-notes)
+          fi
+          if [[ "$VERSION" == *-* ]]; then
+            ARGS+=(--prerelease --latest=false)
+          fi
+          # A re-run for the same tag keeps the existing release
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg "${ARGS[@]}"

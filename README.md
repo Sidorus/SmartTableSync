@@ -1,5 +1,14 @@
 # SmartTableSync
 
+[![NuGet](https://img.shields.io/nuget/vpre/SmartTableSync?label=NuGet&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
+[![Downloads](https://img.shields.io/nuget/dt/SmartTableSync?label=Downloads&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
+[![Scaffold tool](https://img.shields.io/nuget/vpre/SmartTableSync.Scaffold?label=Scaffold%20tool&logo=nuget)](https://www.nuget.org/packages/SmartTableSync.Scaffold)
+[![CI](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Sidorus/SmartTableSync?include_prereleases&sort=semver&label=Release)](https://github.com/Sidorus/SmartTableSync/releases)
+[![License](https://img.shields.io/github/license/Sidorus/SmartTableSync?label=License)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![SQL Server](https://img.shields.io/badge/SQL%20Server-2016%2B%20%7C%20Azure%20SQL-CC2927?logo=microsoftsqlserver)](#where-it-runs)
+
 A self-configuring .NET 10 engine that keeps tables synchronized from one SQL database to another
 (parent → child): give it table names, and it inspects each table's schema, picks how to detect
 changes and how to merge them, and keeps the child up to date on a schedule you choose. The engine
@@ -24,6 +33,20 @@ Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instan
 **New here?** Watch it work with the [one-script demo](demo/README.md), or start syncing your own
 Azure SQL databases with the [quick start](quickstart/README.md). All the ways to set it up are
 under [guides](#guides).
+
+### Install from NuGet
+
+Published on nuget.org as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) (the
+engine) and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) (the
+tool that writes the child's SQL):
+
+```bash
+dotnet add package SmartTableSync --prerelease
+dotnet tool install --global SmartTableSync.Scaffold --prerelease
+```
+
+`--prerelease` is needed while only preview versions exist. Set up, run and test it on your
+machine in a few minutes: [use it from NuGet](docs/guides/nuget.md).
 
 ## The problem
 
@@ -128,6 +151,7 @@ every SQL statement.
 | **Sync my own Azure SQL databases** with one script | [Quick start](quickstart/README.md) |
 | Set it up by hand in **Manual mode**: scaffold tool, reviewed SQL, least rights (production) | [Manual mode, step by step](docs/guides/manual-mode.md) |
 | Set it up by hand in **Auto mode**: the engine creates the child's tables | [Auto mode, step by step](docs/guides/auto-mode.md) |
+| **Use the NuGet package** in my app: install, set up, run, test locally with Docker | [Use it from NuGet](docs/guides/nuget.md) |
 | Run it in a **container** on Linux: Docker, Azure Container Apps, Kubernetes | [Run it in a container](docs/guides/containers.md) |
 | Run it in **my own app**: a background service, Hangfire or Quartz.NET | [Run it in your own app](docs/guides/hosting.md) |
 
