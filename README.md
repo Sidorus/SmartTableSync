@@ -31,40 +31,8 @@ Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instan
   or any other SQL Server sign-in.
 - Notices schema changes in the parent, and in Auto mode adds new columns to the child by itself.
 
-## Get started in a few commands
-
-The first two ways come entirely from NuGet: no clone needed.
-
-**Sync your Azure SQL databases with an Azure Function** (the [quick start](quickstart/README.md);
-needs the Azure CLI, Terraform and go-sqlcmd):
-
-```powershell
-dotnet new install SmartTableSync.Templates
-dotnet new smarttablesync-azure -n MySync
-cd MySync
-az login
-./quickstart/deploy.ps1 -Suffix acme1 `
-    -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB `
-    -Tables "Product,Customer"
-```
-
-It creates the Function in your subscription, runs the first sync and keeps the child up to date
-every 5 minutes. Add `-DryRun` first to only see what it would do.
-
-**Use the engine in your own .NET app** ([step by step, with a local test in Docker](docs/guides/nuget.md)):
-
-```bash
-dotnet new worker -n MySync
-cd MySync
-dotnet add package SmartTableSync
-```
-
-Then call `builder.Services.AddSmartTableSync()`, run `ISyncOrchestrator.RunAsync` on a timer, and
-put the connection strings and the table list in your settings; the guide has the complete code.
-
-**Just watch it work:** the [one-script demo](demo/README.md), from a clone of this repository,
-creates its own server, databases and tables. All the other ways to set it up are under
-[guides](#guides).
+**New here?** [Get started in a few commands](#get-started-in-a-few-commands), or pick a way to
+set it up under [guides](#guides).
 
 ## The problem
 
@@ -157,6 +125,41 @@ More: [every step of a run in detail](docs/how-it-works.md) ·
 | **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
 | **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`, on Windows or Linux: an Azure Function (included as an example), a Linux container (image included), a background service, a Hangfire or Quartz.NET job, a Windows service. It only needs network access to both databases. |
 | **Schedule** | Decided by the host: any interval, from every minute to once a night. The example Function runs every 5 minutes. |
+
+## Get started in a few commands
+
+The first two ways come entirely from NuGet: no clone needed.
+
+**Sync your Azure SQL databases with an Azure Function** (the [quick start](quickstart/README.md);
+needs the Azure CLI, Terraform and go-sqlcmd):
+
+```powershell
+dotnet new install SmartTableSync.Templates
+dotnet new smarttablesync-azure -n MySync
+cd MySync
+az login
+./quickstart/deploy.ps1 -Suffix acme1 `
+    -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB `
+    -Tables "Product,Customer"
+```
+
+It creates the Function in your subscription, runs the first sync and keeps the child up to date
+every 5 minutes. Add `-DryRun` first to only see what it would do.
+
+**Use the engine in your own .NET app** ([step by step, with a local test in Docker](docs/guides/nuget.md)):
+
+```bash
+dotnet new worker -n MySync
+cd MySync
+dotnet add package SmartTableSync
+```
+
+Then call `builder.Services.AddSmartTableSync()`, run `ISyncOrchestrator.RunAsync` on a timer, and
+put the connection strings and the table list in your settings; the guide has the complete code.
+
+**Just watch it work:** the [one-script demo](demo/README.md), from a clone of this repository,
+creates its own server, databases and tables. All the other ways to set it up are under
+[guides](#guides).
 
 ## Install from NuGet
 
