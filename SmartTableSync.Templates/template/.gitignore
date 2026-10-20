@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+
+# Azure Functions local settings: may contain connection strings
+local.settings.json
+
+# What the quick start writes per deployment: SQL scripts and settings
+quickstart/generated/
+
+# Terraform: state holds resource IDs; the lock file and providers come from terraform init
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan

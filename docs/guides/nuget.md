@@ -1,17 +1,19 @@
 # Use it from NuGet: install, set up, run and test
 
-SmartTableSync is published on nuget.org as two packages:
+SmartTableSync is published on nuget.org as three packages:
 
 | Package | What it is | Install |
 |---|---|---|
 | [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) | the sync engine, a library for your .NET app | `dotnet add package SmartTableSync` |
 | [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) | a command-line tool that writes the SQL the child database needs | `dotnet tool install --global SmartTableSync.Scaffold` |
+| [SmartTableSync.Templates](https://www.nuget.org/packages/SmartTableSync.Templates) | a `dotnet new` template: the Azure Function and the quick start script as your own project (from version 0.5.1) | `dotnet new install SmartTableSync.Templates` |
 
 The current version is 0.5.0. What changed in each version is in the
 [changelog](../../CHANGELOG.md).
 
 This page takes you from nothing to a running sync: first a **complete test on your own machine**
-with SQL Server in Docker, then **your real databases**.
+with SQL Server in Docker, then **your real databases**. To deploy straight to Azure SQL with
+an Azure Function instead, see [the Azure Function template](#the-azure-function-template).
 
 ## What you need
 
@@ -187,6 +189,28 @@ The app stays the same; only the settings and the database preparation change.
 4. **Run it** wherever your app runs: a server, a container ([guide](containers.md)), Azure
    App Service or Functions.
 
+## The Azure Function template
+
+For Azure SQL databases, the template gives you the ready Azure Function and the
+[quick start](../../quickstart/README.md) script that deploys it, without cloning this repository:
+
+```powershell
+dotnet new install SmartTableSync.Templates
+dotnet new smarttablesync-azure -n MySync
+cd MySync
+./quickstart/deploy.ps1 -Suffix acme1 -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB -Tables "Product,Customer" -DryRun
+```
+
+| What you get | Uses |
+|---|---|
+| `MySync/`, the Function: a timer that syncs every 5 minutes | the `SmartTableSync` package |
+| `quickstart/deploy.ps1` and `quickstart/terraform/` | the Azure CLI, Terraform and go-sqlcmd on your machine |
+| `.config/dotnet-tools.json` | the `SmartTableSync.Scaffold` tool, for Manual mode |
+
+The packages are restored as soon as the project is created, and both have the template's version.
+Drop `-DryRun` to create the Azure resources and start the first sync. Everything the script
+needs and does: [quick start](../../quickstart/README.md).
+
 ## Check that it runs
 
 On the child database:
@@ -204,7 +228,11 @@ For metrics and dashboards, see [observability](../observability.md).
 ```bash
 dotnet add package SmartTableSync
 dotnet tool update --global SmartTableSync.Scaffold
+dotnet new update     # the template, for projects you create from now on
 ```
+
+In a project created from the template, run `dotnet add MySync package SmartTableSync` and
+`dotnet tool update SmartTableSync.Scaffold` in its root folder.
 
 Read the version's *Upgrading* part in the [changelog](../../CHANGELOG.md) first: it says when a
 schema script or a new right is needed.

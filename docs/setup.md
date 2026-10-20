@@ -75,9 +75,8 @@ writes those scripts too (step 2).
 
 You need:
 
-- **The scaffold tool.** Until it is published on NuGet, run it from the repository with
-  `dotnet run --project SmartTableSync.Scaffold -- <arguments>` wherever this guide writes
-  `smarttablesync-scaffold <arguments>` ([more ways to run it](../SmartTableSync.Scaffold/README.md#install)).
+- **The scaffold tool**, from NuGet: `dotnet tool install --global SmartTableSync.Scaffold`
+  ([more ways to run it](../SmartTableSync.Scaffold/README.md#install)).
 - **Its two connection strings**, as environment variables (see
   [the scaffold README](../SmartTableSync.Scaffold/README.md#connection-strings)):
   `ParentIntrospectionConnectionString` (introspection identity → parent) and

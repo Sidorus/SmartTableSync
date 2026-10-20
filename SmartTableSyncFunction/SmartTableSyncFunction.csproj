@@ -14,7 +14,9 @@
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.10.0" />
   </ItemGroup>
 
-  <!-- SmartTableSync.Core brings the Microsoft Entra sign-in (Managed Identity) package with it. -->
+  <!-- The SmartTableSync library brings the Microsoft Entra sign-in (Managed Identity) package
+       with it. The smarttablesync-azure template (SmartTableSync.Templates) ships this project
+       with the reference below replaced by the SmartTableSync NuGet package. -->
 
   <ItemGroup>
     <ProjectReference Include="..\SmartTableSync.Core\SmartTableSync.Core.csproj" />

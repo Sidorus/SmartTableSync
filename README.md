@@ -3,6 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/SmartTableSync?label=NuGet&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
 [![Downloads](https://img.shields.io/nuget/dt/SmartTableSync?label=Downloads&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
 [![Scaffold tool](https://img.shields.io/nuget/v/SmartTableSync.Scaffold?label=Scaffold%20tool&logo=nuget)](https://www.nuget.org/packages/SmartTableSync.Scaffold)
+[![Template](https://img.shields.io/nuget/v/SmartTableSync.Templates?label=Template&logo=nuget)](https://www.nuget.org/packages/SmartTableSync.Templates)
 [![CI](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Sidorus/SmartTableSync?sort=semver&label=Release)](https://github.com/Sidorus/SmartTableSync/releases)
 [![License](https://img.shields.io/github/license/Sidorus/SmartTableSync?label=License)](LICENSE)
@@ -30,9 +31,40 @@ Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instan
   or any other SQL Server sign-in.
 - Notices schema changes in the parent, and in Auto mode adds new columns to the child by itself.
 
-**New here?** Watch it work with the [one-script demo](demo/README.md), or start syncing your own
-Azure SQL databases with the [quick start](quickstart/README.md), or
-[install it from NuGet](#install-from-nuget). All the ways to set it up are under [guides](#guides).
+## Get started in a few commands
+
+The first two ways come entirely from NuGet: no clone needed.
+
+**Sync your Azure SQL databases with an Azure Function** (the [quick start](quickstart/README.md);
+needs the Azure CLI, Terraform and go-sqlcmd):
+
+```powershell
+dotnet new install SmartTableSync.Templates
+dotnet new smarttablesync-azure -n MySync
+cd MySync
+az login
+./quickstart/deploy.ps1 -Suffix acme1 `
+    -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB `
+    -Tables "Product,Customer"
+```
+
+It creates the Function in your subscription, runs the first sync and keeps the child up to date
+every 5 minutes. Add `-DryRun` first to only see what it would do.
+
+**Use the engine in your own .NET app** ([step by step, with a local test in Docker](docs/guides/nuget.md)):
+
+```bash
+dotnet new worker -n MySync
+cd MySync
+dotnet add package SmartTableSync
+```
+
+Then call `builder.Services.AddSmartTableSync()`, run `ISyncOrchestrator.RunAsync` on a timer, and
+put the connection strings and the table list in your settings; the guide has the complete code.
+
+**Just watch it work:** the [one-script demo](demo/README.md), from a clone of this repository,
+creates its own server, databases and tables. All the other ways to set it up are under
+[guides](#guides).
 
 ## The problem
 
@@ -128,18 +160,26 @@ More: [every step of a run in detail](docs/how-it-works.md) ·
 
 ## Install from NuGet
 
-Published on nuget.org as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) (the
-engine) and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) (the
-tool that writes the child's SQL):
+Published on nuget.org as three packages, always released together with the same version:
 
-```bash
-dotnet add package SmartTableSync
-dotnet tool install --global SmartTableSync.Scaffold
-```
+| Package | What it is | Install |
+|---|---|---|
+| [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) | the engine, a library for your .NET app | `dotnet add package SmartTableSync` |
+| [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) | the tool that writes the child's SQL | `dotnet tool install --global SmartTableSync.Scaffold` |
+| [SmartTableSync.Templates](https://www.nuget.org/packages/SmartTableSync.Templates) | a `dotnet new` template: the Azure Function and the quick start script, as your own project | `dotnet new install SmartTableSync.Templates` |
 
 The package includes everything needed to connect, also with managed identities. Set up, run and
-test it on your machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
-and what to check when upgrading: [changelog](CHANGELOG.md) and
+test it on your machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). Deploy it to
+Azure without cloning this repository:
+
+```powershell
+dotnet new install SmartTableSync.Templates
+dotnet new smarttablesync-azure -n MySync
+cd MySync
+./quickstart/deploy.ps1 -Suffix acme1 -ParentConnectionString $env:PARENT_DB -ChildConnectionString $env:CHILD_DB -Tables "Product,Customer"
+```
+
+What's new in each version, and what to check when upgrading: [changelog](CHANGELOG.md) and
 [releases](https://github.com/Sidorus/SmartTableSync/releases).
 
 ## Guides
@@ -150,7 +190,7 @@ every SQL statement.
 | I want to | Guide |
 |---|---|
 | **See it work** first: everything is created for me, with demo tables | [Run the demo](demo/README.md) (`./demo/run-demo.ps1 -Suffix <yours>`) |
-| **Sync my own Azure SQL databases** with one script | [Quick start](quickstart/README.md) |
+| **Sync my own Azure SQL databases** with one script, from a clone or from the NuGet template | [Quick start](quickstart/README.md) |
 | Set it up by hand in **Manual mode**: scaffold tool, reviewed SQL, least rights (production) | [Manual mode, step by step](docs/guides/manual-mode.md) |
 | Set it up by hand in **Auto mode**: the engine creates the child's tables | [Auto mode, step by step](docs/guides/auto-mode.md) |
 | **Use the NuGet package** in my app: install, set up, run, test locally with Docker | [Use it from NuGet](docs/guides/nuget.md) |
@@ -232,8 +272,9 @@ for tables without any key, is in the **[roadmap](docs/roadmap.md)**.
 ## Status
 
 The sync engine runs in production on Azure SQL Database with a deployed Function App. Releases
-are published to NuGet as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) and
-[SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold). What changed in
+are published to NuGet as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync),
+[SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) and
+[SmartTableSync.Templates](https://www.nuget.org/packages/SmartTableSync.Templates). What changed in
 each version, and what to check when upgrading, is in the [changelog](CHANGELOG.md); how a release
 is made, in [releasing](docs/releasing.md).
 

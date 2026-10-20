@@ -2,6 +2,7 @@
   <Project Path="SmartTableSync.Core/SmartTableSync.Core.csproj" />
   <Project Path="SmartTableSync.IntegrationTests/SmartTableSync.IntegrationTests.csproj" />
   <Project Path="SmartTableSync.Scaffold/SmartTableSync.Scaffold.csproj" />
+  <Project Path="SmartTableSync.Templates/SmartTableSync.Templates.csproj" />
   <Project Path="SmartTableSync.Tests/SmartTableSync.Tests.csproj" />
   <Project Path="SmartTableSync.Worker/SmartTableSync.Worker.csproj" />
   <Project Path="SmartTableSyncFunction/SmartTableSyncFunction.csproj" />

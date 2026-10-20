@@ -49,6 +49,12 @@ jobs:
         run: |
           dotnet pack SmartTableSync.Core/SmartTableSync.Core.csproj --no-build --configuration Release --output packages
           dotnet pack SmartTableSync.Scaffold/SmartTableSync.Scaffold.csproj --no-build --configuration Release --output packages
+          dotnet pack SmartTableSync.Templates/SmartTableSync.Templates.csproj --no-build --configuration Release --output packages
+
+      # Installs the template from the package above, creates a project with it and builds that
+      # project against the packed SmartTableSync package; also runs the packed scaffold tool
+      - name: Test the template
+        run: bash .github/scripts/test-template.sh packages
 
   # Runs next to the build: the demo's Terraform must stay formatted and valid. Validation
   # needs no Azure sign-in and creates nothing.
