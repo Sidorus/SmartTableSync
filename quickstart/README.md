@@ -109,14 +109,34 @@ never writes them to a file or prints them.
 
 ## Step by step
 
-1. **Sign in** to the subscription the Function should go into:
+1. **Turn on Change Tracking, if you use it.** SQL Server Change Tracking is the best way for
+   SmartTableSync to find changed rows: it reads only what changed, and deletes arrive with every
+   sync. It needs a primary key on the table and is turned on in the **parent**, before the setup,
+   so the first sync already uses it. Skip this step if you don't want it: the other tables sync
+   with a `rowversion` column, a timestamp column, or a full re-scan, chosen by themselves.
+
+   Either run this on the parent yourself (or ask your DBA), once for the database and once per
+   table:
+
+   ```sql
+   ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+   ALTER TABLE dbo.Product ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+   ALTER TABLE dbo.Customer ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+   ```
+
+   or add `-EnableChangeTracking` to the commands below, and the script does it for the listed
+   tables that have a primary key. That needs `ALTER` rights on the tables and the database for
+   the parent sign-in. The script grants `VIEW CHANGE TRACKING` to the Function's identity itself
+   (way A); with your own connection strings (way B), the parent login needs that right too.
+
+2. **Sign in** to the subscription the Function should go into:
 
    ```powershell
    az login
    az account set --subscription "<subscription name or id>"
    ```
 
-2. **Try a dry run.** It only reads both databases, writes the SQL it would run to
+3. **Try a dry run.** It only reads both databases, writes the SQL it would run to
    `quickstart/generated/<suffix>/`, and shows Terraform's plan. Nothing is created or changed.
 
    ```powershell
@@ -137,10 +157,10 @@ never writes them to a file or prints them.
    A table marked `NO KEY` or `BLOCKED` won't sync until you fix what its note says; the others
    are not affected.
 
-3. **Run the setup**: the same command without `-DryRun`. It asks once before creating anything,
+4. **Run the setup**: the same command without `-DryRun`. It asks once before creating anything,
    and Terraform shows its plan and asks again.
 
-4. **Check the result.** The script waits for the first copy and shows, per table, the row count
+5. **Check the result.** The script waits for the first copy and shows, per table, the row count
    in the parent and in the child, then the strategy SmartTableSync chose. For changes made after
    that:
 
