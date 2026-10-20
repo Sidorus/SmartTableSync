@@ -7,11 +7,30 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-20
+
+Packaging only: the packages can now be debugged into and verified. The sync works exactly as in
+0.5.2.
+
 ### Changed
 
 - The SmartTableSync and SmartTableSync.Scaffold packages can be debugged into: their DLLs carry
   the debug symbols, with Source Link to the exact commit on GitHub, so a debugger steps into the
   source of the version you use. Release builds are deterministic, marked as CI builds.
+
+### Upgrading
+
+Nothing to change.
+
+### Tested
+
+- The packed DLLs of both packages have the deterministic-build marker, the embedded debug
+  symbols, the Source Link to the commit and the compiler flags.
+- Unit tests (298) pass; the release workflow runs the unit and integration tests and the template
+  test before publishing.
+- The sync itself, on the 0.5.2 code that 0.5.3 keeps unchanged: an Azure quick start on three
+  tables (Change Tracking, RowVersion and Timestamp) matched the parent row for row after many
+  inserts, updates and deletes, small edge cases, and changes made while a sync was running.
 
 ## [0.5.2] - 2026-10-20
 
