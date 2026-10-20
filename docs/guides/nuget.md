@@ -192,7 +192,18 @@ The app stays the same; only the settings and the database preparation change.
 ## The Azure Function template
 
 For Azure SQL databases, the template gives you the ready Azure Function and the
-[quick start](../../quickstart/README.md) script that deploys it, without cloning this repository:
+[quick start](../../quickstart/README.md) script that deploys it, without cloning this repository.
+
+First, if you want SQL Server **Change Tracking** (the best way to find changed rows; the table
+needs a primary key), turn it on in the parent for each table, or add `-EnableChangeTracking` to
+the `deploy.ps1` command:
+
+```sql
+ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+ALTER TABLE dbo.Product ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+```
+
+Then:
 
 ```powershell
 dotnet new install SmartTableSync.Templates

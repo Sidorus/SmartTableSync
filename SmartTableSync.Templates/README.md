@@ -27,6 +27,17 @@ MySync/
 
 ## Deploy it
 
+First, if you want SQL Server **Change Tracking** (the best way to find changed rows; the table
+needs a primary key), turn it on in the parent for each table, or add `-EnableChangeTracking` to
+the command below:
+
+```sql
+ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+ALTER TABLE dbo.Product ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+```
+
+Without it, tables sync with a `rowversion` column, a timestamp column or a full re-scan. Then:
+
 ```powershell
 az login
 ./quickstart/deploy.ps1 -Suffix acme1 `
