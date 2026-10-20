@@ -166,7 +166,7 @@ GO
 --
 -- No Azure.Identity API calls are needed in code for this - the connection-string
 -- keyword handles the token acquisition, through the Microsoft.Data.SqlClient.Extensions.Azure
--- package the Function and the scaffold tool reference. Set ParentDbConnectionString/
+-- package that the SmartTableSync package brings with it. Set ParentDbConnectionString/
 -- ChildDbConnectionString (Function) and ParentIntrospectionConnectionString/
 -- ChildProvisioningConnectionString (Scaffold tool) to the matching identity's string.
 -- ============================================================

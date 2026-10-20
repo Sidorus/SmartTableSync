@@ -29,11 +29,9 @@ cd MySync
 dotnet add package SmartTableSync --prerelease
 ```
 
-For Azure SQL with a managed identity or another Microsoft Entra sign-in, also add:
-
-```bash
-dotnet add package Microsoft.Data.SqlClient.Extensions.Azure
-```
+That's all for packages: `SmartTableSync` includes every sign-in method, including managed
+identities and other Microsoft Entra methods for Azure SQL. (Version `0.5.0-preview.1` is the
+exception: with it, also run `dotnet add package Microsoft.Data.SqlClient.Extensions.Azure --version 7.0.2`.)
 
 Replace `Program.cs` with:
 

@@ -229,8 +229,8 @@ A managed identity connection string looks like:
 Server=tcp:<server>.database.windows.net,1433;Database=<db>;Authentication=Active Directory Managed Identity;User Id=<client id of a user-assigned identity>;Encrypt=True
 ```
 
-Leave out `User Id` for a system-assigned identity. A host other than the bundled Function also
-needs the `Microsoft.Data.SqlClient.Extensions.Azure` package for this to work.
+Leave out `User Id` for a system-assigned identity. The `SmartTableSync` package includes the
+sign-in support this needs, in any host.
 
 The example Function runs every 5 minutes. For another interval, change the schedule in its
 `TimerTrigger` (in `SmartTableSyncTimerFunction`) before publishing. Publish it, for example with
@@ -380,7 +380,7 @@ Hangfire and Quartz.NET, the packages and settings each needs, and what holds fo
 
 | Error or symptom | Cause | Fix |
 |---|---|---|
-| *Cannot find an authentication provider for 'ActiveDirectoryManagedIdentity'* | Since Microsoft.Data.SqlClient 7.0, Entra sign-in is a separate package | Your host needs `Microsoft.Data.SqlClient.Extensions.Azure` (the bundled Function and scaffold tool have it) |
+| *Cannot find an authentication provider for 'ActiveDirectoryManagedIdentity'* | Since Microsoft.Data.SqlClient 7.0, Entra sign-in is a separate package (`Microsoft.Data.SqlClient.Extensions.Azure`), and the host doesn't have it | Use `SmartTableSync` 0.5.0 or later, which includes it; with an older version, add that package to the host in the same version as `Microsoft.Data.SqlClient` |
 | *VIEW DATABASE PERFORMANCE STATE permission denied* | Profiling a table without `VIEW DATABASE STATE` | Grant it on the parent to the runtime and introspection identities |
 | *The EXECUTE permission was denied on the object '\<Table\>TableType'* | TVP batches without `EXECUTE` on the type | `GRANT EXECUTE ON TYPE::dbo.<Table>TableType TO [smarttablesync-runtime]` |
 | *Cannot find the object ... or you do not have permissions* on `SET IDENTITY_INSERT` | A child table that has an `IDENTITY` column (created by an earlier version or by hand) | Recreate it from the scaffold tool's `CREATE TABLE` script (no `IDENTITY`), or `GRANT ALTER ON dbo.<Table> TO [smarttablesync-runtime]` on the child |

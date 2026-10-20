@@ -189,8 +189,8 @@ string says. What works where:
 | Anywhere, for Azure SQL | service principal | `Authentication=Active Directory Service Principal;User Id=<app id>;Password=<client secret>`, from a secret |
 | Linux, to SQL Server with Windows authentication | Kerberos | possible, but needs a keytab and Kerberos configuration in the container; a SQL login is usually simpler |
 
-The image includes `Microsoft.Data.SqlClient.Extensions.Azure`, which every
-`Authentication=Active Directory ...` method needs.
+Every `Authentication=Active Directory ...` method works in the image: the engine includes the
+Microsoft Entra sign-in support (`Microsoft.Data.SqlClient.Extensions.Azure`).
 
 ## Logs and metrics
 

@@ -14,22 +14,15 @@ covers the host itself.
 
 ## What every host needs
 
-1. **The engine.** Reference the `SmartTableSync.Core` project (the NuGet package `SmartTableSync`
-   once it's published):
+1. **The engine**, the NuGet package `SmartTableSync`. It includes every sign-in method: SQL
+   logins, Windows authentication, and Microsoft Entra (`Authentication=Active Directory ...`,
+   including managed identities).
 
    ```bash
-   dotnet add reference ../SmartTableSync/SmartTableSync.Core/SmartTableSync.Core.csproj
+   dotnet add package SmartTableSync
    ```
 
-2. **For Microsoft Entra sign-in** (`Authentication=Active Directory ...` in a connection string,
-   including managed identities), the package that has those sign-in methods, in the same version
-   as `Microsoft.Data.SqlClient`. Not needed for SQL logins or Windows authentication.
-
-   ```bash
-   dotnet add package Microsoft.Data.SqlClient.Extensions.Azure
-   ```
-
-3. **The settings**, in `appsettings.json`, environment variables or any configuration source.
+2. **The settings**, in `appsettings.json`, environment variables or any configuration source.
    The connection strings are top-level settings, not in a `ConnectionStrings` section:
 
    ```json
@@ -46,7 +39,7 @@ covers the host itself.
    Auto mode also needs `ChildProvisioningConnectionString`. Every setting is in the
    [configuration reference](../configuration.md).
 
-4. **These namespaces:**
+3. **These namespaces:**
 
    ```csharp
    using SmartTableSync.Abstractions;   // ISyncOrchestrator
@@ -74,8 +67,7 @@ packages. A new worker project:
 ```bash
 dotnet new worker -n SmartTableSyncWorker
 cd SmartTableSyncWorker
-dotnet add reference ../SmartTableSync/SmartTableSync.Core/SmartTableSync.Core.csproj
-dotnet add package Microsoft.Data.SqlClient.Extensions.Azure
+dotnet add package SmartTableSync
 ```
 
 `Program.cs`:
