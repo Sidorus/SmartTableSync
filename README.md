@@ -133,6 +133,17 @@ The first two ways come entirely from NuGet: no clone needed.
 **Sync your Azure SQL databases with an Azure Function** (the [quick start](quickstart/README.md);
 needs the Azure CLI, Terraform and go-sqlcmd):
 
+First, if you want SQL Server **Change Tracking** (the best way to find changed rows; needs a
+primary key), turn it on in the parent, or let the script do it with `-EnableChangeTracking`.
+Without it, tables sync with a `rowversion` column, a timestamp column or a full re-scan.
+
+```sql
+ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+ALTER TABLE dbo.Product ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+```
+
+Then:
+
 ```powershell
 dotnet new install SmartTableSync.Templates
 dotnet new smarttablesync-azure -n MySync

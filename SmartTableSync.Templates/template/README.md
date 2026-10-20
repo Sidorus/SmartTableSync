@@ -24,6 +24,19 @@ You need PowerShell 7.2+, the [Azure CLI](https://learn.microsoft.com/cli/azure/
 [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local).
 The parent and the child database must already exist; the child may be empty.
 
+**First, Change Tracking, if you use it.** SQL Server Change Tracking is the best way to find
+changed rows, and it must be turned on in the parent for each table you want it for (the table
+needs a primary key), before the setup. Run this on the parent, or add `-EnableChangeTracking`
+to the command below and the script does it (the parent sign-in then needs `ALTER` rights):
+
+```sql
+ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
+ALTER TABLE dbo.Product ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+ALTER TABLE dbo.Customer ENABLE CHANGE_TRACKING WITH (TRACK_COLUMNS_UPDATED = OFF);
+```
+
+Tables without it still sync, with a `rowversion` column, a timestamp column or a full re-scan.
+
 ```powershell
 az login
 az account set --subscription "<subscription name or id>"
