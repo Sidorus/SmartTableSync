@@ -22,12 +22,9 @@ Instance and SQL Server (on-premises or in a VM) in any combination.
 dotnet add package SmartTableSync
 ```
 
-To sign in with a managed identity or another Microsoft Entra method
-(`Authentication=Active Directory ...` in the connection string), also add:
-
-```bash
-dotnet add package Microsoft.Data.SqlClient.Extensions.Azure
-```
+That's the only package you need: it includes every sign-in method, from SQL logins and Windows
+authentication to managed identities and other Microsoft Entra methods
+(`Authentication=Active Directory ...` in the connection string).
 
 ## Use it
 

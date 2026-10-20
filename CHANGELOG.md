@@ -44,6 +44,11 @@ All notable changes to SmartTableSync. The format follows
 
 ### Changed
 
+- **The `SmartTableSync` package includes Microsoft Entra sign-in.** It now depends on
+  `Microsoft.Data.SqlClient.Extensions.Azure`, so managed identities and every other
+  `Authentication=Active Directory ...` connection string work with this one package; a host no
+  longer adds that package itself (one that already did can remove it). Hosts that only use SQL
+  logins or Windows authentication get the Azure sign-in libraries too, unused.
 - The scaffold tool prefixes the files of a non-dbo table with the schema
   (`sales.sp_SyncOrderBatch.sql`); file names for dbo tables are unchanged.
 - A table name with more than one dot, or longer than 100 characters, is rejected at startup with

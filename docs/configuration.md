@@ -54,8 +54,8 @@ Server=sql01.corp.local;Database=ParentDb;Integrated Security=True;Encrypt=True
 Server=sql01.corp.local;Database=ParentDb;User Id=smarttablesync-runtime;Password=<secret>;Encrypt=True
 ```
 
-Any `Authentication=Active Directory ...` method needs the
-`Microsoft.Data.SqlClient.Extensions.Azure` package in the host; the example Function has it.
+Every `Authentication=Active Directory ...` method works with the `SmartTableSync` package alone:
+it includes the Microsoft Entra sign-in support.
 Keep passwords out of source control: use a managed identity, or a secret store such as Key
 Vault references.
 

@@ -209,9 +209,8 @@ Auto mode also needs `ChildProvisioningConnectionString`. Every other setting (t
 keys for tables without a primary key, strategy overrides, delete check interval, retries), with
 examples: [configuration reference](docs/configuration.md).
 
-To sign in with a managed identity or another Microsoft Entra method, the host needs the
-`Microsoft.Data.SqlClient.Extensions.Azure` package; the example Function and the scaffold tool
-have it.
+The package includes every sign-in method: SQL logins, Windows authentication, and Microsoft Entra
+(`Authentication=Active Directory ...`, including managed identities). Nothing else to install.
 
 ## Known limitations
 
