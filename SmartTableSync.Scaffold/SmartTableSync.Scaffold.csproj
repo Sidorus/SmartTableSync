@@ -20,6 +20,12 @@
     <PackageTags>sql;azure;azure-sql;data-sync;sync;cli;dotnet-tool</PackageTags>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Debuggable, verifiable package: the debug symbols inside the DLL, with Source Link to the
+         exact commit on GitHub, and a deterministic build in GitHub Actions -->
+    <DebugType>embedded</DebugType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>

@@ -7,6 +7,12 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The SmartTableSync and SmartTableSync.Scaffold packages can be debugged into: their DLLs carry
+  the debug symbols, with Source Link to the exact commit on GitHub, so a debugger steps into the
+  source of the version you use. Release builds are deterministic, marked as CI builds.
+
 ## [0.5.2] - 2026-10-20
 
 Fixes the quick start in projects created from the template: in 0.5.1 it stopped when publishing
