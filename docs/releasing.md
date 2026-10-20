@@ -56,6 +56,7 @@ release before making it final. A pre-release doesn't need its own changelog sec
 | Version from the tag | the tag isn't `v1.2.3` or `v1.2.3-something` |
 | The tagged commit is on main | the tag points to a commit that isn't part of `main` |
 | Build and test | the build fails or any unit or integration test fails |
+| Package release notes | never stops it: the changelog section `## [version]` becomes the packages' release notes, shown on nuget.org's *Release Notes* tab and in Visual Studio; without a section, the packages link to the changelog |
 | Pack | packing fails; both packages get the tag's version |
 | NuGet login | the trusted publishing policy doesn't match |
 | Push | nuget.org refuses the package; a version that's already published is skipped |
