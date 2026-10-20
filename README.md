@@ -31,24 +31,8 @@ Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instan
 - Notices schema changes in the parent, and in Auto mode adds new columns to the child by itself.
 
 **New here?** Watch it work with the [one-script demo](demo/README.md), or start syncing your own
-Azure SQL databases with the [quick start](quickstart/README.md). All the ways to set it up are
-under [guides](#guides).
-
-### Install from NuGet
-
-Published on nuget.org as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) (the
-engine) and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) (the
-tool that writes the child's SQL):
-
-```bash
-dotnet add package SmartTableSync --prerelease
-dotnet tool install --global SmartTableSync.Scaffold --prerelease
-```
-
-`--prerelease` is needed while only preview versions exist. Set up, run and test it on your
-machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
-and what to check when upgrading: [changelog](CHANGELOG.md) and
-[releases](https://github.com/Sidorus/SmartTableSync/releases).
+Azure SQL databases with the [quick start](quickstart/README.md), or
+[install it from NuGet](#install-from-nuget). All the ways to set it up are under [guides](#guides).
 
 ## The problem
 
@@ -141,6 +125,22 @@ More: [every step of a run in detail](docs/how-it-works.md) ·
 | **Sign-in** | Whatever the connection string supports: managed identity or Microsoft Entra for Azure, SQL logins or Windows authentication on-premises. |
 | **Host** | Any .NET app that calls `ISyncOrchestrator.RunAsync`, on Windows or Linux: an Azure Function (included as an example), a Linux container (image included), a background service, a Hangfire or Quartz.NET job, a Windows service. It only needs network access to both databases. |
 | **Schedule** | Decided by the host: any interval, from every minute to once a night. The example Function runs every 5 minutes. |
+
+## Install from NuGet
+
+Published on nuget.org as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) (the
+engine) and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) (the
+tool that writes the child's SQL):
+
+```bash
+dotnet add package SmartTableSync --prerelease
+dotnet tool install --global SmartTableSync.Scaffold --prerelease
+```
+
+`--prerelease` is needed while only preview versions exist. Set up, run and test it on your
+machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
+and what to check when upgrading: [changelog](CHANGELOG.md) and
+[releases](https://github.com/Sidorus/SmartTableSync/releases).
 
 ## Guides
 
