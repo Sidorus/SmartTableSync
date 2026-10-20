@@ -7,6 +7,12 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-20
+
+The quick start now comes from NuGet: a new template package creates the Azure Function and the
+deploy script as a project of your own, so there's no need to clone the repository. The library
+and the scaffold tool are unchanged apart from the version.
+
 ### Added
 
 - **SmartTableSync.Templates**, a `dotnet new` template package. `dotnet new install
@@ -22,6 +28,20 @@ All notable changes to SmartTableSync. The format follows
   source in the repository, as before.
 - The Manual mode guide and the setup guide install the scaffold tool from NuGet instead of running
   it from the repository.
+
+### Upgrading
+
+Nothing to change: no new settings, rights or schema scripts. Update with
+`dotnet add package SmartTableSync` and `dotnet tool update --global SmartTableSync.Scaffold`.
+
+### Tested
+
+- Unit and integration tests (298 and 72) pass.
+- A project created from the template builds against the release's SmartTableSync package with no
+  warnings, and runs the release's scaffold tool through its tool manifest; the release workflow
+  checks this before publishing.
+- The quick start script's scaffold step runs both in a project created from the template and in
+  the repository.
 
 ## [0.5.0] - 2026-10-20
 
