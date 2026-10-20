@@ -8,7 +8,7 @@ SmartTableSync is published on nuget.org as three packages:
 | [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) | a command-line tool that writes the SQL the child database needs | `dotnet tool install --global SmartTableSync.Scaffold` |
 | [SmartTableSync.Templates](https://www.nuget.org/packages/SmartTableSync.Templates) | a `dotnet new` template: the Azure Function and the quick start script as your own project | `dotnet new install SmartTableSync.Templates` |
 
-The current version is 0.5.1. What changed in each version is in the
+The current version is 0.5.2. What changed in each version is in the
 [changelog](../../CHANGELOG.md).
 
 This page takes you from nothing to a running sync: first a **complete test on your own machine**
