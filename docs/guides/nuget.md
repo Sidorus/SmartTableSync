@@ -7,8 +7,8 @@ SmartTableSync is published on nuget.org as two packages:
 | [SmartTableSync](https://www.nuget.org/packages/SmartTableSync) | the sync engine, a library for your .NET app | `dotnet add package SmartTableSync` |
 | [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold) | a command-line tool that writes the SQL the child database needs | `dotnet tool install --global SmartTableSync.Scaffold` |
 
-While only pre-release versions exist (for example `0.5.0-preview.1`), add `--prerelease` to
-these commands. What changed in each version is in the [changelog](../../CHANGELOG.md).
+The current version is 0.5.0. What changed in each version is in the
+[changelog](../../CHANGELOG.md).
 
 This page takes you from nothing to a running sync: first a **complete test on your own machine**
 with SQL Server in Docker, then **your real databases**.
@@ -26,12 +26,11 @@ A worker service is the simplest host. Any .NET app works the same way; see
 ```bash
 dotnet new worker -n MySync
 cd MySync
-dotnet add package SmartTableSync --prerelease
+dotnet add package SmartTableSync
 ```
 
 That's all for packages: `SmartTableSync` includes every sign-in method, including managed
-identities and other Microsoft Entra methods for Azure SQL. (Version `0.5.0-preview.1` is the
-exception: with it, also run `dotnet add package Microsoft.Data.SqlClient.Extensions.Azure --version 7.0.2`.)
+identities and other Microsoft Entra methods for Azure SQL.
 
 Replace `Program.cs` with:
 
@@ -178,7 +177,7 @@ The app stays the same; only the settings and the database preparation change.
      right to change any schema. Step by step: [Manual mode](manual-mode.md).
 
      ```bash
-     dotnet tool install --global SmartTableSync.Scaffold --prerelease
+     dotnet tool install --global SmartTableSync.Scaffold
      smarttablesync-scaffold --infrastructure --output sql/child
      smarttablesync-scaffold Product Customer --output sql/child
      ```
