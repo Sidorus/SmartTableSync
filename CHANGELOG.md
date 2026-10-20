@@ -7,6 +7,15 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
+The first release on NuGet, as [SmartTableSync](https://www.nuget.org/packages/SmartTableSync)
+and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableSync.Scaffold). It syncs
+tables in any schema and tables without a primary key, copies `decimal` values exactly, runs in a
+Linux container as well as in Azure Functions, and connects to Azure SQL with a managed identity
+using the one package. A quick start sets up the sync between two existing Azure SQL databases with
+one script.
+
 ### Added
 
 - **Publishing to NuGet** (`.github/workflows/publish.yml`). Pushing a tag such as `v0.5.0`
@@ -96,6 +105,29 @@ All notable changes to SmartTableSync. The format follows
   - **Auto mode** then copies the table again by itself on the next run, so every value is exact.
   - **Manual mode:** also run the two `DELETE` statements at the end of that script, so the next
     run copies the table again; then apply the regenerated table type and procedure scripts.
+- **Hosts that added `Microsoft.Data.SqlClient.Extensions.Azure` themselves** can remove it; the
+  package now brings it.
+
+### Tested
+
+- **Automated, on every change:** 298 unit tests and 72 integration tests against a real SQL
+  Server 2022 (Testcontainers), including syncs that run as the three identities with exactly the
+  documented grants, Auto mode creating and evolving the child's tables, tables in other schemas
+  and without a primary key, and exact `decimal` values. CI also builds the container image and
+  checks the Terraform, the NuGet packages for known vulnerabilities, and the code with Semgrep
+  and CodeQL.
+- **On Azure, with the demo** (Azure SQL Database, Azure Functions Flex Consumption, managed
+  identity): about 20,000 inserted, updated and deleted rows per table on Change Tracking,
+  RowVersion and Timestamp tables, plus key changes, deleted and re-inserted rows, rows inserted
+  and deleted between two runs, the same row updated 50 times, NULL and empty values, Unicode,
+  `decimal` limits and rows over 1 MB. Parent and child matched row by row.
+- **On Azure, with the quick start** in Auto mode on two new databases: four tables on four
+  strategies, then inserts, updates, deletes and a column added in the parent, which Auto mode
+  added to the child. Parent and child matched row by row.
+- **The container host**, run once and running continuously, against SQL Server in Docker.
+- **The NuGet packages:** the release workflow published them, they install from nuget.org, the
+  [NuGet guide](docs/guides/nuget.md) was followed step by step, and an app that references only
+  `SmartTableSync` signs in to Azure SQL with Microsoft Entra.
 
 ## [0.4.0] - 2026-10-18
 

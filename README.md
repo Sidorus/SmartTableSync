@@ -1,10 +1,10 @@
 # SmartTableSync
 
-[![NuGet](https://img.shields.io/nuget/vpre/SmartTableSync?label=NuGet&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
+[![NuGet](https://img.shields.io/nuget/v/SmartTableSync?label=NuGet&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
 [![Downloads](https://img.shields.io/nuget/dt/SmartTableSync?label=Downloads&logo=nuget)](https://www.nuget.org/packages/SmartTableSync)
-[![Scaffold tool](https://img.shields.io/nuget/vpre/SmartTableSync.Scaffold?label=Scaffold%20tool&logo=nuget)](https://www.nuget.org/packages/SmartTableSync.Scaffold)
+[![Scaffold tool](https://img.shields.io/nuget/v/SmartTableSync.Scaffold?label=Scaffold%20tool&logo=nuget)](https://www.nuget.org/packages/SmartTableSync.Scaffold)
 [![CI](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Sidorus/SmartTableSync/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/Sidorus/SmartTableSync?include_prereleases&sort=semver&label=Release)](https://github.com/Sidorus/SmartTableSync/releases)
+[![Latest release](https://img.shields.io/github/v/release/Sidorus/SmartTableSync?sort=semver&label=Release)](https://github.com/Sidorus/SmartTableSync/releases)
 [![License](https://img.shields.io/github/license/Sidorus/SmartTableSync?label=License)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/download/dotnet/10.0)
 [![SQL Server](https://img.shields.io/badge/SQL%20Server-2016%2B%20%7C%20Azure%20SQL-CC2927?logo=microsoftsqlserver)](#where-it-runs)
@@ -133,12 +133,12 @@ engine) and [SmartTableSync.Scaffold](https://www.nuget.org/packages/SmartTableS
 tool that writes the child's SQL):
 
 ```bash
-dotnet add package SmartTableSync --prerelease
-dotnet tool install --global SmartTableSync.Scaffold --prerelease
+dotnet add package SmartTableSync
+dotnet tool install --global SmartTableSync.Scaffold
 ```
 
-`--prerelease` is needed while only preview versions exist. Set up, run and test it on your
-machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
+The package includes everything needed to connect, also with managed identities. Set up, run and
+test it on your machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
 and what to check when upgrading: [changelog](CHANGELOG.md) and
 [releases](https://github.com/Sidorus/SmartTableSync/releases).
 
