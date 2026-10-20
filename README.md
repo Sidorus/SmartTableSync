@@ -46,7 +46,9 @@ dotnet tool install --global SmartTableSync.Scaffold --prerelease
 ```
 
 `--prerelease` is needed while only preview versions exist. Set up, run and test it on your
-machine in a few minutes: [use it from NuGet](docs/guides/nuget.md).
+machine in a few minutes: [use it from NuGet](docs/guides/nuget.md). What's new in each version,
+and what to check when upgrading: [changelog](CHANGELOG.md) and
+[releases](https://github.com/Sidorus/SmartTableSync/releases).
 
 ## The problem
 
@@ -165,6 +167,8 @@ Reference:
 | What happens in a run, merging, reliability | [How it works](docs/how-it-works.md) |
 | Logs, metrics, Application Insights, Prometheus, Grafana | [Observability](docs/observability.md) |
 | The scaffold tool's commands | [SmartTableSync.Scaffold](SmartTableSync.Scaffold/README.md) |
+| What changed in each version, and what to check when upgrading | [Changelog](CHANGELOG.md) |
+| How a version is released | [Releasing](docs/releasing.md) |
 | Projects, code structure, architecture decisions | [Architecture](docs/architecture.md) |
 
 Every setting, with what it accepts, what happens on a wrong value, examples and a complete
