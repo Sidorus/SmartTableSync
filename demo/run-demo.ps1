@@ -350,7 +350,9 @@ Invoke-Sql -Database $demo.ChildDatabase -File (Join-Path $sqlDir '03_child_gran
 Write-Step '5/6  Publishing the Function from source'
 Push-Location (Join-Path $repoRoot 'SmartTableSyncFunction')
 try {
-    Invoke-Native { func azure functionapp publish $demo.FunctionApp }
+    # The runtime is given, because only local.settings.json (git-ignored, so missing in a fresh
+    # clone) would tell func otherwise
+    Invoke-Native { func azure functionapp publish $demo.FunctionApp --dotnet-isolated }
 }
 finally {
     Pop-Location

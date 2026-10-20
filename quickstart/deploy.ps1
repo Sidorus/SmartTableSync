@@ -877,7 +877,9 @@ else {
 Write-Step '5/5  Publishing the Function, starting the first sync and waiting for it'
 Push-Location (Join-Path $repoRoot 'SmartTableSyncFunction')
 try {
-    Invoke-Native { func azure functionapp publish $deployment.FunctionApp }
+    # The runtime is given, because only local.settings.json (git-ignored, so missing in a fresh
+    # clone or a project made from the template) would tell func otherwise
+    Invoke-Native { func azure functionapp publish $deployment.FunctionApp --dotnet-isolated }
 }
 finally {
     Pop-Location
