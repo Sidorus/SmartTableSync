@@ -7,6 +7,18 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The quick start in a project created from the `smarttablesync-azure` template stopped at
+  publishing the Function ("Can't determine project language from files"): `func` read the
+  runtime from `local.settings.json`, which such a project, like a fresh clone, doesn't have.
+  `deploy.ps1` and the demo's `run-demo.ps1` now pass `--dotnet-isolated`.
+
+### Changed
+
+- Turning on Change Tracking is now the first step of the quick start, in the README's *Get
+  started*, the NuGet guide and the template's READMEs.
+
 ## [0.5.1] - 2026-10-20
 
 The quick start now comes from NuGet: a new template package creates the Azure Function and the
