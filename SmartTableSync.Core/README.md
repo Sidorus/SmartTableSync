@@ -102,6 +102,7 @@ Tried it? Tell me what worked and what didn't:
 [report a bug or ask for a feature](https://github.com/Sidorus/SmartTableSync/issues/new/choose),
 [ask a question](https://github.com/Sidorus/SmartTableSync/discussions/categories/q-a), or
 [report a security problem privately](https://github.com/Sidorus/SmartTableSync/security/advisories/new).
+Anything else: Ruslan Sidoriako on [LinkedIn](https://www.linkedin.com/in/ruslan-sidoriako-26752461).
 
 ## License
 

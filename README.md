@@ -303,6 +303,7 @@ Tried it? I'd like to hear what worked and what didn't, even in one line.
 | A question, "how do I...?" | [ask in Discussions](https://github.com/Sidorus/SmartTableSync/discussions/categories/q-a) |
 | A setup you'd like to share | [Show and tell](https://github.com/Sidorus/SmartTableSync/discussions/categories/show-and-tell) |
 | A security problem | [report it privately](https://github.com/Sidorus/SmartTableSync/security/advisories/new) ([SECURITY.md](SECURITY.md)) |
+| Anything else, without a GitHub account | Ruslan Sidoriako on [LinkedIn](https://www.linkedin.com/in/ruslan-sidoriako-26752461) |
 
 Pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build, test and
 what makes a change easy to accept.
