@@ -59,6 +59,17 @@ it includes the Microsoft Entra sign-in support.
 Keep passwords out of source control: use a managed identity, or a secret store such as Key
 Vault references.
 
+**How SmartTableSync shows up in SQL Server.** Its connections report the application name
+`SmartTableSync` (the scaffold tool's: `SmartTableSync.Scaffold`), so a DBA can tell them apart
+in `sys.dm_exec_sessions`, `APP_NAME()`, Extended Events and audit logs:
+
+```sql
+SELECT session_id, login_name, program_name FROM sys.dm_exec_sessions WHERE program_name LIKE N'SmartTableSync%';
+```
+
+To use your own name, for example one per deployment, set it in the connection string:
+`...;Application Name=OrdersSync`. A name in the connection string always wins.
+
 ## Engine settings
 
 ### `SmartTableSync:TableList`

@@ -4,7 +4,9 @@ namespace SmartTableSync.Sql;
 /// open-retry provider (SyncSettings.ConnectionOpenAttempts), so transient Azure SQL failures
 /// while connecting - failover, throttling, brief unavailability - are retried with exponential
 /// backoff instead of failing the table for a whole cycle. Commands are deliberately not
-/// retried here; see SyncSettings.ConnectionOpenAttempts.</summary>
+/// retried here; see SyncSettings.ConnectionOpenAttempts. Every connection reports
+/// "SmartTableSync" as its application name unless the connection string sets one
+/// (SqlApplicationName).</summary>
 internal sealed class DbConnectionFactory : IDbConnectionFactory
 {
     private readonly string _parentConnStr;
@@ -14,14 +16,17 @@ internal sealed class DbConnectionFactory : IDbConnectionFactory
 
     public DbConnectionFactory(IConfiguration config, IOptions<SyncSettings> settings, ILogger<DbConnectionFactory> logger)
     {
-        _parentConnStr = config["ParentDbConnectionString"]
-            ?? throw new InvalidOperationException("ParentDbConnectionString is not configured.");
-        _childConnStr = config["ChildDbConnectionString"]
-            ?? throw new InvalidOperationException("ChildDbConnectionString is not configured.");
+        _parentConnStr = WithApplicationName(config["ParentDbConnectionString"]
+            ?? throw new InvalidOperationException("ParentDbConnectionString is not configured."), "ParentDbConnectionString");
+        _childConnStr = WithApplicationName(config["ChildDbConnectionString"]
+            ?? throw new InvalidOperationException("ChildDbConnectionString is not configured."), "ChildDbConnectionString");
 
         // Optional - only required when SyncSettings.Mode is Auto. Not validated here so
         // Manual-mode deployments never need to configure it.
-        _childProvisioningConnStr = config["ChildProvisioningConnectionString"];
+        var childProvisioningConnStr = config["ChildProvisioningConnectionString"];
+        _childProvisioningConnStr = childProvisioningConnStr is null
+            ? null
+            : WithApplicationName(childProvisioningConnStr, "ChildProvisioningConnectionString");
 
         _openRetryProvider = CreateOpenRetryProvider(settings.Value.ConnectionOpenAttempts, logger);
     }
@@ -37,6 +42,9 @@ internal sealed class DbConnectionFactory : IDbConnectionFactory
 
     private SqlConnection Create(string connectionString) =>
         new(connectionString) { RetryLogicProvider = _openRetryProvider };
+
+    private static string WithApplicationName(string connectionString, string settingName) =>
+        SqlApplicationName.WithDefault(connectionString, SqlApplicationName.Engine, settingName);
 
     // TransientErrors is left null on purpose: SqlClient then uses its own maintained list of
     // transient connection errors, which tracks Azure SQL's error numbers better than a
