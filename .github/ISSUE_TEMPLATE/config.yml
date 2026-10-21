@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or "how do I...?"
+    url: https://github.com/Sidorus/SmartTableSync/discussions/categories/q-a
+    about: Ask in Discussions; answers stay findable for the next person.
+  - name: Show what you use it for
+    url: https://github.com/Sidorus/SmartTableSync/discussions/categories/show-and-tell
+    about: Tell how and where you sync; it helps decide what comes next.
+  - name: Security problem
+    url: https://github.com/Sidorus/SmartTableSync/security/advisories/new
+    about: Report it privately, not as a public issue.

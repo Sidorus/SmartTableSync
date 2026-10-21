@@ -1,0 +1,26 @@
+name: Feature request
+description: Something SmartTableSync should do that it doesn't yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/Sidorus/SmartTableSync/blob/main/docs/roadmap.md) and the
+        [known limitations](https://github.com/Sidorus/SmartTableSync/blob/main/docs/limitations.md) first: it may be planned already.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you'd like it to work. A setting, a command, a change in behaviour.
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Databases, number and size of tables, how often you sync. It helps to judge how common the need is.

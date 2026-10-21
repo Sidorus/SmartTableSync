@@ -292,6 +292,21 @@ are published to NuGet as [SmartTableSync](https://www.nuget.org/packages/SmartT
 each version, and what to check when upgrading, is in the [changelog](CHANGELOG.md); how a release
 is made, in [releasing](docs/releasing.md).
 
+## Feedback and contributing
+
+Tried it? I'd like to hear what worked and what didn't, even in one line.
+
+| You have | Go to |
+|---|---|
+| A bug | [open an issue](https://github.com/Sidorus/SmartTableSync/issues/new/choose) (the form asks for what helps find the cause) |
+| An idea or a missing feature | [open a feature request](https://github.com/Sidorus/SmartTableSync/issues/new/choose) |
+| A question, "how do I...?" | [ask in Discussions](https://github.com/Sidorus/SmartTableSync/discussions/categories/q-a) |
+| A setup you'd like to share | [Show and tell](https://github.com/Sidorus/SmartTableSync/discussions/categories/show-and-tell) |
+| A security problem | [report it privately](https://github.com/Sidorus/SmartTableSync/security/advisories/new) ([SECURITY.md](SECURITY.md)) |
+
+Pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build, test and
+what makes a change easy to accept.
+
 ## License
 
 Copyright 2026 Ruslan Sidoriako. Licensed under the [Apache License, Version 2.0](LICENSE).

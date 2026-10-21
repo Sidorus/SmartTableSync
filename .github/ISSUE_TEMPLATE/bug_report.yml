@@ -1,0 +1,68 @@
+name: Bug report
+description: Something doesn't sync, fails, or behaves differently from the docs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please leave out passwords and other secrets: replace them with `***`.
+        A security problem? Don't open an issue; use [private reporting](https://github.com/Sidorus/SmartTableSync/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SmartTableSync version
+      placeholder: "0.5.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Where it runs
+      options:
+        - Azure Function (quick start or template)
+        - Azure Function (my own)
+        - Container (SmartTableSync.Worker)
+        - My own app (NuGet package)
+        - Scaffold tool
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Auto
+        - Manual
+        - Not sure
+  - type: dropdown
+    id: database
+    attributes:
+      label: Databases (parent / child)
+      options:
+        - Azure SQL Database / Azure SQL Database
+        - SQL Server / Azure SQL Database
+        - Azure SQL Managed Instance involved
+        - SQL Server / SQL Server
+        - Other
+  - type: textarea
+    id: table
+    attributes:
+      label: The table
+      description: |
+        The strategy from `SELECT TableName, IncrementalStrategy, MergeStrategy FROM dbo.SyncTableConfig` on the child,
+        and if you can, the table's definition (column names can be renamed).
+      render: sql
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: The lines around the error, for example `Product: ... errors` and the exception.
+      render: text
