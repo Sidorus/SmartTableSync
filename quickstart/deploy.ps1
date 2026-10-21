@@ -322,6 +322,25 @@ function Initialize-Terraform {
     Invoke-Native { terraform "-chdir=$terraformDir" workspace select -or-create $Suffix }
 }
 
+# Stops when the suffix's resource group exists in Azure but this folder's Terraform state for the
+# suffix doesn't have it: another quick start (another folder or machine) created it, and Terraform
+# would only fail at apply with "already exists". Reads the local state file, so it runs before
+# Terraform is initialized.
+function Assert-SuffixAvailable {
+    $resourceGroup = "rg-smarttablesync-qs-$Suffix"
+    $exists = az group exists --name $resourceGroup
+    if ($LASTEXITCODE -ne 0) { throw "Could not check whether the resource group $resourceGroup exists." }
+    if ($exists -ne 'true') { return }
+
+    $stateFile = Join-Path $terraformDir "terraform.tfstate.d/$Suffix/terraform.tfstate"
+    $managed = (Test-Path $stateFile) -and @(
+        (Get-Content $stateFile -Raw | ConvertFrom-Json).resources |
+            Where-Object { $_.mode -eq 'managed' -and $_.type -eq 'azurerm_resource_group' }).Count -gt 0
+    if (-not $managed) {
+        throw "Suffix '$Suffix' is already used by another quick start (another folder or machine): the resource group $resourceGroup exists, but this folder's Terraform state doesn't manage it. Choose another -Suffix, or run -Destroy in the folder that created it."
+    }
+}
+
 function Get-Deployment {
     Initialize-Terraform | Out-Null
     $json = terraform "-chdir=$terraformDir" output -json
@@ -724,6 +743,7 @@ $tableNames = @($Tables.Split(',') | Where-Object { $_.Trim() } | ForEach-Object
 if (-not $tableNames) { throw 'List at least one table in -Tables.' }
 $duplicates = @($tableNames | Group-Object Setting | Where-Object Count -gt 1 | ForEach-Object Name)
 if ($duplicates) { throw "Listed more than once: $($duplicates -join ', ')" }
+Assert-SuffixAvailable
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
 Write-Host ''

@@ -172,7 +172,7 @@ never writes them to a file or prints them.
 
 | Parameter | Required | Meaning |
 |---|---|---|
-| `-Suffix` | yes | 3-8 lowercase letters or digits, part of every Azure name. Use the same one for `-SyncNow` and `-Destroy`. |
+| `-Suffix` | yes | 3-8 lowercase letters or digits, part of every Azure name. `acme1` in the examples is only an example: each deployment needs its own suffix, unique in the subscription. The script stops when the suffix's resource group already exists but was created by another folder or machine. Use the same one for `-SyncNow` and `-Destroy`. |
 | `-ParentServer` | way A | parent server host name, e.g. `myserver.database.windows.net` |
 | `-ParentDatabase` | way A | parent database |
 | `-ChildServer` | no | way A: child server; the parent's server when left out |

@@ -62,6 +62,10 @@ their database users, with exactly the rights they need. No password anywhere.
     -Tables "Product,Customer"
 ```
 
+`acme1` is only an example: give each deployment its own `-Suffix` (3-8 lowercase letters or
+digits), unique in the subscription. The script stops if another folder or machine already
+deployed with that suffix.
+
 Add `-DryRun` first to see what it would do without changing anything. Afterwards:
 
 ```powershell
