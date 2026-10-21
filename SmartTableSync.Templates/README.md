@@ -45,6 +45,10 @@ az login
     -Tables "Product,Customer"
 ```
 
+`acme1` is only an example: give each deployment its own `-Suffix` (3-8 lowercase letters or
+digits), unique in the subscription. The script stops if another folder or machine already
+deployed with that suffix.
+
 What you need and every parameter:
 [the quick start guide](https://github.com/Sidorus/SmartTableSync/blob/main/quickstart/README.md).
 
