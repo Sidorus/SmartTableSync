@@ -7,6 +7,13 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- SmartTableSync's connections show up in SQL Server as `SmartTableSync`, and the scaffold tool's
+  as `SmartTableSync.Scaffold` (`APP_NAME()`, `sys.dm_exec_sessions.program_name`), so a DBA can
+  see which sessions are the sync. An `Application Name` in the connection string still wins.
+  See [connection strings](docs/configuration.md#connection-strings).
+
 ## [0.5.3] - 2026-10-20
 
 Packaging only: the packages can now be debugged into and verified. The sync works exactly as in

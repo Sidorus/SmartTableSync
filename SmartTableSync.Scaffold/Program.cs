@@ -97,7 +97,8 @@ if (args.Contains("--rowversion-setup"))
     var rowVersionSchemaReader = new SchemaReader();
     var rowVersionGenerator = new SqlArtifactGenerator();
 
-    await using var rowVersionParent = new SqlConnection(rowVersionParentConnString);
+    await using var rowVersionParent = new SqlConnection(SqlApplicationName.WithDefault(
+        rowVersionParentConnString, SqlApplicationName.Scaffold, "ParentIntrospectionConnectionString"));
     await rowVersionParent.OpenAsync();
 
     var failedRowVersionTables = new List<string>();
@@ -157,7 +158,8 @@ if (args.Contains("--change-tracking-setup"))
     var changeTrackingSchemaReader = new SchemaReader();
     var changeTrackingGenerator = new SqlArtifactGenerator();
 
-    await using var changeTrackingParent = new SqlConnection(changeTrackingParentConnString);
+    await using var changeTrackingParent = new SqlConnection(SqlApplicationName.WithDefault(
+        changeTrackingParentConnString, SqlApplicationName.Scaffold, "ParentIntrospectionConnectionString"));
     await changeTrackingParent.OpenAsync();
 
     var failedChangeTrackingTables = new List<string>();
@@ -215,8 +217,12 @@ var generator = new SqlArtifactGenerator();
 var syncSettings = new SyncSettings();
 SyncSettingsServiceCollectionExtensions.Bind(syncSettings, new ConfigurationBuilder().AddEnvironmentVariables().Build());
 
-await using var parent = new SqlConnection(parentConnString);
-await using var child = new SqlConnection(childConnString);
+// Shows up as "SmartTableSync.Scaffold" in SQL Server (APP_NAME()), unless the connection string
+// sets its own Application Name
+await using var parent = new SqlConnection(SqlApplicationName.WithDefault(
+    parentConnString, SqlApplicationName.Scaffold, "ParentIntrospectionConnectionString"));
+await using var child = new SqlConnection(SqlApplicationName.WithDefault(
+    childConnString, SqlApplicationName.Scaffold, "ChildProvisioningConnectionString"));
 await parent.OpenAsync();
 await child.OpenAsync();
 
