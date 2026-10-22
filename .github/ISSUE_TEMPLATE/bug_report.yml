@@ -64,5 +64,5 @@ body:
     id: logs
     attributes:
       label: Log lines
-      description: The lines around the error, for example `Product: ... errors` and the exception.
+      description: "The lines around the error, for example `Product: ... errors` and the exception."
       render: text
