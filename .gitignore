@@ -21,6 +21,7 @@ obj/
 !README.md
 !CHANGELOG.md
 !SECURITY.md
+!CONTRIBUTING.md
 !docs/*.md
 !docs/guides/*.md
 !docs/adr/*.md
