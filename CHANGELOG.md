@@ -7,12 +7,44 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-22
+
+SmartTableSync now shows up by name in SQL Server, the quick start explains a reused suffix
+instead of failing in Terraform, and there are clear ways to give feedback.
+
 ### Added
 
 - SmartTableSync's connections show up in SQL Server as `SmartTableSync`, and the scaffold tool's
   as `SmartTableSync.Scaffold` (`APP_NAME()`, `sys.dm_exec_sessions.program_name`), so a DBA can
   see which sessions are the sync. An `Application Name` in the connection string still wins.
   See [connection strings](docs/configuration.md#connection-strings).
+- Issue forms for bugs and feature requests, links to Discussions for questions and for sharing a
+  setup, a [contributing guide](CONTRIBUTING.md), and a feedback section in the README and on the
+  NuGet package page.
+
+### Changed
+
+- The quick start stops before Terraform, with a clear message, when the suffix's resource group
+  already exists but another folder or machine created it. Before, Terraform failed at apply with
+  "a resource with the ID ... already exists". The docs say that `acme1` is only an example.
+- A connection string that can't be read now stops the sync at startup with a message naming the
+  setting (for example *"ChildDbConnectionString isn't a valid connection string"*), instead of at
+  the first connection.
+
+### Upgrading
+
+Nothing to change. If you filter SQL Server sessions or audit logs by program name, they now show
+`SmartTableSync` instead of SqlClient's default; set `Application Name` in the connection strings
+to keep a name of your own.
+
+### Tested
+
+- Unit and integration tests (303 and 74) pass, including new ones that check `APP_NAME()` and
+  `sys.dm_exec_sessions.program_name` on a real SQL Server, with and without an `Application
+  Name` in the connection string.
+- The quick start's suffix check on Azure: it stops for a resource group that exists but isn't in
+  the folder's Terraform state, and continues for a new suffix, a deleted one, and the folder's own
+  deployment.
 
 ## [0.5.3] - 2026-10-20
 
