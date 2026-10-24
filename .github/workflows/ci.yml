@@ -23,9 +23,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
@@ -64,9 +64,9 @@ jobs:
       run:
         working-directory: demo/terraform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
 
       - name: Format check
         run: terraform fmt -check -diff
@@ -81,7 +81,7 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the container image
         run: docker build -f SmartTableSync.Worker/Dockerfile -t smarttablesync-worker:ci .
@@ -94,9 +94,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
@@ -112,7 +112,7 @@ jobs:
     container:
       image: semgrep/semgrep:1.178.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # All C# rules on the shipped code. Product code that has to build SQL from table and
       # column names (they can't be SQL parameters) quotes them with SqlIdentifier and marks the
