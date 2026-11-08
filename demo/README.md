@@ -198,6 +198,29 @@ authentication (in SSMS: *Microsoft Entra MFA*) with the same account you ran th
 account is the server's admin, and the SQL firewall already allows your IP. You'll see two
 databases: `sqldb-parent` (change data here) and `sqldb-child` (the copy, don't change it).
 
+**In SSMS** (version 19 or later):
+
+1. Open SSMS. The **Connect to Server** window opens; otherwise click **Connect → Database Engine**.
+2. **Server type:** Database Engine
+3. **Server name:** the name from the command above, for example
+   `sql-smarttablesync-rs01.database.windows.net`
+4. **Authentication:** **Microsoft Entra MFA** (in older SSMS: *Azure Active Directory - Universal
+   with MFA*)
+5. **User name:** the account you ran the demo with, the one `az account show` shows
+6. **Encryption:** Mandatory (the default in SSMS 20 and later)
+7. Click **Connect**. A Microsoft sign-in window opens; sign in there.
+8. In **Object Explorer**, open **Databases**: `sqldb-parent` and `sqldb-child`. Right-click one and
+   choose **New Query** to run SQL in it.
+
+No password is needed, and none exists: the demo server accepts only Microsoft Entra sign-in.
+
+If it fails:
+
+| Message | What to do |
+|---|---|
+| *Client with IP address '...' is not allowed to access the server* | Your IP changed since the setup. Run the setup command again (it updates the firewall rule), or add your IP in the Azure portal under **SQL server → Networking** |
+| *Login failed for user ...* | You signed in with a different account than the one that ran the demo. Use that account |
+
 **2. Change rows in `sqldb-parent`.** Some examples, one per table:
 
 ```sql
