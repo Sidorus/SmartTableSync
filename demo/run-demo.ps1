@@ -111,10 +111,102 @@ function Invoke-Native([scriptblock] $command) {
     }
 }
 
-function Assert-Tool([string] $name, [string] $installHint) {
-    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-        throw "'$name' was not found. $installHint"
+# Checks everything the script needs before anything runs, and shows it all at once: each tool
+# with its version, or how to install it when it's missing or too old, then the Azure sign-in.
+# Stops when anything is missing, so one run tells you everything to install. When the older ODBC
+# sqlcmd comes first on PATH but go-sqlcmd is installed, go-sqlcmd is put first for this run.
+# Returns the signed-in Azure account (name, id, user).
+function Assert-Prerequisites([string[]] $Tools) {
+    $catalog = [ordered]@{
+        az        = @{ Name = 'Azure CLI'; Minimum = '2.50'; Winget = 'Microsoft.AzureCLI'; Url = 'https://learn.microsoft.com/cli/azure/install-azure-cli'
+                       Read = { (az version --output json 2>$null | ConvertFrom-Json).'azure-cli' } }
+        terraform = @{ Name = 'Terraform'; Minimum = '1.5'; Winget = 'Hashicorp.Terraform'; Url = 'https://developer.hashicorp.com/terraform/install'
+                       Read = { (terraform version -json 2>$null | ConvertFrom-Json).terraform_version } }
+        sqlcmd    = @{ Name = 'go-sqlcmd'; Minimum = '1.0'; Winget = 'sqlcmd'; Url = 'https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility'
+                       Read = { $text = (& sqlcmd --version 2>$null) -join ' '; if ($LASTEXITCODE -eq 0 -and $text -match '(\d+\.\d+\.\d+)') { $Matches[1] } } }
+        dotnet    = @{ Name = '.NET 10 SDK'; Minimum = '10.0'; Winget = 'Microsoft.DotNet.SDK.10'; Url = 'https://dotnet.microsoft.com/download/dotnet/10.0'
+                       Read = { @(dotnet --list-sdks 2>$null) | ForEach-Object { ($_ -split ' ')[0] } | Where-Object { $_ -like '10.*' } | Select-Object -Last 1 } }
+        func      = @{ Name = 'Azure Functions Core Tools'; Minimum = '4.0'; Winget = 'Microsoft.Azure.FunctionsCoreTools'; Url = 'https://learn.microsoft.com/azure/azure-functions/functions-run-local'
+                       Read = { $text = (func --version 2>$null | Select-Object -First 1); if ($text -match '(\d+\.\d+\.\d+)') { $Matches[1] } } }
     }
+
+    function Write-Row([string] $status, [string] $name, [string] $detail) {
+        $color = if ($status -eq 'ok') { 'Green' } else { 'Red' }
+        Write-Host ('  {0,-11} {1,-28} {2}' -f "[$status]", $name, $detail) -ForegroundColor $color
+    }
+
+    function Get-InstallHint($tool) {
+        $winget = if ($IsWindows) { "winget install $($tool.Winget)   " } else { '' }
+        "$winget$($tool.Url)"
+    }
+
+    Write-Step 'Checking what this script needs'
+    Write-Row 'ok' 'PowerShell' "$($PSVersionTable.PSVersion)"
+
+    $problems = 0
+    foreach ($key in $Tools) {
+        $tool = $catalog[$key]
+        $note = ''
+        $onPath = [bool] (Get-Command $key -ErrorAction SilentlyContinue)
+        $version = if ($onPath) { try { & $tool.Read } catch { $null } }
+
+        # The ODBC sqlcmd that comes with SQL Server can't sign in with your Azure CLI identity, and
+        # go-sqlcmd isn't always on PATH after installing it. When go-sqlcmd is installed, use it
+        # for this run instead of asking you to fix PATH.
+        if ($key -eq 'sqlcmd' -and -not $version -and $IsWindows) {
+            $goSqlcmd = @(
+                (Join-Path ${env:ProgramFiles} 'SqlCmd\sqlcmd.exe')
+                (Join-Path ${env:LOCALAPPDATA} 'Microsoft\WinGet\Links\sqlcmd.exe')
+            ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+            if ($goSqlcmd) {
+                $env:PATH = "$(Split-Path $goSqlcmd);$env:PATH"
+                $version = try { & $tool.Read } catch { $null }
+                $note = if ($onPath) { '  (put ahead of the older ODBC sqlcmd on PATH for this run)' } else { "  (found in $(Split-Path $goSqlcmd), added to PATH for this run)" }
+                $onPath = $true
+            }
+        }
+
+        if (-not $onPath) {
+            Write-Row 'missing' $tool.Name (Get-InstallHint $tool)
+            $problems++
+            continue
+        }
+        if ($key -eq 'sqlcmd' -and -not $version) {
+            Write-Row 'wrong' $tool.Name "the sqlcmd on PATH is the older ODBC version: $(Get-InstallHint $tool)"
+            $problems++
+            continue
+        }
+
+        if (-not $version) {
+            $detail = if ($key -eq 'dotnet') { "no .NET 10 SDK installed: $(Get-InstallHint $tool)" } else { "installed, but its version couldn't be read: $(Get-InstallHint $tool)" }
+            Write-Row 'wrong' $tool.Name $detail
+            $problems++
+        }
+        elseif ([version] ($version -replace '[^\d.].*$', '') -lt [version] $tool.Minimum) {
+            Write-Row 'too old' $tool.Name "$version (need $($tool.Minimum)+): $(Get-InstallHint $tool)"
+            $problems++
+        }
+        else {
+            Write-Row 'ok' $tool.Name "$version$note"
+        }
+    }
+
+    $account = $null
+    if ($Tools -contains 'az' -and (Get-Command az -ErrorAction SilentlyContinue)) {
+        $account = az account show --query '{name:name, id:id, user:user.name}' --output json 2>$null | ConvertFrom-Json
+        if ($LASTEXITCODE -eq 0 -and $account) {
+            Write-Row 'ok' 'Azure sign-in' "$($account.name) ($($account.user))"
+        }
+        else {
+            Write-Row 'missing' 'Azure sign-in' 'run "az login", then "az account set --subscription <name or id>"'
+            $problems++
+        }
+    }
+
+    if ($problems) {
+        throw "$problems of the things above are missing or need attention. Install or fix them, open a new terminal so PATH is updated, and run the script again."
+    }
+    $account
 }
 
 function Get-TerraformVariables {
@@ -242,25 +334,10 @@ function Show-SyncStatus {
 
 # --- Prerequisites ----------------------------------------------------------------------
 
-Assert-Tool 'az' 'Install the Azure CLI: https://learn.microsoft.com/cli/azure/install-azure-cli'
-Assert-Tool 'terraform' 'Install Terraform: https://developer.hashicorp.com/terraform/install'
-
-if (-not $Destroy) {
-    $goSqlcmdHint = 'Install go-sqlcmd (winget install sqlcmd): https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility'
-    Assert-Tool 'sqlcmd' $goSqlcmdHint
-    Assert-Tool 'dotnet' 'Install the .NET 10 SDK: https://dotnet.microsoft.com/download'
-    Assert-Tool 'func' 'Install Azure Functions Core Tools v4: https://learn.microsoft.com/azure/azure-functions/functions-run-local'
-
-    # The older ODBC sqlcmd that ships with SQL Server can't sign in with your Azure CLI
-    # identity; only go-sqlcmd understands --version and --authentication-method.
-    & sqlcmd --version *> $null
-    if ($LASTEXITCODE -ne 0) {
-        throw "The 'sqlcmd' on your PATH ($((Get-Command sqlcmd).Source)) is the older ODBC version. $goSqlcmdHint, and make sure it comes first on PATH."
-    }
-}
-
-$account = az account show --query '{name:name, id:id, user:user.name}' --output json | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Not signed in. Run "az login" and "az account set --subscription <id>" first.' }
+# Azure CLI and Terraform always; SQL, .NET and the Functions tools for everything but -Destroy
+$needed = @('az', 'terraform')
+if (-not $Destroy) { $needed += @('sqlcmd', 'dotnet', 'func') }
+$account = Assert-Prerequisites $needed
 
 # Terraform deploys into exactly the subscription shown below, whatever its provider version
 # would pick by itself, and the SQL admin is the signed-in account unless given explicitly.

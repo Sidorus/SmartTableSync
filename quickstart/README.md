@@ -87,6 +87,11 @@ never writes them to a file or prints them.
 | [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) (`winget install sqlcmd`) | runs the SQL; the older ODBC `sqlcmd` can't sign in with Azure CLI |
 | [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local) | build and publish the Function |
 
+You don't need to check these by hand: the script lists every tool with its version and your Azure
+sign-in before it does anything, shows the install command for anything missing or too old, and
+stops until all of them are there. When the older ODBC `sqlcmd` comes first on your PATH but
+go-sqlcmd is installed, it uses go-sqlcmd by itself.
+
 **On the databases**
 
 - They can be on the same server or on two servers.

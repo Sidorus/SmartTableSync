@@ -7,6 +7,15 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The quick start and the demo check everything they need before they do anything, and show it in
+  one list: each tool (Azure CLI, Terraform, go-sqlcmd, .NET 10 SDK, Azure Functions Core Tools)
+  with its version, the install command for anything missing or too old, and the Azure sign-in.
+  They stop until everything is there, instead of stopping at the first missing tool. When the
+  older ODBC `sqlcmd` comes first on PATH, or go-sqlcmd isn't on PATH at all, an installed
+  go-sqlcmd is used for that run without changing PATH by hand.
+
 ### Fixed
 
 - The quick start (`deploy.ps1`) and the demo (`run-demo.ps1`) can be started from Windows

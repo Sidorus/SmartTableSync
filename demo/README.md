@@ -65,11 +65,15 @@ tells it which one to use.
   - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
   - [Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or later
   - [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) (`winget install sqlcmd`).
-    The older ODBC `sqlcmd` that ships with SQL Server can't sign in with your Azure account; the
-    script checks which one it finds.
+    The older ODBC `sqlcmd` that ships with SQL Server can't sign in with your Azure account;
+    when both are installed, the script uses go-sqlcmd by itself.
   - [.NET 10 SDK](https://dotnet.microsoft.com/download)
   - [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
   - PowerShell 7.2 or later (`pwsh`, installed next to Windows PowerShell: `winget install Microsoft.PowerShell`). Started from Windows PowerShell 5.1, the script switches to `pwsh` by itself.
+
+  The script checks all of them, and your Azure sign-in, before it does anything: it lists each
+  tool with its version, shows the install command for anything missing or too old, and stops
+  until everything is there.
 
 ### Step 2. Sign in to Azure and choose the subscription
 
