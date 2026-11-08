@@ -18,7 +18,7 @@ project with.
 
 ## Deploy it to Azure
 
-You need PowerShell 7.2+, the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli),
+You need [PowerShell 7.2+](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) (`pwsh`; started from Windows PowerShell 5.1, the script switches to it by itself), the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli),
 [Terraform](https://developer.hashicorp.com/terraform/install) 1.5+,
 [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) and
 [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local).

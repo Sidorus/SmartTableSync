@@ -69,7 +69,7 @@ tells it which one to use.
     script checks which one it finds.
   - [.NET 10 SDK](https://dotnet.microsoft.com/download)
   - [Azure Functions Core Tools v4](https://learn.microsoft.com/azure/azure-functions/functions-run-local)
-  - PowerShell 7.2 or later (`pwsh`)
+  - PowerShell 7.2 or later (`pwsh`, installed next to Windows PowerShell: `winget install Microsoft.PowerShell`). Started from Windows PowerShell 5.1, the script switches to `pwsh` by itself.
 
 ### Step 2. Sign in to Azure and choose the subscription
 

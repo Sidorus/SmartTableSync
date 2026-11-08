@@ -81,7 +81,7 @@ never writes them to a file or prints them.
 
 | Tool | Why |
 |---|---|
-| PowerShell 7.2+ | runs the script |
+| [PowerShell 7.2+](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) (`pwsh`; `winget install Microsoft.PowerShell`) | runs the script. Started from Windows PowerShell 5.1, it switches to `pwsh` by itself |
 | [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), signed in (`az login`, `az account set --subscription <id>`) | the subscription the Function is created in; with way A also your sign-in for SQL |
 | [Terraform](https://developer.hashicorp.com/terraform/install) 1.5+ | creates the Azure resources |
 | [go-sqlcmd](https://learn.microsoft.com/sql/tools/sqlcmd/go-sqlcmd-utility) (`winget install sqlcmd`) | runs the SQL; the older ODBC `sqlcmd` can't sign in with Azure CLI |

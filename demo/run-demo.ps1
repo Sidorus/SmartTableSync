@@ -39,7 +39,7 @@
     Removes everything the demo created.
 #>
 
-#Requires -Version 7.2
+# Needs PowerShell 7.2+; started from Windows PowerShell 5.1 it runs itself again in pwsh (below)
 [CmdletBinding(DefaultParameterSetName = 'Setup')]
 param(
     # Short unique suffix for globally unique Azure names: 3-8 lowercase letters or digits
@@ -68,6 +68,26 @@ param(
     # Seconds to wait for the child to catch up after a sync is triggered
     [int] $SyncTimeoutSeconds = 300
 )
+
+# Windows PowerShell 5.1 (powershell.exe) can't run this script, and Windows keeps it next to
+# PowerShell 7 (pwsh.exe). Started from 5.1, the script runs itself again in pwsh with the same
+# parameters, or says how to install pwsh. The parameters go to pwsh as JSON in an environment
+# variable, not on the command line, where 5.1 mangles values with quotes or spaces.
+if ($PSVersionTable.PSVersion -lt [version] '7.2') {
+    $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($PSVersionTable.PSVersion.Major -ge 7 -or -not $pwsh) {
+        Write-Host "This script needs PowerShell 7.2 or newer (this is $($PSVersionTable.PSVersion)). Install or update it with: winget install Microsoft.PowerShell" -ForegroundColor Red
+        exit 1
+    }
+    $relaunch = @{}
+    foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+        $relaunch[$entry.Key] = if ($entry.Value -is [System.Management.Automation.SwitchParameter]) { $entry.Value.IsPresent } else { $entry.Value }
+    }
+    $env:SMARTTABLESYNC_RELAUNCH = ConvertTo-Json $relaunch -Compress
+    $command = "`$p = `$env:SMARTTABLESYNC_RELAUNCH | ConvertFrom-Json -AsHashtable; Remove-Item Env:SMARTTABLESYNC_RELAUNCH; & '$($PSCommandPath.Replace("'", "''"))' @p; exit `$LASTEXITCODE"
+    & $pwsh.Source -NoProfile -OutputFormat Text -EncodedCommand ([Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command)))
+    exit $LASTEXITCODE
+}
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -198,7 +218,7 @@ function Wait-ForSync {
             [pscustomobject]@{
                 Table  = $table
                 Parent = $line
-                Child  = $childLine ?? '(not synced yet)'
+                Child  = if ($null -ne $childLine) { $childLine } else { '(not synced yet)' }
                 Match  = $line -eq $childLine
             }
         }
