@@ -234,7 +234,9 @@ Then add it to `SmartTableSync__TableList`.
 **A column is added in the parent:** run the scaffold tool for that table again. For an existing
 child table it writes `<Table>_AddColumns.sql` instead of `CREATE TABLE`, and a table type script
 that recreates an out-of-date type. Apply `<Table>_AddColumns.sql`, the table type, then the
-procedure. Until then the table stops with an error; the others keep syncing.
+procedure. Until then the table stops with an error, logged on every run and counted in the
+`smarttablesync.table_sync_failures` metric (see [what is measured](../observability.md#what-is-measured));
+the others keep syncing.
 
 **Other column changes** (type, length, key): the scaffold tool prints `NEEDS A MANUAL CHANGE`
 with what to change; a `decimal` precision or scale change gets `<Table>_AlterColumns.sql`. See

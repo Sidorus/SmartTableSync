@@ -62,6 +62,11 @@ fixed is in the [changelog](../CHANGELOG.md); what's planned is in the [roadmap]
   - a removed `NOT NULL` column;
   - a column that now allows `NULL` in the parent but not in the child;
   - a different precision or scale of a `decimal` or `numeric` column.
+
+  The error names the change and is logged on every run until the child is fixed (in Manual mode
+  too, until the reviewed scripts are applied); the other tables keep syncing. Each such run adds 1
+  to the `smarttablesync.table_sync_failures` metric for that table, so you can alert on it (see
+  [what is measured](observability.md#what-is-measured)).
 - In Auto mode, a schema change costs **one full re-scan** of that table.
 - In **Manual mode**, rows synced before a column was added get its value only when they next
   change.

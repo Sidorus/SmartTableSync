@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using SmartTableSync.Abstractions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartTableSync.Planning;
 using SmartTableSync.Sql;
@@ -51,7 +52,7 @@ internal static class SyncerTestHelpers
     /// table is logged and skipped rather than thrown. A new orchestrator per call starts with no
     /// reconcile history, so every Timestamp/RowVersion table also runs its delete reconciliation.</summary>
     public static async Task<IReadOnlyList<string>> RunOrchestratorAsync(
-        IReadOnlyDictionary<string, string?> connectionStrings, SyncSettings settings)
+        IReadOnlyDictionary<string, string?> connectionStrings, SyncSettings settings, ISyncMetricsReporter? metrics = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(connectionStrings)
@@ -69,7 +70,7 @@ internal static class SyncerTestHelpers
             connections,
             new ChildDatabaseRunLock(connections),
             new SyncStateRepository(),
-            new NoOpSyncMetricsReporter(),
+            metrics ?? new NoOpSyncMetricsReporter(),
             Microsoft.Extensions.Options.Options.Create(settings),
             logger);
 

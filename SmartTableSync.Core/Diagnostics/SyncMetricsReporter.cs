@@ -20,6 +20,7 @@ public sealed class SyncMetricsReporter : ISyncMetricsReporter, IDisposable
     private readonly Histogram<double> _syncLagMinutes;
     private readonly Counter<long> _tableProvisioned;
     private readonly Counter<long> _fullRescans;
+    private readonly Counter<long> _tableSyncFailures;
 
     public SyncMetricsReporter()
     {
@@ -30,6 +31,7 @@ public sealed class SyncMetricsReporter : ISyncMetricsReporter, IDisposable
         _syncLagMinutes = _meter.CreateHistogram<double>("smarttablesync.sync_lag_minutes");
         _tableProvisioned = _meter.CreateCounter<long>("smarttablesync.table_provisioned");
         _fullRescans = _meter.CreateCounter<long>("smarttablesync.full_rescans");
+        _tableSyncFailures = _meter.CreateCounter<long>("smarttablesync.table_sync_failures");
     }
 
     public void RowsSynced(string tableName, string syncMode, int count) =>
@@ -52,6 +54,9 @@ public sealed class SyncMetricsReporter : ISyncMetricsReporter, IDisposable
 
     public void FullRescan(string tableName, string reason) =>
         _fullRescans.Add(1, new TagList { { "TableName", tableName }, { "Reason", reason } });
+
+    public void TableSyncFailed(string tableName) =>
+        _tableSyncFailures.Add(1, new TagList { { "TableName", tableName } });
 
     public void Dispose() => _meter.Dispose();
 }

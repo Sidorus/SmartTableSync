@@ -20,6 +20,12 @@ All notable changes to SmartTableSync. The format follows
   in `SmartTableSync:AllowFullRescanFor`); any table can be forced to it with
   `SmartTableSync:IncrementalStrategyOverrides:<Table> = WholeTableCopy`. See
   [WholeTableCopy](docs/sync-strategies.md#wholetablecopy).
+- **`smarttablesync.table_sync_failures`**, a counter tagged `TableName`: adds 1 every time a
+  table's run fails as a whole and is retried on the next run, for example after a parent schema
+  change that needs a reviewed script. Such a run records none of the other metrics, so until now
+  only the error log showed it; alert when this is above 0. `ISyncMetricsReporter` gets
+  `TableSyncFailed(tableName)` with an empty default body, so your own reporters keep compiling.
+  See [what is measured](docs/observability.md#what-is-measured).
 
 ### Changed
 

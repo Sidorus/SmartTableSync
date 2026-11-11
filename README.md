@@ -242,8 +242,9 @@ decides who creates them:
 | Best for | Production, where every schema change is reviewed | A child database used only by the sync; dev, test, getting started |
 
 Changes that could lose data (a column's type, length or key) are never applied automatically in
-either mode. Step by step: [Manual mode](docs/guides/manual-mode.md) ·
-[Auto mode](docs/guides/auto-mode.md).
+either mode: the table stops, the error naming the change is logged on every run, and the
+`smarttablesync.table_sync_failures` metric counts it, so you can alert on it. Step by step:
+[Manual mode](docs/guides/manual-mode.md) · [Auto mode](docs/guides/auto-mode.md).
 
 ## Configuration
 
@@ -278,7 +279,8 @@ The main ones; the full list is on its own page, **[known limitations](docs/limi
 - Deletes reach the child on every run only with Change Tracking (and whole-table copies); with
   the other strategies, at the next delete check (hourly by default).
 - Changes in the parent that could lose data (a column's type, length or key) need a reviewed
-  script; the table stops until then.
+  script; the table stops until then, with an error logged on every run and counted in the
+  `smarttablesync.table_sync_failures` metric.
 
 ## Roadmap
 

@@ -140,7 +140,9 @@ the table type and procedure, and copies the table once more so existing rows ge
 column, a column that now allows `NULL` in the parent but not in the child, a different `decimal`
 precision or scale) are never applied automatically. The table stops with an error naming the
 change, on every run, until you change the child table yourself; the scaffold tool writes the
-script for most of them. Other tables keep syncing. See
+script for most of them. Other tables keep syncing. Each failed run adds 1 to the
+`smarttablesync.table_sync_failures` metric for that table, so you can alert on it (see
+[what is measured](../observability.md#what-is-measured)). See
 [when the parent schema changes](../setup.md#when-the-parent-schema-changes).
 
 **Copy a table again, or choose its strategy again:** the same SQL as in

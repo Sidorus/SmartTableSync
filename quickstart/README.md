@@ -312,7 +312,7 @@ to change one.
 | | Auto (default) | Manual (`-Mode Manual`) |
 |---|---|---|
 | Who creates the child's tables | the Function, on its first run | this script, from the scaffold tool's scripts |
-| A column added to the parent later | added by the Function on its next run | the table stops until you run the scaffold tool and apply `<Table>_AddColumns.sql` |
+| A column added to the parent later | added by the Function on its next run | the table stops (an error on every run, counted in `smarttablesync.table_sync_failures`) until you run the scaffold tool and apply `<Table>_AddColumns.sql` |
 | Function's rights on the child | DDL through the provisioning identity; data rights on whole schemas | data rights on the synced objects only |
 | Good for | a child database used only by SmartTableSync; trying it out | production with change control |
 
