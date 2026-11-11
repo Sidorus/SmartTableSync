@@ -7,6 +7,20 @@ All notable changes to SmartTableSync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **WholeTableCopy**, a fifth strategy, for tables **without any key**: no primary key, no unique
+  index whose key columns are all `NOT NULL`, and no `SmartTableSync:KeyColumns`. Such a table
+  could not be synced before. Every run, in one transaction on the child, it deletes all rows and
+  bulk-copies every parent row, so duplicate rows come across exactly and deletes arrive every
+  run. Readers of the child see the previous copy until the commit, and a failed copy leaves it in
+  place. It needs only `SELECT`, `INSERT` and `DELETE` for the runtime identity: no schema rights,
+  no merge procedure and no table type, and the child table gets no primary key. Chosen by itself
+  for a table without any key, with the same size rule as FullRescan (up to 50,000 rows, or listed
+  in `SmartTableSync:AllowFullRescanFor`); any table can be forced to it with
+  `SmartTableSync:IncrementalStrategyOverrides:<Table> = WholeTableCopy`. See
+  [WholeTableCopy](docs/sync-strategies.md#wholetablecopy).
+
 ### Changed
 
 - The quick start and the demo check everything they need before they do anything, and show it in
@@ -15,6 +29,8 @@ All notable changes to SmartTableSync. The format follows
   They stop until everything is there, instead of stopping at the first missing tool. When the
   older ODBC `sqlcmd` comes first on PATH, or go-sqlcmd isn't on PATH at all, an installed
   go-sqlcmd is used for that run without changing PATH by hand.
+- The quick start's table check shows `WholeTableCopy` for a table without any key, instead of
+  `NO KEY`; only such a table over 50,000 rows is still `BLOCKED`.
 
 ### Fixed
 

@@ -287,15 +287,114 @@ public class SyncPlanHeuristicTests
     }
 
     [Fact]
-    public void DerivePlan_NoKey_ThrowsNamingTheKeyColumnsSetting()
+    public void DerivePlan_NoKey_ChoosesWholeTableCopyWithNothingToMerge()
     {
+        // A timestamp and a rowversion column would make the key-based strategies applicable;
+        // without a key none of them can run, so they're passed over.
         var profile = CreateProfile(tableName: "sales.Ledger") with { PrimaryKeyColumns = [] };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate"));
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer");
+
+        Assert.Equal(IncrementalStrategy.WholeTableCopy, plan.IncrementalStrategy);
+        Assert.Equal(MergeStrategy.Replace, plan.MergeStrategy);
+        Assert.Null(plan.TvpTypeName);
+        Assert.Null(plan.IncrementalColumn);
+        Assert.Empty(plan.RetryableSqlErrorNumbers);
+    }
+
+    [Fact]
+    public void DerivePlan_NoKeyAndReferencesOtherTables_StillMergesNothing()
+    {
+        var profile = CreateProfile(referencesOtherTables: true) with { PrimaryKeyColumns = [] };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions);
+
+        Assert.Equal(MergeStrategy.Replace, plan.MergeStrategy);
+        Assert.Empty(plan.RetryableSqlErrorNumbers);
+    }
+
+    [Fact]
+    public void DerivePlan_NoKeyAndLargeTable_ThrowsNamingBothWaysOut()
+    {
+        var profile = CreateProfile(tableName: "sales.Ledger", rowCount: DefaultOptions.FullRescanRowCountThreshold + 1)
+            with { PrimaryKeyColumns = [] };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(profile, DefaultOptions));
 
         Assert.Contains("sales.Ledger", ex.Message);
         Assert.Contains("no PRIMARY KEY and no unique index", ex.Message);
+        Assert.Contains("SmartTableSync:AllowFullRescanFor", ex.Message);
         Assert.Contains("SmartTableSync:KeyColumns:sales.Ledger", ex.Message);
+    }
+
+    [Fact]
+    public void DerivePlan_NoKeyAndLargeTableListedInAllowFullRescanFor_ChoosesWholeTableCopy()
+    {
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1) with { PrimaryKeyColumns = [] };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, allowFullRescan: true);
+
+        Assert.Equal(IncrementalStrategy.WholeTableCopy, plan.IncrementalStrategy);
+    }
+
+    [Theory]
+    [InlineData(IncrementalStrategy.Timestamp)]
+    [InlineData(IncrementalStrategy.RowVersion)]
+    [InlineData(IncrementalStrategy.SqlChangeTracking)]
+    [InlineData(IncrementalStrategy.FullRescan)]
+    public void DerivePlan_NoKeyAndOverrideToAKeyedStrategy_ThrowsNamingTheKeyColumnsSetting(IncrementalStrategy forced)
+    {
+        var profile = CreateProfile(tableName: "sales.Ledger") with { PrimaryKeyColumns = [] };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            _heuristic.DerivePlan(profile, DefaultOptions, timestampColumn: "LastUpdate", rowVersionColumn: "RowVer", strategyOverride: forced));
+
+        Assert.Contains($"forces {forced}", ex.Message);
+        Assert.Contains("SmartTableSync:KeyColumns:sales.Ledger", ex.Message);
+    }
+
+    [Fact]
+    public void DerivePlan_NoKeyAndOverrideToWholeTableCopy_ChoosesIt()
+    {
+        var profile = CreateProfile() with { PrimaryKeyColumns = [] };
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions, strategyOverride: IncrementalStrategy.WholeTableCopy);
+
+        Assert.Equal(IncrementalStrategy.WholeTableCopy, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_KeyAndOverrideToWholeTableCopy_ChoosesItEvenForALargeTable()
+    {
+        // The override is the operator's consent to copy every row every run, as for FullRescan.
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
+
+        var plan = _heuristic.DerivePlan(
+            profile, DefaultOptions, timestampColumn: "LastUpdate", strategyOverride: IncrementalStrategy.WholeTableCopy);
+
+        Assert.Equal(IncrementalStrategy.WholeTableCopy, plan.IncrementalStrategy);
+        Assert.Equal(MergeStrategy.Replace, plan.MergeStrategy);
+        Assert.Null(plan.TvpTypeName);
+    }
+
+    [Fact]
+    public void DerivePlan_KeyAndNoChangeColumn_ChoosesFullRescanNotWholeTableCopy()
+    {
+        var profile = CreateProfile();
+
+        var plan = _heuristic.DerivePlan(profile, DefaultOptions);
+
+        Assert.Equal(IncrementalStrategy.FullRescan, plan.IncrementalStrategy);
+    }
+
+    [Fact]
+    public void DerivePlan_KeyAndLargeTableWithoutConsent_NeverFallsBackToWholeTableCopy()
+    {
+        var profile = CreateProfile(rowCount: DefaultOptions.FullRescanRowCountThreshold + 1);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _heuristic.DerivePlan(profile, DefaultOptions));
+
+        Assert.Contains("FullRescan", ex.Message);
     }
 
     [Theory]

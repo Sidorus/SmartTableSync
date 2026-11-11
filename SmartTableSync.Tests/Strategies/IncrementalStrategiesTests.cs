@@ -9,6 +9,7 @@ using SmartTableSync.Strategies.SqlChangeTracking;
 using SmartTableSync.Strategies.RowVersion;
 using SmartTableSync.Strategies.Timestamp;
 using SmartTableSync.Strategies.FullRescan;
+using SmartTableSync.Strategies.WholeTableCopy;
 using SmartTableSync.Merge;
 using SmartTableSync.Sql;
 using Xunit;
@@ -53,7 +54,8 @@ public class IncrementalStrategiesTests
     public void All_IsInAutoSelectionPriorityOrder()
     {
         Assert.Equal(
-            [IncrementalStrategy.SqlChangeTracking, IncrementalStrategy.RowVersion, IncrementalStrategy.Timestamp, IncrementalStrategy.FullRescan],
+            [IncrementalStrategy.SqlChangeTracking, IncrementalStrategy.RowVersion, IncrementalStrategy.Timestamp,
+                IncrementalStrategy.FullRescan, IncrementalStrategy.WholeTableCopy],
             IncrementalStrategies.All.Select(s => s.Kind));
     }
 
@@ -62,6 +64,7 @@ public class IncrementalStrategiesTests
     [InlineData(IncrementalStrategy.FullRescan, typeof(FullRescanSyncRunner))]
     [InlineData(IncrementalStrategy.RowVersion, typeof(RowVersionSyncRunner))]
     [InlineData(IncrementalStrategy.SqlChangeTracking, typeof(ChangeTrackingSyncRunner))]
+    [InlineData(IncrementalStrategy.WholeTableCopy, typeof(WholeTableCopySyncRunner))]
     public void For_CreatesTheStrategysRunner(IncrementalStrategy kind, Type expectedRunner)
     {
         var runner = IncrementalStrategies.For(kind).CreateRunner(Services(kind));
@@ -74,6 +77,7 @@ public class IncrementalStrategiesTests
     [InlineData(IncrementalStrategy.FullRescan, false)]
     [InlineData(IncrementalStrategy.RowVersion, true)]
     [InlineData(IncrementalStrategy.SqlChangeTracking, true)]
+    [InlineData(IncrementalStrategy.WholeTableCopy, false)]
     public void Baseline_IsDefinedOnlyForStrategiesWithTheirOwnPosition(IncrementalStrategy kind, bool hasBaseline)
     {
         Assert.Equal(hasBaseline, IncrementalStrategies.For(kind).Baseline is not null);

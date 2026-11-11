@@ -11,4 +11,8 @@ internal enum MergeStrategy
     /// Chosen when the table references another table (a row can arrive before the row it
     /// references and fail the FK check until it does) or when rows are large.</summary>
     RowByRow,
+
+    /// <summary>No merge at all: the child table is emptied and filled again by bulk copy. Only
+    /// with the WholeTableCopy strategy, which needs no merge procedure or table type.</summary>
+    Replace,
 }

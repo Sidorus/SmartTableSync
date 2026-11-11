@@ -333,6 +333,16 @@ foreach (var requestedName in tableNames)
                 : $"  wrote {udtPath}");
         }
 
+        // A whole-table copy merges nothing: no procedure. The runtime identity needs only SELECT,
+        // INSERT and DELETE on the child table.
+        if (plan.MergeStrategy == MergeStrategy.Replace)
+        {
+            Console.WriteLine(profile.PrimaryKeyColumns.Count == 0
+                ? "  no key: the table is copied whole every run (WholeTableCopy), so no merge procedure is needed"
+                : "  WholeTableCopy: the table is copied whole every run, so no merge procedure is needed");
+            continue;
+        }
+
         var tableObject = SyncTableName.Object(tableName);
         var spName = plan.MergeStrategy == MergeStrategy.Tvp ? $"sp_Sync{tableObject}Batch" : $"sp_Sync{tableObject}";
         var spPath = Path.Combine(outputDir, $"{filePrefix}{spName}.sql");

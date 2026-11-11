@@ -64,6 +64,29 @@ public class SqlArtifactGeneratorTests
         Assert.Contains("\t[AttributeId] ASC,\n\t[Slug] ASC", script.Replace("\r\n", "\n"));
     }
 
+    [Fact]
+    public void GenerateCreateTableScript_TableWithoutKey_CreatesTheChildWithoutPrimaryKey()
+    {
+        // WholeTableCopy: the parent's rows may repeat, so the child can't have a key either.
+        var profile = ProductAttributeValueProfile() with { PrimaryKeyColumns = [] };
+
+        var script = _generator.GenerateCreateTableScript(profile).Replace("\r\n", "\n");
+
+        Assert.DoesNotContain("PRIMARY KEY CLUSTERED", script);
+        Assert.Contains("-- No PRIMARY KEY: the parent table has no key", script);
+        Assert.Contains("\t[Slug] [nvarchar](200) NULL\n) ON [PRIMARY]", script);
+    }
+
+    [Fact]
+    public void GenerateMergeProcedureScript_WholeTableCopy_Throws()
+    {
+        var plan = ProductAttributeValuePlan() with { MergeStrategy = MergeStrategy.Replace, IncrementalStrategy = IncrementalStrategy.WholeTableCopy };
+
+        var ex = Assert.Throws<NotSupportedException>(() => _generator.GenerateMergeProcedureScript(ProductAttributeValueProfile(), plan));
+
+        Assert.Contains("needs no merge procedure", ex.Message);
+    }
+
     [Theory]
     [InlineData("UniqueIndex")]
     [InlineData("Configured")]

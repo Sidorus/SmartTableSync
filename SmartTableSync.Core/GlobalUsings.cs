@@ -24,3 +24,4 @@ global using SmartTableSync.Strategies.InitialSync;
 global using SmartTableSync.Strategies.RowVersion;
 global using SmartTableSync.Strategies.SqlChangeTracking;
 global using SmartTableSync.Strategies.Timestamp;
+global using SmartTableSync.Strategies.WholeTableCopy;

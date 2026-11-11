@@ -11,9 +11,14 @@ flowchart TD
     Infra --> Each["For each table in the list"]
     Each --> Columns{"New table, or did the<br/>parent table's schema change?"}
     Columns -- No --> Plan["Use the saved plan"]
-    Columns -- Yes --> CT
+    Columns -- Yes --> Key
 
     subgraph Once["Only when the table is new or its schema changed"]
+        Key{"Has a key? (primary key,<br/>unique index or KeyColumns)"} -- Yes --> CT
+        Key -- No --> SmallNoKey{"Small table, or listed in<br/>AllowFullRescanFor?"}
+        SmallNoKey -- Yes --> SWT["WholeTableCopy:<br/>replace the whole child table"]
+        SmallNoKey -- No --> Fail
+        SWT --> Mode
         CT{"Change Tracking<br/>enabled on the table?"} -- Yes --> SCT["SqlChangeTracking"]
         CT -- No --> RV{"Has a rowversion<br/>column?"}
         RV -- Yes --> SRV["RowVersion"]
@@ -53,11 +58,13 @@ flowchart TD
    `SmartTableSync:KeyColumns:<Table>` ([setup](setup.md#tables-without-a-primary-key)). Usually
    nothing changed, and the saved plan is used as it is. Other settings are not part of this
    check; see [changing a table's strategy later](#changing-a-tables-strategy-later).
-3. **Pick how to find changes.** Only for a new table or a changed schema. The four checks run in
-   this order and the first match wins. "Small" means 50,000 rows or fewer, counted at this
-   moment. To choose a strategy yourself, set `SmartTableSync:IncrementalStrategyOverrides:<Table>`;
-   it still has to fit the table, or this step fails. Each strategy is explained, with a
-   diagram, in [how SmartTableSync finds what changed](sync-strategies.md).
+3. **Pick how to find changes.** Only for a new table or a changed schema. A table **without any
+   key** is copied whole every run (WholeTableCopy); for the others the four checks run in this
+   order and the first match wins. "Small" means 50,000 rows or fewer, counted at this moment. To
+   choose a strategy yourself, set `SmartTableSync:IncrementalStrategyOverrides:<Table>`; it still
+   has to fit the table, or this step fails. Each strategy is explained, with a diagram, in
+   [how SmartTableSync finds what changed](sync-strategies.md). A whole-table copy skips steps 4,
+   6, 7 and 8: every run deletes all child rows and copies every parent row in one transaction.
 4. **Pick how to write rows.** In batches through one stored-procedure call, or row by row for
    tables that reference other tables or have rows over about 1 MB. See
    [how rows are written](#how-rows-are-written).

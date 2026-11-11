@@ -7,15 +7,17 @@ fixed is in the [changelog](../CHANGELOG.md); what's planned is in the [roadmap]
 
 - **One-way only, parent → child.** The child is a read-only copy; rows written directly into it
   are overwritten or removed by the next sync.
-- **Every synced table needs a key.** Its primary key; without one, the columns named in
-  `SmartTableSync:KeyColumns:<Table>` (`NOT NULL`, unique together), or else a unique index whose
-  key columns are all `NOT NULL` (not filtered, not disabled). Configured columns are checked for
-  duplicates only when the table is set up or its schema changes; duplicates that appear later
-  aren't caught: the child keeps one row per key value, and a batch that holds both rows can
-  fail. Change Tracking still needs a real primary key
-  ([setup](setup.md#tables-without-a-primary-key)). A table with no unique columns at all
-  (duplicate rows possible) can't be synced yet; a whole-table copy for it is
-  [planned](roadmap.md).
+- **Only changes are copied when a table has a key.** Its primary key; without one, the columns
+  named in `SmartTableSync:KeyColumns:<Table>` (`NOT NULL`, unique together), or else a unique
+  index whose key columns are all `NOT NULL` (not filtered, not disabled). Configured columns are
+  checked for duplicates only when the table is set up or its schema changes; duplicates that
+  appear later aren't caught: the child keeps one row per key value, and a batch that holds both
+  rows can fail. Change Tracking still needs a real primary key
+  ([setup](setup.md#tables-without-a-primary-key)).
+- **A table with no key at all is copied whole every run** (the
+  [WholeTableCopy](sync-strategies.md#wholetablecopy) strategy): duplicate rows come across
+  exactly, but every run reads and writes the whole table. That is automatic only up to 50,000
+  rows; a bigger table must be listed in `SmartTableSync:AllowFullRescanFor`, or given a key.
 - **Same schema in the child.** Tables can be in any schema (`sales.Order`), and the child keeps
   the parent's schema, so a parent table can't be copied into a different schema.
 - **Column types.** Columns of type `xml`, `sql_variant`, `geography`, `geometry`, `hierarchyid`
@@ -29,7 +31,8 @@ fixed is in the [changelog](../CHANGELOG.md); what's planned is in the [roadmap]
   `NULL` are copied by the first sync but not picked up as changed later. The column must hold
   **UTC** time (for example `SYSUTCDATETIME()`): it is compared with the parent's UTC clock, so
   local time in a time zone behind UTC makes changes look older than they are and they are missed.
-- **Deletes** reach the child on every run only for Change Tracking tables. RowVersion, Timestamp
+- **Deletes** reach the child on every run only for Change Tracking tables (and whole-table copies,
+  which replace every row each run). RowVersion, Timestamp
   and full re-scan tables get them from the delete reconciliation: by default at most once an
   hour per host process, and also on the first run after the host starts. On a host that scales
   to zero, that means a full key comparison of those tables on most cold starts. See

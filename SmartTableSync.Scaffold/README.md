@@ -94,8 +94,13 @@ scripts it writes match what the engine will expect. Set them the same way as fo
 | Variable | Effect |
 |---|---|
 | `SmartTableSync__TimestampColumns__<Table>` | the datetime column the Timestamp strategy uses (default `LastUpdate`) |
-| `SmartTableSync__AllowFullRescanFor` | comma-separated large tables allowed to fall back to a full re-scan |
-| `SmartTableSync__IncrementalStrategyOverrides__<Table>` | force `SqlChangeTracking`, `RowVersion`, `Timestamp` or `FullRescan` for a table |
+| `SmartTableSync__AllowFullRescanFor` | comma-separated large tables allowed to fall back to a full re-scan, or (without any key) a whole-table copy |
+| `SmartTableSync__IncrementalStrategyOverrides__<Table>` | force `SqlChangeTracking`, `RowVersion`, `Timestamp`, `FullRescan` or `WholeTableCopy` for a table |
+
+For a table without any key (or one forced to `WholeTableCopy`), the tool writes only the child
+table, without a primary key when the parent has none, and no table type or merge procedure: the
+table is copied whole every run, and the runtime identity needs only `SELECT`, `INSERT` and
+`DELETE` on it.
 
 If a setting can't work for a table, for example a forced strategy the table doesn't support,
 the tool reports the same error the engine would and writes nothing for that table.

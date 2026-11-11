@@ -159,8 +159,8 @@ go-sqlcmd is installed, it uses go-sqlcmd by itself.
    sales.Order    64 Timestamp         LastUpdate column (must hold UTC time)
    ```
 
-   A table marked `NO KEY` or `BLOCKED` won't sync until you fix what its note says; the others
-   are not affected.
+   A table without any key shows `WholeTableCopy`: it's copied whole every run. A table marked
+   `BLOCKED` won't sync until you fix what its note says; the others are not affected.
 
 4. **Run the setup**: the same command without `-DryRun`. It asks once before creating anything,
    and Terraform shows its plan and asks again.

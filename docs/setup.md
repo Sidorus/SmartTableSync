@@ -146,8 +146,13 @@ Rows are matched, paged and deleted by a key, and the child table gets that key 
    isn't disabled. With several, the one with the fewest key columns wins, then the oldest
    (lowest `index_id`). Included columns don't count. No setting is needed.
 
-A table with none of these stops with a message naming the setting. Setting `KeyColumns` for a
-table that has a primary key is an error too, rather than being ignored.
+A table with none of these has no key at all, so it's **copied whole every run**
+([WholeTableCopy](sync-strategies.md#wholetablecopy)): the child gets no primary key, duplicate
+rows come across exactly, and the runtime identity needs only `SELECT`, `INSERT` and `DELETE` on
+it. That's automatic up to 50,000 rows; a bigger table must be listed in
+`SmartTableSync:AllowFullRescanFor` or given a key, or it stops with a message naming both
+settings. Setting `KeyColumns` for a table that has a primary key is an error, rather than being
+ignored.
 
 **Change Tracking** needs a real primary key: SQL Server won't enable it without one, and the
 Change Tracking script refuses such a table. Tables keyed by a unique index or by `KeyColumns`

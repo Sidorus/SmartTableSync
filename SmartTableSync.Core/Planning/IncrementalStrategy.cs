@@ -22,4 +22,11 @@ public enum IncrementalStrategy
     /// enables it): only changed keys are read and deletes are reported directly. Named
     /// "SqlChangeTracking" to keep it distinct from the Timestamp strategy's column.</summary>
     SqlChangeTracking,
+
+    /// <summary>Replaces the whole child table every run: all child rows are deleted and every
+    /// parent row is copied again, in one transaction. Needs no key, so it's the strategy for a
+    /// table without a PRIMARY KEY, unique index or configured key columns, and it copies
+    /// duplicate rows exactly. Chosen automatically only for such a table (with the same size
+    /// rule as FullRescan); a table with a key gets it only through an override.</summary>
+    WholeTableCopy,
 }
