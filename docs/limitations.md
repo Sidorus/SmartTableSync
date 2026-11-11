@@ -31,6 +31,13 @@ fixed is in the [changelog](../CHANGELOG.md); what's planned is in the [roadmap]
   `NULL` are copied by the first sync but not picked up as changed later. The column must hold
   **UTC** time (for example `SYSUTCDATETIME()`): it is compared with the parent's UTC clock, so
   local time in a time zone behind UTC makes changes look older than they are and they are missed.
+- **Timestamp strategy, late commits:** each run reads rows whose datetime column is at or after
+  the last sync minus one minute. A transaction that sets the column and commits more than a
+  minute later (a long batch job, for example) is not visible to the run in between, and is
+  older than every later window, so that change is never copied. The child keeps the old values
+  until the row changes again; the delete reconciliation doesn't repair it, because it compares
+  keys, not values. RowVersion and Change Tracking see a change when it commits, so they don't
+  have this gap; use one of them for tables with long-running write transactions.
 - **Deletes** reach the child on every run only for Change Tracking tables (and whole-table copies,
   which replace every row each run). RowVersion, Timestamp
   and full re-scan tables get them from the delete reconciliation: by default at most once an
