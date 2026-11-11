@@ -15,17 +15,7 @@ What is planned next. **Nothing on this page is built yet**; what works today is
 | 5 | In Manual mode a new plan is saved before the reviewed child scripts are applied, so the table can fail until they are. | Check that the child matches the plan before saving it, and wait with a clear message until it does. |
 | 6 | In Manual mode, rows synced before a column was added get its value only when they next change. | Re-scan the table once, automatically, after the child gains the column. |
 
-## 2. Tables with no unique columns
-
-A table with no primary key, no unique index and no columns that are unique together can't be
-synced today. Planned: a **Snapshot** strategy, chosen only for such tables and only within the
-same size limit as a full re-scan (50,000 rows, or listed in `AllowFullRescanFor`). Each run, in
-one transaction on the child: delete all rows, bulk-copy every parent row, commit. Readers keep
-seeing the previous copy until the commit, duplicate rows come across as they are, and deletes
-need no separate check. It needs only `DELETE` and `INSERT` for the runtime identity, so the
-least-privilege model stays as it is.
-
-## 3. Control API
+## 2. Control API
 
 Today the sync is controlled through settings and the host's schedule. Planned: an HTTP API to
 see what the sync is doing and act on it, as a separate package (`SmartTableSync.Control`) that
@@ -59,7 +49,7 @@ How it fits the existing design:
 - The existing metrics stay the source for dashboards and alerts; the API adds per-table state
   that metrics can't show.
 
-## 4. Web page
+## 3. Web page
 
 A web page on top of the control API, for people who don't want to call an API:
 
@@ -74,7 +64,7 @@ A web page on top of the control API, for people who don't want to call an API:
 Planned as a small ASP.NET Core + Blazor app that can be hosted next to the sync or on its own,
 with the same Entra ID sign-in and roles as the API.
 
-## 5. Other planned work
+## 4. Other planned work
 
 - **Alerts and dashboards out of the box:** example Azure Monitor alert rules and a Grafana
   dashboard for lag, failed rows and runs that stop, using the existing `smarttablesync.*`

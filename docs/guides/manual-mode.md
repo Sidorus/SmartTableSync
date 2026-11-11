@@ -73,7 +73,9 @@ GRANT SELECT ON sales.[Order] TO [smarttablesync-parent-introspection];
 ## 3. Optional: give tables a better way to find changes
 
 SmartTableSync picks, per table: Change Tracking, else a `rowversion` column, else a `LastUpdate`
-datetime column, else a full re-scan (up to 50,000 rows). [How it finds what
+datetime column, else a full re-scan (up to 50,000 rows). A table without any key is copied whole
+every run instead (up to 50,000 rows); the scaffold tool then writes only its child table, with no
+merge procedure. [How it finds what
 changed](../sync-strategies.md) helps you choose. To add Change Tracking or a `rowversion` column,
 let the scaffold tool write the script, review it, and have a DBA apply it **to the parent**:
 

@@ -21,6 +21,20 @@ internal sealed class TableSyncerFactory : ITableSyncerFactory
     public ITableSyncer Create(TableProfile profile, SyncPlan plan)
     {
         var logger = _loggerFactory.CreateLogger<ConfigurableTableSyncer>();
+
+        // A whole-table copy has no merge strategy, no separate first copy and no delete check:
+        // every run already replaces the whole child table, so the same runner serves both phases.
+        if (plan.IncrementalStrategy == IncrementalStrategy.WholeTableCopy)
+        {
+            var wholeTableCopy = new Lazy<ISyncRunner>(() => new WholeTableCopySyncRunner(profile, plan, logger));
+            var runners = new Dictionary<SyncPhase, Lazy<ISyncRunner>>
+            {
+                [SyncPhase.Initial] = wholeTableCopy,
+                [SyncPhase.Incremental] = wholeTableCopy,
+            };
+            return new ConfigurableTableSyncer(profile.TableName, runners, deleteReconciler: null);
+        }
+
         var commands = new TableSyncCommandFactory(profile, plan);
         var mergeStrategy = BatchMergeStrategyFactory.Create(profile, plan, logger);
         var strategy = IncrementalStrategies.For(plan.IncrementalStrategy);

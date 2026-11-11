@@ -11,6 +11,9 @@ internal static class BatchMergeStrategyFactory
         {
             MergeStrategy.Tvp => new TvpBatchMergeStrategy(profile, plan),
             MergeStrategy.RowByRow => new RowByRowBatchMergeStrategy(profile, plan, logger),
+            MergeStrategy.Replace => throw new NotSupportedException(
+                $"{profile.TableName}: MergeStrategy Replace merges nothing - the WholeTableCopy runner copies the table " +
+                "itself, and TableSyncerFactory never asks for a merge strategy for it."),
             _ => throw new NotSupportedException($"Unhandled merge strategy: {plan.MergeStrategy}"),
         };
 }

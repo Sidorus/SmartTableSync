@@ -293,22 +293,56 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
     }
 
     [Fact]
-    public async Task AutoMode_TableWithoutAnyKey_FailsNamingTheKeyColumnsSetting()
+    public async Task AutoMode_TableWithoutAnyKey_CopiesItWholeWithTheRuntimeIdentity()
     {
-        // Arrange
+        // Arrange - a heap with no index at all, and rows that repeat exactly: no key can tell
+        // them apart, so the whole table is copied every run, by the runtime identity's DELETE
+        // and INSERT rights alone
         const string table = "KeylessCode";
         await using var parent = new SqlConnection(_sql.ParentConnectionString);
         await using var child = new SqlConnection(_sql.ChildConnectionString);
         await parent.OpenAsync();
         await child.OpenAsync();
         await CreateParentHeapAsync(parent, table);
+        await ExecuteAsync(parent, $"""
+            INSERT INTO [dbo].[{table}] ([Seq], [Code], [Region], [Name], [Note], [LastUpdate])
+            SELECT [Seq], [Code], [Region], [Name], [Note], [LastUpdate] FROM [dbo].[{table}] WHERE [Seq] <= 5;
+            INSERT INTO [dbo].[{table}] ([Seq], [Code], [Region], [Name], [Note], [LastUpdate])
+            SELECT [Seq], [Code], [Region], [Name], [Note], [LastUpdate] FROM [dbo].[{table}] WHERE [Seq] = 1;
+            """);
 
         // Act
         var errors = await RunAutoModeAsync(table);
 
+        // Assert - every row with its exact number of copies; the child has no PRIMARY KEY and
+        // no merge procedure, and the plan says so
+        Assert.Empty(errors);
+        Assert.Equal(await RowsWithCountsAsync(parent, table), await RowsWithCountsAsync(child, table));
+        // 50 rows, a second copy of Seq 1 to 5, and two more of Seq 1 (copies of both rows there)
+        Assert.Equal(57, await ScalarAsync(child, $"SELECT COUNT(*) FROM [dbo].[{table}]"));
+        Assert.Equal(4, await ScalarAsync(child, $"SELECT COUNT(*) FROM [dbo].[{table}] WHERE [Seq] = 1"));
+        Assert.Empty(await ChildPrimaryKeyAsync(child, table));
+        Assert.Equal(0, await ScalarAsync(child, $"SELECT COUNT(*) FROM sys.procedures WHERE name = 'sp_Sync{table}'"));
+        Assert.Equal(1, await ScalarAsync(child, $"""
+            SELECT COUNT(*) FROM [dbo].[SyncTableConfig]
+            WHERE [TableName] = '{table}' AND [IncrementalStrategy] = 'WholeTableCopy' AND [MergeStrategy] = 'Replace'
+            """));
+
+        // Act - an update of every copy of a row, a new duplicate, and one copy of a duplicate
+        // deleted (the other copies stay)
+        await ExecuteAsync(parent, $"""
+            UPDATE [dbo].[{table}] SET [Name] = N'Changed' WHERE [Seq] = 2;
+            INSERT INTO [dbo].[{table}] ([Seq], [Code], [Region], [Name], [Note], [LastUpdate])
+            VALUES (1000, N'C1000', 'SE', N'New', NULL, GETUTCDATE()), (1000, N'C1000', 'SE', N'New', NULL, GETUTCDATE());
+            DELETE TOP (1) FROM [dbo].[{table}] WHERE [Seq] = 1;
+            DELETE FROM [dbo].[{table}] WHERE [Seq] = 40;
+            """);
+        errors = await RunAutoModeAsync(table);
+
         // Assert
-        Assert.Contains(errors, e => e.Contains($"SmartTableSync:KeyColumns:{table}", StringComparison.Ordinal));
-        Assert.Equal(0, await ScalarAsync(child, $"SELECT COUNT(*) FROM sys.tables WHERE name = '{table}'"));
+        Assert.Empty(errors);
+        Assert.Equal(await RowsWithCountsAsync(parent, table), await RowsWithCountsAsync(child, table));
+        Assert.Equal(3, await ScalarAsync(child, $"SELECT COUNT(*) FROM [dbo].[{table}] WHERE [Seq] = 1"));
     }
 
     [Fact]
@@ -479,6 +513,26 @@ public class LeastPrivilegeAutoModeTests : IClassFixture<LeastPrivilegeAutoModeT
             columns.Add(reader.GetString(0));
 
         return columns;
+    }
+
+    // Every distinct row with the number of times it appears, in a stable order. A checksum can't
+    // tell how often a row repeats, which is exactly what a table without a key must keep.
+    private static async Task<IReadOnlyList<string>> RowsWithCountsAsync(SqlConnection connection, string table)
+    {
+        await using var command = new SqlCommand($"""
+            SELECT CONCAT([Seq], '|', [Code], '|', [Region], '|', [Name], '|', ISNULL([Note], '<null>'), '|',
+                          CONVERT(VARCHAR(30), [LastUpdate], 126), '|', COUNT(*))
+            FROM   [dbo].[{table}]
+            GROUP  BY [Seq], [Code], [Region], [Name], [Note], [LastUpdate]
+            ORDER  BY 1
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        var rows = new List<string>();
+        while (await reader.ReadAsync())
+            rows.Add(reader.GetString(0));
+
+        return rows;
     }
 
     private static async Task<int> ScalarAsync(SqlConnection connection, string sql)

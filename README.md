@@ -24,7 +24,8 @@ Azure: parent and child can each be Azure SQL Database, Azure SQL Managed Instan
 
 - Syncs the tables you list, one way, from the parent into the child: inserts, updates and deletes.
 - Chooses per table how to find changed rows: SQL Server Change Tracking, a `rowversion` column,
-  a timestamp column, or a full re-scan for small tables.
+  a timestamp column, or a full re-scan for small tables. A small table without any key, even
+  with duplicate rows, is copied whole every run.
 - Copies a new table in full once, then only what changed; resumes where it stopped after a
   failure.
 - Runs with least privilege: the sync never has DDL rights, and signs in with managed identities
@@ -271,17 +272,18 @@ The package includes every sign-in method: SQL logins, Windows authentication, a
 The main ones; the full list is on its own page, **[known limitations](docs/limitations.md)**:
 
 - One-way only, parent → child; the child is a read-only copy.
-- Every table needs a key (primary key, unique index, or `SmartTableSync:KeyColumns`); a table
-  with possible duplicate rows can't be synced yet.
-- Deletes reach the child on every run only with Change Tracking; with the other strategies, at
-  the next delete check (hourly by default).
+- Only a table with a key (primary key, unique index, or `SmartTableSync:KeyColumns`) gets just
+  its changes copied; a table without any key is copied whole every run, automatically only up
+  to 50,000 rows.
+- Deletes reach the child on every run only with Change Tracking (and whole-table copies); with
+  the other strategies, at the next delete check (hourly by default).
 - Changes in the parent that could lose data (a column's type, length or key) need a reviewed
   script; the table stops until then.
 
 ## Roadmap
 
-What's planned next, including an API and a web page to control the sync and a whole-table copy
-for tables without any key, is in the **[roadmap](docs/roadmap.md)**.
+What's planned next, including an API and a web page to control the sync, is in the
+**[roadmap](docs/roadmap.md)**.
 
 ## Status
 

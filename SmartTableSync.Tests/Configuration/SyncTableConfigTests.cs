@@ -56,6 +56,36 @@ public class SyncTableConfigTests
         Assert.Equal(MergeStrategy.RowByRow, plan.MergeStrategy);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Tvp")]
+    [InlineData("RowByRow")]
+    public void ToSyncPlan_WholeTableCopy_AlwaysReplacesWhateverTheOverride(string? mergeStrategyOverrideName)
+    {
+        var mergeStrategyOverride = mergeStrategyOverrideName is null ? (MergeStrategy?)null : Enum.Parse<MergeStrategy>(mergeStrategyOverrideName);
+        var config = CreateConfig(mergeStrategyOverride: mergeStrategyOverride) with
+        {
+            PrimaryKeyColumns = [],
+            MergeStrategy = MergeStrategy.Replace,
+            TvpTypeName = null,
+            IncrementalStrategy = IncrementalStrategy.WholeTableCopy,
+        };
+
+        var plan = config.ToSyncPlan();
+
+        Assert.Equal(MergeStrategy.Replace, plan.MergeStrategy);
+        Assert.Null(plan.TvpTypeName);
+    }
+
+    [Fact]
+    public void ToSyncPlan_ReplaceOverrideOnAnotherStrategy_IsIgnored()
+    {
+        var plan = CreateConfig(mergeStrategyOverride: MergeStrategy.Replace).ToSyncPlan();
+
+        Assert.Equal(MergeStrategy.Tvp, plan.MergeStrategy);
+        Assert.Equal("TestTableTableType", plan.TvpTypeName);
+    }
+
     [Fact]
     public void ToSyncPlan_WithRetryableSqlErrorsOverride_OverrideWins()
     {

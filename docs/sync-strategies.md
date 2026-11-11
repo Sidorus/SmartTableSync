@@ -2,10 +2,11 @@
 
 Every run (as often as you schedule it; every 5 minutes in the example Function), SmartTableSync
 asks the parent for the rows that changed since the last successful run and writes them into
-the child. How it finds those rows depends on the table. There are four ways, called
-**incremental strategies**. Each table gets the first one that works for it, in this order,
-unless you force one with `SmartTableSync:IncrementalStrategyOverrides:<Table>`. The choice is
-made when the table is set up and kept until its schema changes; see
+the child. How it finds those rows depends on the table. There are five ways, called
+**incremental strategies**. A table with a key gets the first of the first four that works for
+it, in this order; a table without any key always gets the fifth, WholeTableCopy. You can force
+one with `SmartTableSync:IncrementalStrategyOverrides:<Table>`. The choice is made when the
+table is set up and kept until its schema changes; see
 [changing a table's strategy later](how-it-works.md#changing-a-tables-strategy-later).
 
 | Strategy | What the parent table needs | Finds inserts and updates by | Finds deletes |
@@ -14,8 +15,10 @@ made when the table is set up and kept until its schema changes; see
 | [RowVersion](#rowversion) | A `rowversion` column | The row's version number | [Delete reconciliation](#delete-reconciliation), hourly by default |
 | [Timestamp](#timestamp) | A datetime column the application updates (`LastUpdate`) | The time of the last change | [Delete reconciliation](#delete-reconciliation), hourly by default |
 | [FullRescan](#fullrescan) | Nothing, but only for small tables | Reading the whole table | [Delete reconciliation](#delete-reconciliation), hourly by default |
+| [WholeTableCopy](#wholetablecopy) | Nothing, not even a key; only for small tables | Copying the whole table | Every run |
 
-Two rules hold for all four:
+Two rules hold for the first four (WholeTableCopy doesn't merge or keep a position; it replaces
+the whole child table each run):
 
 - **Reading a row twice is harmless.** Every write into the child is a `MERGE`, so a row that is
   read again ends up exactly the same. The strategies use this on purpose to never miss a row.
@@ -134,9 +137,52 @@ Good to know:
   Tracking cases above, or any parent schema change on a table that already has data, in Auto
   mode.
 
+## WholeTableCopy
+
+For tables **without any key**: no primary key, no unique index whose key columns are all
+`NOT NULL`, and no `SmartTableSync:KeyColumns`. Such a table can hold identical rows, so nothing
+can be matched row by row. Instead, every run replaces the child table:
+
+1. In one transaction on the child: **delete every row**, then **bulk-copy every parent row**,
+   streamed straight from the parent (nothing is held in memory).
+2. Commit. There is no position to save and no delete check: every run is a complete copy.
+
+The parent is read in one snapshot when the database allows it (the default in Azure SQL
+Database), so the copy is one consistent point in time. Example, a `dbo.Ledger` table with no key
+where one of two identical rows was deleted and a new row was added:
+
+| Parent after the changes | Child after the run |
+|---|---|
+| `Rent, 500` | `Rent, 500` |
+| `Fee, 20` (one of two copies left) | `Fee, 20` (one copy, the same as the parent) |
+| `Fee, 35` (new) | `Fee, 35` |
+
+Good to know:
+
+- **Chosen by itself only for a table without any key.** A table with a key never gets it
+  automatically, because copying only the changes is cheaper. You can still force it on any table
+  with `SmartTableSync:IncrementalStrategyOverrides:<Table> = WholeTableCopy`, for example for a
+  small reference table you want replaced exactly each time.
+- **Same size rule as FullRescan:** automatic only for tables with **50,000 rows or fewer** when
+  the table is set up; a larger one must be listed in `SmartTableSync:AllowFullRescanFor`, or it
+  fails at setup with a message naming that setting and `SmartTableSync:KeyColumns`. Forcing it
+  with the override counts as your consent.
+- **Readers never see a half-empty table.** Until the commit, queries on the child see the
+  previous complete copy (with read committed snapshot, the default in Azure SQL Database;
+  without it they wait for the commit). If a copy fails, the transaction is rolled back and the
+  child keeps the previous copy.
+- **No schema rights needed.** The runtime identity needs only `SELECT`, `INSERT` and `DELETE` on
+  the child table. The child table has **no primary key** when the parent has none, and there is
+  no merge procedure or table type.
+- **Duplicate rows come across exactly**, as many times as they are in the parent.
+- **Cost:** every run reads and writes the whole table, and the child's transaction log grows by
+  roughly the table's size each run. Keep it for small tables, or give the table a key with
+  `SmartTableSync:KeyColumns` when some columns are unique together.
+
 ## Delete reconciliation
 
-RowVersion, Timestamp and FullRescan can't see deletes. For those tables the engine compares the
+RowVersion, Timestamp and FullRescan can't see deletes (WholeTableCopy needs no check: it
+replaces every row). For those tables the engine compares the
 list of keys in the parent with the list in the child and deletes child rows whose key no longer
 exists in the parent. It does this at most once an hour per host process
 (`SmartTableSync:ReconcileIntervalHours`), and also on the first run after the host starts,

@@ -9,6 +9,9 @@ internal static class IncrementalStrategies
     /// <item>RowVersion - the table has a rowversion column, which SQL Server updates on every write.</item>
     /// <item>Timestamp - the table has the configured (default "LastUpdate") datetime column; trusts the application to update it.</item>
     /// <item>FullRescan - none of the above: small tables, or tables listed in AllowFullRescanFor.</item>
+    /// <item>WholeTableCopy - never by this order for a table with a key (FullRescan always comes
+    /// first and has the same size rule); SyncPlanHeuristic chooses it on its own for a table
+    /// without any key, the only strategy that can sync one.</item>
     /// </list>
     /// An IncrementalStrategyOverrides entry skips this order but must still be applicable.</summary>
     public static IReadOnlyList<IIncrementalStrategy> All { get; } =
@@ -17,6 +20,7 @@ internal static class IncrementalStrategies
         new RowVersionStrategy(),
         new TimestampStrategy(),
         new FullRescanStrategy(),
+        new WholeTableCopyStrategy(),
     ];
 
     public static IIncrementalStrategy For(IncrementalStrategy kind) =>

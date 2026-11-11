@@ -125,16 +125,18 @@ that use a different name.
 
 ### `SmartTableSync:AllowFullRescanFor`
 
-**Default: none.** Tables over 50,000 rows that may use the FullRescan strategy anyway, which
-reads the whole table on every run.
+**Default: none.** Tables over 50,000 rows that may use the FullRescan or WholeTableCopy strategy
+anyway, which read the whole table on every run.
 
 ```json
 "SmartTableSync:AllowFullRescanFor": "PriceList,sales.Region"
 ```
 
 - Only matters for a table with no other way to find changes (no Change Tracking, no
-  `rowversion` column, no timestamp column). Without it, such a large table stops at setup with a
-  message naming this setting, so a big table is never re-read every run by accident.
+  `rowversion` column, no timestamp column), or with **no key at all**, which is then copied
+  whole every run ([WholeTableCopy](sync-strategies.md#wholetablecopy)). Without it, such a large
+  table stops at setup with a message naming this setting, so a big table is never re-read every
+  run by accident.
 - Tables of 50,000 rows or fewer don't need to be listed.
 - Consider the cost first: every run reads and merges every row. A `rowversion` column (scaffold
   tool `--rowversion-setup`) is usually the better fix. See [FullRescan](sync-strategies.md#fullrescan).
@@ -154,8 +156,14 @@ reads the whole table on every run.
 | `RowVersion` | a `rowversion` column |
 | `Timestamp` | the timestamp column (see `TimestampColumns`) |
 | `FullRescan` | nothing; forcing it counts as consent for a large table too |
+| `WholeTableCopy` | nothing, not even a key; replaces the whole child table every run. Forcing it counts as consent for a large table too |
 
-- Without an override the first that fits wins, in the order of the table above.
+- Without an override the first that fits wins, in the order of the table above, except
+  `WholeTableCopy`: it's never picked by that order, and it's **always** picked for a table
+  without any key, the only strategy that can sync one. See
+  [WholeTableCopy](sync-strategies.md#wholetablecopy).
+- For a table without any key, every value except `WholeTableCopy` stops the table at setup:
+  the other strategies match rows by their key.
 - An override the table can't satisfy stops the table at setup with a clear message.
 - **An unknown value is quietly ignored** and the strategy is picked automatically, so check the
   spelling (case doesn't matter).
@@ -174,6 +182,9 @@ in key order.
 
 - A table without a primary key and without this setting uses its unique index whose key columns
   are all `NOT NULL` (not filtered or disabled). This setting is for tables that don't have one.
+- A table with neither is copied whole every run
+  ([WholeTableCopy](sync-strategies.md#wholetablecopy)). If some columns are unique together,
+  naming them here is usually better: then only the changes are copied.
 - The columns must exist and be `NOT NULL`, and must be unique together: the parent's data is
   checked for duplicates when the table is set up, and duplicates stop it with a message.
 - Setting it for a table that **has** a primary key is a mistake and stops the table: the primary

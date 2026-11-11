@@ -29,10 +29,18 @@ internal sealed record SyncTableConfig(
     /// TvpTypeName follows the RESOLVED merge strategy: the stored name is null unless the
     /// heuristic itself chose Tvp, so a MergeStrategyOverride of Tvp falls back to the same
     /// "{Table}TableType" convention. Without that, the TVP type name would be empty and
-    /// every batch (and, in Auto mode, the generated CREATE TYPE) would fail.</summary>
+    /// every batch (and, in Auto mode, the generated CREATE TYPE) would fail.
+    ///
+    /// Replace belongs to WholeTableCopy alone, in both directions: a whole-table copy ignores a
+    /// MergeStrategyOverride (it merges nothing), and a Replace override on any other strategy is
+    /// ignored too (those strategies always merge).</summary>
     public SyncPlan ToSyncPlan()
     {
-        var resolvedMergeStrategy = MergeStrategyOverride ?? MergeStrategy;
+        var resolvedMergeStrategy = IncrementalStrategy == IncrementalStrategy.WholeTableCopy
+            ? MergeStrategy.Replace
+            : MergeStrategyOverride is { } mergeOverride && mergeOverride != MergeStrategy.Replace
+                ? mergeOverride
+                : MergeStrategy;
         var resolvedTvpTypeName = resolvedMergeStrategy == MergeStrategy.Tvp
             ? TvpTypeName ?? SyncTableName.TableTypeName(TableName)
             : null;

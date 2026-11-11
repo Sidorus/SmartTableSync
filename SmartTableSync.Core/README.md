@@ -83,6 +83,7 @@ your scheduler. Overlapping runs are safe, also across several instances.
 | RowVersion | the table has a `rowversion` column | at the delete check, hourly by default |
 | Timestamp | the table has a UTC datetime column updated on every change (default `LastUpdate`) | at the delete check |
 | Full re-scan | none of the above, and the table has up to 50,000 rows | at the delete check |
+| Whole-table copy | the table has no key at all (no primary key, unique index or `KeyColumns`), up to 50,000 rows; duplicate rows are copied exactly | on every run |
 
 ## Documentation
 

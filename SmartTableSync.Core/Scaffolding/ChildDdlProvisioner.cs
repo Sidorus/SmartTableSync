@@ -47,8 +47,12 @@ internal sealed class ChildDdlProvisioner : IChildDdlProvisioner
             await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateTvpUdtScript(profile, plan.TvpTypeName), ct);
         }
 
-        // CREATE OR ALTER - idempotent by construction, always safe to (re)run.
-        await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateMergeProcedureScript(profile, plan), ct);
+        // CREATE OR ALTER - idempotent by construction, always safe to (re)run. A whole-table copy
+        // merges nothing, so it has no procedure.
+        if (plan.MergeStrategy != MergeStrategy.Replace)
+        {
+            await SqlScriptExecutor.ExecuteAsync(childProvisioning, _generator.GenerateMergeProcedureScript(profile, plan), ct);
+        }
 
         _logger.LogInformation("{Table}: child DDL objects verified/created", profile.TableName);
     }

@@ -503,7 +503,8 @@ SELECT CASE WHEN @id IS NULL THEN 0 ELSE 1 END,
     $willHaveCt = $hasCt -or ($EnableChangeTracking -and $hasPk)
 
     $strategy, $note = if (-not $exists) { 'MISSING', 'not found in the parent' }
-        elseif (-not $hasPk -and -not $uniqueIndexes) { 'NO KEY', 'no primary key or unique NOT NULL index: set SmartTableSync:KeyColumns for it after the setup' }
+        elseif (-not $hasPk -and -not $uniqueIndexes -and $rows -le $fullRescanRowLimit) { 'WholeTableCopy', 'no key: the whole table is copied every run (or set SmartTableSync:KeyColumns to copy only changes)' }
+        elseif (-not $hasPk -and -not $uniqueIndexes) { 'BLOCKED', "no key and over $fullRescanRowLimit rows: set SmartTableSync:KeyColumns for it, or list it in SmartTableSync:AllowFullRescanFor to copy it whole every run" }
         elseif ($willHaveCt -and $hasPk) { 'SqlChangeTracking', $(if ($hasCt) { 'Change Tracking is on' } else { 'Change Tracking will be turned on' }) }
         elseif ($hasRowVersion) { 'RowVersion', 'has a rowversion column' }
         elseif ($hasLastUpdate) { 'Timestamp', 'LastUpdate column (must hold UTC time)' }
@@ -864,7 +865,7 @@ $reports | Format-Table Table, Rows, Strategy, Note -AutoSize -Wrap | Out-Host
 
 $missing = @($reports | Where-Object { -not $_.Exists })
 if ($missing) { throw "Not found in the parent: $(($missing | ForEach-Object Table) -join ', '). Check the names (schema.Table for schemas other than dbo)." }
-$problems = @($reports | Where-Object { $_.Strategy -in @('NO KEY', 'BLOCKED') })
+$problems = @($reports | Where-Object { $_.Strategy -eq 'BLOCKED' })
 if ($problems) {
     Write-Host "These tables won't sync until you fix what the Note says; the others will: $(($problems | ForEach-Object Table) -join ', ')" -ForegroundColor Yellow
 }
