@@ -24,6 +24,7 @@ Insights; the sections below show the other options and how to turn things off.
 | `smarttablesync.sync_lag_minutes` | histogram | `TableName` | time since the table's previous successful run, recorded on each incremental run |
 | `smarttablesync.full_rescans` | counter | `TableName`, `Reason` | one-off full re-scans: after a schema change in Auto mode (`schema_changed`), or when Change Tracking's history can't be used (`no_position`, `position_expired`, `position_ahead`). A table on the FullRescan strategy isn't counted on every run |
 | `smarttablesync.table_provisioned` | counter | `TableName` | a table's plan was saved: a new table, or a schema change (both modes) |
+| `smarttablesync.table_sync_failures` | counter | `TableName` | a table's run failed as a whole and is retried next run: for example a parent schema change that needs a reviewed script, a SQL error or a timeout. None of the other metrics are recorded for that table on that run, so alert on this one |
 
 `SyncMode` is `initial` (the first copy) or `incremental`. `rows_deleted` and `sync_lag_minutes`
 are recorded only for incremental runs.
@@ -132,6 +133,9 @@ sends. Use the Azure Monitor data source with the queries from
 ```promql
 # Rows copied per table, per minute
 sum by (TableName) (rate(smarttablesync_rows_synced_total[15m])) * 60
+
+# Tables whose run failed in the last hour (a schema change to review, a SQL error): alert when > 0
+sum by (TableName) (increase(smarttablesync_table_sync_failures_total[1h])) > 0
 
 # Tables with rows that failed to write in the last hour: alert when > 0
 sum by (TableName) (increase(smarttablesync_rows_errored_total[1h])) > 0

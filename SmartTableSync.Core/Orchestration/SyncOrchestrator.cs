@@ -181,6 +181,7 @@ internal sealed class SyncOrchestrator : ISyncOrchestrator
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "{Table}: sync failed - will retry on next run", tableName);
+            _metrics.TableSyncFailed(tableName);
         }
     }
 

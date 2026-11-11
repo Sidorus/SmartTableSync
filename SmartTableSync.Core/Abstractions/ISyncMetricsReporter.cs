@@ -29,4 +29,12 @@ public interface ISyncMetricsReporter
     void FullRescan(string tableName, string reason)
     {
     }
+
+    /// <summary>A table's run failed as a whole (for example a parent schema change Auto mode
+    /// doesn't apply by itself, or a SQL error) and the table is retried on the next run. None of
+    /// the other per-table metrics are reported for that run, so this is the one to alert on.
+    /// Has a default no-op body so existing implementations keep compiling.</summary>
+    void TableSyncFailed(string tableName)
+    {
+    }
 }

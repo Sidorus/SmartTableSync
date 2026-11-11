@@ -266,14 +266,15 @@ traces
 | order by timestamp desc
 
 // The SmartTableSync metrics: rows_synced, rows_errored, rows_deleted, sync_duration_seconds,
-// sync_lag_minutes, full_rescans, table_provisioned
+// sync_lag_minutes, full_rescans, table_provisioned, table_sync_failures
 customMetrics
 | where name startswith "smarttablesync."
 | summarize sum(valueSum) by name, bin(timestamp, 15m)
 ```
 
 `severityLevel` 2 is a warning and 3 an error; a failing table always shows up there. The
-metrics can also be charted and alerted on under **Metrics**.
+metrics can also be charted and alerted on under **Metrics**; to be told when a table stops,
+alert when `smarttablesync.table_sync_failures` is above 0.
 
 **In your own host** the choice is yours: the engine only writes through `ILogger` and
 `System.Diagnostics.Metrics`, and has no reference to any monitoring product. With OpenTelemetry,
