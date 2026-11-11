@@ -6,16 +6,30 @@ What is planned next. **Nothing on this page is built yet**; what works today is
 
 ## 1. Fixes for open problems
 
+Data correctness and scale come first.
+
 | Priority | Problem today | Planned fix |
 |---|---|---|
-| 1 | The run lock's connection is idle during a run, and Azure SQL Database can close idle connections after about 30 minutes, so two very long runs could overlap: correct data, double work. | Keep the lock connection active between tables, and check that the lock is still held before each table. |
-| 2 | The time of the last delete check is kept in memory, so a host that scales to zero repeats the full key comparison on most cold starts. | Store it per table in `CustomSyncState`, so every host instance and restart sees the same time. |
-| 3 | A row that can't be written (other than a foreign-key timing error) is logged and skipped, and stays out of date until it changes again. | Record failed keys in a small `SyncFailedRow` table, read them again on the next runs, and report how many are waiting as a metric. |
-| 4 | Changing `IncrementalStrategyOverrides`, `TimestampColumns`, `AllowFullRescanFor` or `KeyColumns` for a table that is already set up has no effect until its schema changes. | Include those settings in what decides that a table must be planned again. |
-| 5 | In Manual mode a new plan is saved before the reviewed child scripts are applied, so the table can fail until they are. | Check that the child matches the plan before saving it, and wait with a clear message until it does. |
-| 6 | In Manual mode, rows synced before a column was added get its value only when they next change. | Re-scan the table once, automatically, after the child gains the column. |
+| 1 | The delete check loads every child key and every parent key into memory, then deletes missing rows one at a time. On tables with tens of millions of rows that is a lot of memory for a small host and a very slow delete. | Bulk-copy the parent keys into a temporary table on the child connection and delete the missing rows with one set-based statement, in batches. Temporary tables need no extra rights. |
+| 2 | Timestamp strategy: a change committed more than a minute after its datetime column was set is never copied (see [limitations](limitations.md#change-detection)). | A per-table overlap setting, and an optional periodic full re-scan of Timestamp tables as a safety net. |
+| 3 | The run lock's connection is idle during a run, and Azure SQL Database can close idle connections after about 30 minutes, so two very long runs could overlap: correct data, double work. | Keep the lock connection active between tables, and check that the lock is still held before each table. |
+| 4 | The time of the last delete check is kept in memory, so a host that scales to zero repeats the full key comparison on most cold starts. | Store it per table in `CustomSyncState`, so every host instance and restart sees the same time. |
+| 5 | The delete check compares keys ignoring case. With a case-sensitive collation, `abc` and `ABC` are different rows, so a deleted one can stay in the child. | Compare in SQL (fix 1), so the column's collation decides. |
+| 6 | Change Tracking applies deletes one row at a time: deleting 100,000 rows in the parent means 100,000 round trips to the child. | Delete a page's keys in one statement, and fall back to one row at a time only when that fails. |
+| 7 | Changing `IncrementalStrategyOverrides`, `TimestampColumns`, `AllowFullRescanFor` or `KeyColumns` for a table that is already set up has no effect until its schema changes. | Include those settings in what decides that a table must be planned again. |
+| 8 | In Manual mode a new plan is saved before the reviewed child scripts are applied, so the table can fail until they are. | Check that the child matches the plan before saving it, and wait with a clear message until it does. |
+| 9 | In Manual mode, rows synced before a column was added get its value only when they next change. | Re-scan the table once, automatically, after the child gains the column. |
 
-## 2. Control API
+## 2. Trust: prove the copy is right
+
+| Feature | What it gives |
+|---|---|
+| **Verify command** | A Scaffold command (for example `verify Product`) that compares row counts and checksums per key range between parent and child and prints the first ranges that differ. Can also run on a schedule and publish a metric, so drift raises an alert. |
+| **Repair rows that failed to write** | Today a row that can't be written (other than a foreign-key timing error) is logged and skipped, and stays out of date until it changes again. Planned: record failed keys in a small `SyncFailedRow` table, read them again on the next runs, and report how many are waiting as a metric. |
+| **Migrating from Azure SQL Data Sync** | A step-by-step guide for teams moving off Data Sync before it retires on 30 September 2027: what maps to what, and how to switch over table by table. |
+| **1.0 release** | A stated compatibility policy for settings and the child's tracking tables, so an upgrade never needs manual changes within a major version. |
+
+## 3. Control API
 
 Today the sync is controlled through settings and the host's schedule. Planned: an HTTP API to
 see what the sync is doing and act on it, as a separate package (`SmartTableSync.Control`) that
@@ -30,7 +44,7 @@ any ASP.NET Core host adds with `AddSmartTableSyncControl()` and `MapSmartTableS
 | `POST /sync/tables/{table}/pause` and `/resume` | Skip a table on every run until it is resumed |
 | `POST /sync/tables/{table}/rescan` | Read the whole table once on the next run |
 | `POST /sync/tables/{table}/reset-plan` | Pick the strategy again with the current settings (today: delete its `SyncTableConfig` row by hand) |
-| `POST /sync/tables/{table}/retry-failed` | Read the rows that failed to write again (needs fix 3) |
+| `POST /sync/tables/{table}/retry-failed` | Read the rows that failed to write again (needs the repair feature in section 2) |
 | `GET /sync/settings` | The settings in effect, without connection strings |
 
 How it fits the existing design:
@@ -49,7 +63,7 @@ How it fits the existing design:
 - The existing metrics stay the source for dashboards and alerts; the API adds per-table state
   that metrics can't show.
 
-## 3. Web page
+## 4. Web page
 
 A web page on top of the control API, for people who don't want to call an API:
 
@@ -64,8 +78,10 @@ A web page on top of the control API, for people who don't want to call an API:
 Planned as a small ASP.NET Core + Blazor app that can be hosted next to the sync or on its own,
 with the same Entra ID sign-in and roles as the API.
 
-## 4. Other planned work
+## 5. Other planned work
 
+- **Row filters and column selection:** copy only some rows (a `WHERE` condition per table) or
+  some columns, as Data Sync allows.
 - **Alerts and dashboards out of the box:** example Azure Monitor alert rules and a Grafana
   dashboard for lag, failed rows and runs that stop, using the existing `smarttablesync.*`
   metrics ([observability](observability.md) already shows the queries).
@@ -75,7 +91,7 @@ with the same Entra ID sign-in and roles as the API.
   from one host.
 - **A different schema in the child:** map `sales.Order` in the parent to, for example,
   `copy.Order` in the child.
-- **Release:** publish the `SmartTableSync` and `SmartTableSync.Scaffold` packages to NuGet, and
-  run the [Azure demo](../demo/README.md) end to end on every release.
+- **CodeQL in CI**, now that the repository is public (Semgrep runs today).
+- **Release checks:** run the [Azure demo](../demo/README.md) end to end on every release.
 
 Two-way sync is not planned: the child is a read-only copy by design.
