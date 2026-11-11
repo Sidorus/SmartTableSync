@@ -29,7 +29,8 @@ Set with `SmartTableSync:Mode`.
   tool's scripts. The engine only ever reads and writes data.
 - **Auto**: the engine creates the child's tracking tables, tables and procedures itself when it
   first sees a table, using a separate provisioning identity, and adds columns that appear in the
-  parent later. Changes that could lose data still need a reviewed script.
+  parent later. Changes that could lose data still need a reviewed script; until then the table
+  stops, logs an error on every run and adds to the `smarttablesync.table_sync_failures` metric.
 
 ## Identities and their rights
 
@@ -365,7 +366,7 @@ until that grant exists.
 |---|---|
 | A column is added | Adds it to the child table (nullable, since existing rows have no value yet), recreates the table type and procedure, then **re-scans the table once** so every row gets the new values. Logged as a full re-scan with reason `schema_changed`. |
 | A column is removed | Leaves a nullable child column in place (it doesn't block inserts) and logs a warning. A `NOT NULL` child column would block inserts, so that's reported as below. |
-| A column's type or length changes, the primary key changes, or a column now allows `NULL` that the child doesn't | **Nothing is changed.** The table stops with an error naming the change, on every run, until you apply a reviewed script (the scaffold tool writes the new table type and procedure). Other tables keep syncing. |
+| A column's type or length changes, the primary key changes, or a column now allows `NULL` that the child doesn't | **Nothing is changed.** The table stops with an error naming the change, on every run, until you apply a reviewed script (the scaffold tool writes the new table type and procedure). Each failed run adds 1 to the `smarttablesync.table_sync_failures` metric, so you can alert on it. Other tables keep syncing. |
 | Change Tracking enabled or disabled | No child change; the table switches strategy and is re-scanned once. |
 
 The new plan is saved only after the child changes and the re-scan succeeded. If anything fails
