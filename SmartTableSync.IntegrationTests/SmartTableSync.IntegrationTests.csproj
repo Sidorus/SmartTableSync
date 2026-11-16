@@ -12,7 +12,7 @@
     <PackageReference Include="Testcontainers.MsSql" Version="4.16.0" />
     <!-- Lifts Testcontainers' transitive SSH.NET past GHSA-q939-rpr3-3284 / GHSA-mggc-4xg6-vcxf.
          Remove once Testcontainers depends on a fixed version. -->
-    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="SSH.NET" Version="2026.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
